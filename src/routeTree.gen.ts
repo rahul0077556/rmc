@@ -20,8 +20,10 @@ import { Route as BatchSheetIdRouteImport } from './routes/batch-sheet.$id'
 import { Route as ChallanTripIdRouteImport } from './routes/challan.$tripId'
 import { Route as ShellSalesIndexRouteImport } from './routes/_shell.sales.index'
 import { Route as ShellSalesApprovalsRouteImport } from './routes/_shell.sales.approvals'
+import { Route as ShellSalesCustomersRouteImport } from './routes/_shell.sales.customers'
 import { Route as ShellDispatcherPlanPoIdRouteImport } from './routes/_shell.dispatcher.plan.$poId'
 import { Route as ShellSalesOrdersIndexRouteImport } from './routes/_shell.sales.orders.index'
+import { Route as ShellSalesOrdersPoIdRouteImport } from './routes/_shell.sales.orders.$poId'
 import { Route as ShellSalesOrdersNewRouteImport } from './routes/_shell.sales.orders.new'
 
 const IndexRoute = IndexRouteImport.update({
@@ -78,6 +80,11 @@ const ShellSalesApprovalsRoute = ShellSalesApprovalsRouteImport.update({
   path: '/approvals',
   getParentRoute: () => ShellSalesRoute,
 } as any)
+const ShellSalesCustomersRoute = ShellSalesCustomersRouteImport.update({
+  id: '/customers',
+  path: '/customers',
+  getParentRoute: () => ShellSalesRoute,
+} as any)
 const ShellDispatcherPlanPoIdRoute = ShellDispatcherPlanPoIdRouteImport.update({
   id: '/plan/$poId',
   path: '/plan/$poId',
@@ -86,6 +93,11 @@ const ShellDispatcherPlanPoIdRoute = ShellDispatcherPlanPoIdRouteImport.update({
 const ShellSalesOrdersIndexRoute = ShellSalesOrdersIndexRouteImport.update({
   id: '/orders/',
   path: '/orders/',
+  getParentRoute: () => ShellSalesRoute,
+} as any)
+const ShellSalesOrdersPoIdRoute = ShellSalesOrdersPoIdRouteImport.update({
+  id: '/orders/$poId',
+  path: '/orders/$poId',
   getParentRoute: () => ShellSalesRoute,
 } as any)
 const ShellSalesOrdersNewRoute = ShellSalesOrdersNewRouteImport.update({
@@ -104,8 +116,10 @@ export interface FileRoutesByFullPath {
   '/batch-sheet/$id': typeof BatchSheetIdRoute
   '/challan/$tripId': typeof ChallanTripIdRoute
   '/sales/approvals': typeof ShellSalesApprovalsRoute
+  '/sales/customers': typeof ShellSalesCustomersRoute
   '/sales/': typeof ShellSalesIndexRoute
   '/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
+  '/sales/orders/$poId': typeof ShellSalesOrdersPoIdRoute
   '/sales/orders/new': typeof ShellSalesOrdersNewRoute
   '/sales/orders/': typeof ShellSalesOrdersIndexRoute
 }
@@ -118,8 +132,10 @@ export interface FileRoutesByTo {
   '/batch-sheet/$id': typeof BatchSheetIdRoute
   '/challan/$tripId': typeof ChallanTripIdRoute
   '/sales/approvals': typeof ShellSalesApprovalsRoute
+  '/sales/customers': typeof ShellSalesCustomersRoute
   '/sales': typeof ShellSalesIndexRoute
   '/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
+  '/sales/orders/$poId': typeof ShellSalesOrdersPoIdRoute
   '/sales/orders/new': typeof ShellSalesOrdersNewRoute
   '/sales/orders': typeof ShellSalesOrdersIndexRoute
 }
@@ -135,8 +151,10 @@ export interface FileRoutesById {
   '/batch-sheet/$id': typeof BatchSheetIdRoute
   '/challan/$tripId': typeof ChallanTripIdRoute
   '/_shell/sales/approvals': typeof ShellSalesApprovalsRoute
+  '/_shell/sales/customers': typeof ShellSalesCustomersRoute
   '/_shell/sales/': typeof ShellSalesIndexRoute
   '/_shell/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
+  '/_shell/sales/orders/$poId': typeof ShellSalesOrdersPoIdRoute
   '/_shell/sales/orders/new': typeof ShellSalesOrdersNewRoute
   '/_shell/sales/orders/': typeof ShellSalesOrdersIndexRoute
 }
@@ -152,8 +170,10 @@ export interface FileRouteTypes {
     | '/batch-sheet/$id'
     | '/challan/$tripId'
     | '/sales/approvals'
+    | '/sales/customers'
     | '/sales/'
     | '/dispatcher/plan/$poId'
+    | '/sales/orders/$poId'
     | '/sales/orders/new'
     | '/sales/orders/'
   fileRoutesByTo: FileRoutesByTo
@@ -166,8 +186,10 @@ export interface FileRouteTypes {
     | '/batch-sheet/$id'
     | '/challan/$tripId'
     | '/sales/approvals'
+    | '/sales/customers'
     | '/sales'
     | '/dispatcher/plan/$poId'
+    | '/sales/orders/$poId'
     | '/sales/orders/new'
     | '/sales/orders'
   id:
@@ -182,8 +204,10 @@ export interface FileRouteTypes {
     | '/batch-sheet/$id'
     | '/challan/$tripId'
     | '/_shell/sales/approvals'
+    | '/_shell/sales/customers'
     | '/_shell/sales/'
     | '/_shell/dispatcher/plan/$poId'
+    | '/_shell/sales/orders/$poId'
     | '/_shell/sales/orders/new'
     | '/_shell/sales/orders/'
   fileRoutesById: FileRoutesById
@@ -274,6 +298,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellSalesApprovalsRouteImport
       parentRoute: typeof ShellSalesRoute
     }
+    '/_shell/sales/customers': {
+      id: '/_shell/sales/customers'
+      path: '/customers'
+      fullPath: '/sales/customers'
+      preLoaderRoute: typeof ShellSalesCustomersRouteImport
+      parentRoute: typeof ShellSalesRoute
+    }
     '/_shell/dispatcher/plan/$poId': {
       id: '/_shell/dispatcher/plan/$poId'
       path: '/plan/$poId'
@@ -286,6 +317,13 @@ declare module '@tanstack/react-router' {
       path: '/orders'
       fullPath: '/sales/orders/'
       preLoaderRoute: typeof ShellSalesOrdersIndexRouteImport
+      parentRoute: typeof ShellSalesRoute
+    }
+    '/_shell/sales/orders/$poId': {
+      id: '/_shell/sales/orders/$poId'
+      path: '/orders/$poId'
+      fullPath: '/sales/orders/$poId'
+      preLoaderRoute: typeof ShellSalesOrdersPoIdRouteImport
       parentRoute: typeof ShellSalesRoute
     }
     '/_shell/sales/orders/new': {
@@ -312,14 +350,18 @@ const ShellDispatcherRouteWithChildren = ShellDispatcherRoute._addFileChildren(
 
 interface ShellSalesRouteChildren {
   ShellSalesApprovalsRoute: typeof ShellSalesApprovalsRoute
+  ShellSalesCustomersRoute: typeof ShellSalesCustomersRoute
   ShellSalesIndexRoute: typeof ShellSalesIndexRoute
+  ShellSalesOrdersPoIdRoute: typeof ShellSalesOrdersPoIdRoute
   ShellSalesOrdersNewRoute: typeof ShellSalesOrdersNewRoute
   ShellSalesOrdersIndexRoute: typeof ShellSalesOrdersIndexRoute
 }
 
 const ShellSalesRouteChildren: ShellSalesRouteChildren = {
   ShellSalesApprovalsRoute: ShellSalesApprovalsRoute,
+  ShellSalesCustomersRoute: ShellSalesCustomersRoute,
   ShellSalesIndexRoute: ShellSalesIndexRoute,
+  ShellSalesOrdersPoIdRoute: ShellSalesOrdersPoIdRoute,
   ShellSalesOrdersNewRoute: ShellSalesOrdersNewRoute,
   ShellSalesOrdersIndexRoute: ShellSalesOrdersIndexRoute,
 }
