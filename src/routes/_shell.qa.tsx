@@ -94,7 +94,7 @@ function QaPage() {
 
   const grade = (active?.trip.grade ?? "M25") as Grade;
   const target = SLUMP_TARGET[grade];
-  const slumpOk = form.slump >= target.min && form.slump <= target.max;
+  const slumpOk = form.slump >= target[0] && form.slump <= target[1];
 
   const queueColumns: Column<QcQueueRow>[] = [
     { key: "bs", header: "Batch Sheet", cell: (r) => <span className="font-medium">{r.batchSheetId}</span> },
@@ -117,7 +117,7 @@ function QaPage() {
             size="sm"
             onClick={() => {
               setActive(r);
-              setForm({ ...EMPTY, slump: SLUMP_TARGET[r.trip.grade as Grade].min + 20 });
+              setForm({ ...EMPTY, slump: SLUMP_TARGET[r.trip.grade as Grade][0] + 20 });
             }}
           >
             Inspect
@@ -243,7 +243,7 @@ function QaPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs">
-                Slump (mm) · target {target.min}–{target.max}
+                Slump (mm) · target {target[0]}–{target[1]}
               </Label>
               <Input
                 value={form.slump}
