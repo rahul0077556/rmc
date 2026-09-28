@@ -15,8 +15,10 @@ import { Route as ShellDispatcherRouteImport } from './routes/_shell.dispatcher'
 import { Route as ShellOwnerRouteImport } from './routes/_shell.owner'
 import { Route as ShellProductionRouteImport } from './routes/_shell.production'
 import { Route as ShellQaRouteImport } from './routes/_shell.qa'
+import { Route as ShellSalesRouteImport } from './routes/_shell.sales'
 import { Route as BatchSheetIdRouteImport } from './routes/batch-sheet.$id'
 import { Route as ChallanTripIdRouteImport } from './routes/challan.$tripId'
+import { Route as ShellSalesIndexRouteImport } from './routes/_shell.sales.index'
 import { Route as ShellDispatcherPlanPoIdRouteImport } from './routes/_shell.dispatcher.plan.$poId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -48,6 +50,11 @@ const ShellQaRoute = ShellQaRouteImport.update({
   path: '/qa',
   getParentRoute: () => ShellRoute,
 } as any)
+const ShellSalesRoute = ShellSalesRouteImport.update({
+  id: '/sales',
+  path: '/sales',
+  getParentRoute: () => ShellRoute,
+} as any)
 const BatchSheetIdRoute = BatchSheetIdRouteImport.update({
   id: '/batch-sheet/$id',
   path: '/batch-sheet/$id',
@@ -57,6 +64,11 @@ const ChallanTripIdRoute = ChallanTripIdRouteImport.update({
   id: '/challan/$tripId',
   path: '/challan/$tripId',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ShellSalesIndexRoute = ShellSalesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ShellSalesRoute,
 } as any)
 const ShellDispatcherPlanPoIdRoute = ShellDispatcherPlanPoIdRouteImport.update({
   id: '/plan/$poId',
@@ -70,8 +82,10 @@ export interface FileRoutesByFullPath {
   '/owner': typeof ShellOwnerRoute
   '/production': typeof ShellProductionRoute
   '/qa': typeof ShellQaRoute
+  '/sales': typeof ShellSalesRouteWithChildren
   '/batch-sheet/$id': typeof BatchSheetIdRoute
   '/challan/$tripId': typeof ChallanTripIdRoute
+  '/sales/': typeof ShellSalesIndexRoute
   '/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
 }
 export interface FileRoutesByTo {
@@ -82,6 +96,7 @@ export interface FileRoutesByTo {
   '/qa': typeof ShellQaRoute
   '/batch-sheet/$id': typeof BatchSheetIdRoute
   '/challan/$tripId': typeof ChallanTripIdRoute
+  '/sales': typeof ShellSalesIndexRoute
   '/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
 }
 export interface FileRoutesById {
@@ -92,8 +107,10 @@ export interface FileRoutesById {
   '/_shell/owner': typeof ShellOwnerRoute
   '/_shell/production': typeof ShellProductionRoute
   '/_shell/qa': typeof ShellQaRoute
+  '/_shell/sales': typeof ShellSalesRouteWithChildren
   '/batch-sheet/$id': typeof BatchSheetIdRoute
   '/challan/$tripId': typeof ChallanTripIdRoute
+  '/_shell/sales/': typeof ShellSalesIndexRoute
   '/_shell/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
 }
 export interface FileRouteTypes {
@@ -104,8 +121,10 @@ export interface FileRouteTypes {
     | '/owner'
     | '/production'
     | '/qa'
+    | '/sales'
     | '/batch-sheet/$id'
     | '/challan/$tripId'
+    | '/sales/'
     | '/dispatcher/plan/$poId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -116,6 +135,7 @@ export interface FileRouteTypes {
     | '/qa'
     | '/batch-sheet/$id'
     | '/challan/$tripId'
+    | '/sales'
     | '/dispatcher/plan/$poId'
   id:
     | '__root__'
@@ -125,8 +145,10 @@ export interface FileRouteTypes {
     | '/_shell/owner'
     | '/_shell/production'
     | '/_shell/qa'
+    | '/_shell/sales'
     | '/batch-sheet/$id'
     | '/challan/$tripId'
+    | '/_shell/sales/'
     | '/_shell/dispatcher/plan/$poId'
   fileRoutesById: FileRoutesById
 }
@@ -181,6 +203,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellQaRouteImport
       parentRoute: typeof ShellRoute
     }
+    '/_shell/sales': {
+      id: '/_shell/sales'
+      path: '/sales'
+      fullPath: '/sales'
+      preLoaderRoute: typeof ShellSalesRouteImport
+      parentRoute: typeof ShellRoute
+    }
     '/batch-sheet/$id': {
       id: '/batch-sheet/$id'
       path: '/batch-sheet/$id'
@@ -194,6 +223,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/challan/$tripId'
       preLoaderRoute: typeof ChallanTripIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_shell/sales/': {
+      id: '/_shell/sales/'
+      path: '/'
+      fullPath: '/sales/'
+      preLoaderRoute: typeof ShellSalesIndexRouteImport
+      parentRoute: typeof ShellSalesRoute
     }
     '/_shell/dispatcher/plan/$poId': {
       id: '/_shell/dispatcher/plan/$poId'
@@ -217,11 +253,24 @@ const ShellDispatcherRouteWithChildren = ShellDispatcherRoute._addFileChildren(
   ShellDispatcherRouteChildren,
 )
 
+interface ShellSalesRouteChildren {
+  ShellSalesIndexRoute: typeof ShellSalesIndexRoute
+}
+
+const ShellSalesRouteChildren: ShellSalesRouteChildren = {
+  ShellSalesIndexRoute: ShellSalesIndexRoute,
+}
+
+const ShellSalesRouteWithChildren = ShellSalesRoute._addFileChildren(
+  ShellSalesRouteChildren,
+)
+
 interface ShellRouteChildren {
   ShellDispatcherRoute: typeof ShellDispatcherRouteWithChildren
   ShellOwnerRoute: typeof ShellOwnerRoute
   ShellProductionRoute: typeof ShellProductionRoute
   ShellQaRoute: typeof ShellQaRoute
+  ShellSalesRoute: typeof ShellSalesRouteWithChildren
 }
 
 const ShellRouteChildren: ShellRouteChildren = {
@@ -229,6 +278,7 @@ const ShellRouteChildren: ShellRouteChildren = {
   ShellOwnerRoute: ShellOwnerRoute,
   ShellProductionRoute: ShellProductionRoute,
   ShellQaRoute: ShellQaRoute,
+  ShellSalesRoute: ShellSalesRouteWithChildren,
 }
 
 const ShellRouteWithChildren = ShellRoute._addFileChildren(ShellRouteChildren)
