@@ -10,33 +10,249 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ShellRouteImport } from './routes/_shell'
+import { Route as ShellBillingRouteImport } from './routes/_shell.billing'
+import { Route as ShellDispatcherRouteImport } from './routes/_shell.dispatcher'
+import { Route as ShellOwnerRouteImport } from './routes/_shell.owner'
+import { Route as ShellPortalRouteImport } from './routes/_shell.portal'
+import { Route as ShellProductionRouteImport } from './routes/_shell.production'
+import { Route as ShellQaRouteImport } from './routes/_shell.qa'
+import { Route as ShellReportsRouteImport } from './routes/_shell.reports'
+import { Route as ShellSalesRouteImport } from './routes/_shell.sales'
+import { Route as BatchSheetIdRouteImport } from './routes/batch-sheet.$id'
+import { Route as ChallanTripIdRouteImport } from './routes/challan.$tripId'
+import { Route as ShellSalesIndexRouteImport } from './routes/_shell.sales.index'
+import { Route as ShellSalesApprovalsRouteImport } from './routes/_shell.sales.approvals'
+import { Route as ShellSalesCustomersRouteImport } from './routes/_shell.sales.customers'
+import { Route as ShellDispatcherPlanPoIdRouteImport } from './routes/_shell.dispatcher.plan.$poId'
+import { Route as ShellSalesOrdersIndexRouteImport } from './routes/_shell.sales.orders.index'
+import { Route as ShellSalesOrdersPoIdRouteImport } from './routes/_shell.sales.orders.$poId'
+import { Route as ShellSalesOrdersNewRouteImport } from './routes/_shell.sales.orders.new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ShellRoute = ShellRouteImport.update({
+  id: '/_shell',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShellBillingRoute = ShellBillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
+  getParentRoute: () => ShellRoute,
+} as any)
+const ShellDispatcherRoute = ShellDispatcherRouteImport.update({
+  id: '/dispatcher',
+  path: '/dispatcher',
+  getParentRoute: () => ShellRoute,
+} as any)
+const ShellOwnerRoute = ShellOwnerRouteImport.update({
+  id: '/owner',
+  path: '/owner',
+  getParentRoute: () => ShellRoute,
+} as any)
+const ShellPortalRoute = ShellPortalRouteImport.update({
+  id: '/portal',
+  path: '/portal',
+  getParentRoute: () => ShellRoute,
+} as any)
+const ShellProductionRoute = ShellProductionRouteImport.update({
+  id: '/production',
+  path: '/production',
+  getParentRoute: () => ShellRoute,
+} as any)
+const ShellQaRoute = ShellQaRouteImport.update({
+  id: '/qa',
+  path: '/qa',
+  getParentRoute: () => ShellRoute,
+} as any)
+const ShellReportsRoute = ShellReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => ShellRoute,
+} as any)
+const ShellSalesRoute = ShellSalesRouteImport.update({
+  id: '/sales',
+  path: '/sales',
+  getParentRoute: () => ShellRoute,
+} as any)
+const BatchSheetIdRoute = BatchSheetIdRouteImport.update({
+  id: '/batch-sheet/$id',
+  path: '/batch-sheet/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChallanTripIdRoute = ChallanTripIdRouteImport.update({
+  id: '/challan/$tripId',
+  path: '/challan/$tripId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShellSalesIndexRoute = ShellSalesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ShellSalesRoute,
+} as any)
+const ShellSalesApprovalsRoute = ShellSalesApprovalsRouteImport.update({
+  id: '/approvals',
+  path: '/approvals',
+  getParentRoute: () => ShellSalesRoute,
+} as any)
+const ShellSalesCustomersRoute = ShellSalesCustomersRouteImport.update({
+  id: '/customers',
+  path: '/customers',
+  getParentRoute: () => ShellSalesRoute,
+} as any)
+const ShellDispatcherPlanPoIdRoute = ShellDispatcherPlanPoIdRouteImport.update({
+  id: '/plan/$poId',
+  path: '/plan/$poId',
+  getParentRoute: () => ShellDispatcherRoute,
+} as any)
+const ShellSalesOrdersIndexRoute = ShellSalesOrdersIndexRouteImport.update({
+  id: '/orders/',
+  path: '/orders/',
+  getParentRoute: () => ShellSalesRoute,
+} as any)
+const ShellSalesOrdersPoIdRoute = ShellSalesOrdersPoIdRouteImport.update({
+  id: '/orders/$poId',
+  path: '/orders/$poId',
+  getParentRoute: () => ShellSalesRoute,
+} as any)
+const ShellSalesOrdersNewRoute = ShellSalesOrdersNewRouteImport.update({
+  id: '/orders/new',
+  path: '/orders/new',
+  getParentRoute: () => ShellSalesRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/billing': typeof ShellBillingRoute
+  '/dispatcher': typeof ShellDispatcherRouteWithChildren
+  '/owner': typeof ShellOwnerRoute
+  '/portal': typeof ShellPortalRoute
+  '/production': typeof ShellProductionRoute
+  '/qa': typeof ShellQaRoute
+  '/reports': typeof ShellReportsRoute
+  '/sales': typeof ShellSalesRouteWithChildren
+  '/batch-sheet/$id': typeof BatchSheetIdRoute
+  '/challan/$tripId': typeof ChallanTripIdRoute
+  '/sales/approvals': typeof ShellSalesApprovalsRoute
+  '/sales/customers': typeof ShellSalesCustomersRoute
+  '/sales/': typeof ShellSalesIndexRoute
+  '/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
+  '/sales/orders/$poId': typeof ShellSalesOrdersPoIdRoute
+  '/sales/orders/new': typeof ShellSalesOrdersNewRoute
+  '/sales/orders/': typeof ShellSalesOrdersIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/billing': typeof ShellBillingRoute
+  '/dispatcher': typeof ShellDispatcherRouteWithChildren
+  '/owner': typeof ShellOwnerRoute
+  '/portal': typeof ShellPortalRoute
+  '/production': typeof ShellProductionRoute
+  '/qa': typeof ShellQaRoute
+  '/reports': typeof ShellReportsRoute
+  '/batch-sheet/$id': typeof BatchSheetIdRoute
+  '/challan/$tripId': typeof ChallanTripIdRoute
+  '/sales/approvals': typeof ShellSalesApprovalsRoute
+  '/sales/customers': typeof ShellSalesCustomersRoute
+  '/sales': typeof ShellSalesIndexRoute
+  '/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
+  '/sales/orders/$poId': typeof ShellSalesOrdersPoIdRoute
+  '/sales/orders/new': typeof ShellSalesOrdersNewRoute
+  '/sales/orders': typeof ShellSalesOrdersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_shell': typeof ShellRouteWithChildren
+  '/_shell/billing': typeof ShellBillingRoute
+  '/_shell/dispatcher': typeof ShellDispatcherRouteWithChildren
+  '/_shell/owner': typeof ShellOwnerRoute
+  '/_shell/portal': typeof ShellPortalRoute
+  '/_shell/production': typeof ShellProductionRoute
+  '/_shell/qa': typeof ShellQaRoute
+  '/_shell/reports': typeof ShellReportsRoute
+  '/_shell/sales': typeof ShellSalesRouteWithChildren
+  '/batch-sheet/$id': typeof BatchSheetIdRoute
+  '/challan/$tripId': typeof ChallanTripIdRoute
+  '/_shell/sales/approvals': typeof ShellSalesApprovalsRoute
+  '/_shell/sales/customers': typeof ShellSalesCustomersRoute
+  '/_shell/sales/': typeof ShellSalesIndexRoute
+  '/_shell/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
+  '/_shell/sales/orders/$poId': typeof ShellSalesOrdersPoIdRoute
+  '/_shell/sales/orders/new': typeof ShellSalesOrdersNewRoute
+  '/_shell/sales/orders/': typeof ShellSalesOrdersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/billing'
+    | '/dispatcher'
+    | '/owner'
+    | '/portal'
+    | '/production'
+    | '/qa'
+    | '/reports'
+    | '/sales'
+    | '/batch-sheet/$id'
+    | '/challan/$tripId'
+    | '/sales/approvals'
+    | '/sales/customers'
+    | '/sales/'
+    | '/dispatcher/plan/$poId'
+    | '/sales/orders/$poId'
+    | '/sales/orders/new'
+    | '/sales/orders/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/billing'
+    | '/dispatcher'
+    | '/owner'
+    | '/portal'
+    | '/production'
+    | '/qa'
+    | '/reports'
+    | '/batch-sheet/$id'
+    | '/challan/$tripId'
+    | '/sales/approvals'
+    | '/sales/customers'
+    | '/sales'
+    | '/dispatcher/plan/$poId'
+    | '/sales/orders/$poId'
+    | '/sales/orders/new'
+    | '/sales/orders'
+  id:
+    | '__root__'
+    | '/'
+    | '/_shell'
+    | '/_shell/billing'
+    | '/_shell/dispatcher'
+    | '/_shell/owner'
+    | '/_shell/portal'
+    | '/_shell/production'
+    | '/_shell/qa'
+    | '/_shell/reports'
+    | '/_shell/sales'
+    | '/batch-sheet/$id'
+    | '/challan/$tripId'
+    | '/_shell/sales/approvals'
+    | '/_shell/sales/customers'
+    | '/_shell/sales/'
+    | '/_shell/dispatcher/plan/$poId'
+    | '/_shell/sales/orders/$poId'
+    | '/_shell/sales/orders/new'
+    | '/_shell/sales/orders/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ShellRoute: typeof ShellRouteWithChildren
+  BatchSheetIdRoute: typeof BatchSheetIdRoute
+  ChallanTripIdRoute: typeof ChallanTripIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +264,198 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_shell': {
+      id: '/_shell'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof ShellRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_shell/billing': {
+      id: '/_shell/billing'
+      path: '/billing'
+      fullPath: '/billing'
+      preLoaderRoute: typeof ShellBillingRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/dispatcher': {
+      id: '/_shell/dispatcher'
+      path: '/dispatcher'
+      fullPath: '/dispatcher'
+      preLoaderRoute: typeof ShellDispatcherRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/owner': {
+      id: '/_shell/owner'
+      path: '/owner'
+      fullPath: '/owner'
+      preLoaderRoute: typeof ShellOwnerRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/portal': {
+      id: '/_shell/portal'
+      path: '/portal'
+      fullPath: '/portal'
+      preLoaderRoute: typeof ShellPortalRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/production': {
+      id: '/_shell/production'
+      path: '/production'
+      fullPath: '/production'
+      preLoaderRoute: typeof ShellProductionRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/qa': {
+      id: '/_shell/qa'
+      path: '/qa'
+      fullPath: '/qa'
+      preLoaderRoute: typeof ShellQaRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/reports': {
+      id: '/_shell/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof ShellReportsRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/sales': {
+      id: '/_shell/sales'
+      path: '/sales'
+      fullPath: '/sales'
+      preLoaderRoute: typeof ShellSalesRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/batch-sheet/$id': {
+      id: '/batch-sheet/$id'
+      path: '/batch-sheet/$id'
+      fullPath: '/batch-sheet/$id'
+      preLoaderRoute: typeof BatchSheetIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/challan/$tripId': {
+      id: '/challan/$tripId'
+      path: '/challan/$tripId'
+      fullPath: '/challan/$tripId'
+      preLoaderRoute: typeof ChallanTripIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_shell/sales/': {
+      id: '/_shell/sales/'
+      path: '/'
+      fullPath: '/sales/'
+      preLoaderRoute: typeof ShellSalesIndexRouteImport
+      parentRoute: typeof ShellSalesRoute
+    }
+    '/_shell/sales/approvals': {
+      id: '/_shell/sales/approvals'
+      path: '/approvals'
+      fullPath: '/sales/approvals'
+      preLoaderRoute: typeof ShellSalesApprovalsRouteImport
+      parentRoute: typeof ShellSalesRoute
+    }
+    '/_shell/sales/customers': {
+      id: '/_shell/sales/customers'
+      path: '/customers'
+      fullPath: '/sales/customers'
+      preLoaderRoute: typeof ShellSalesCustomersRouteImport
+      parentRoute: typeof ShellSalesRoute
+    }
+    '/_shell/dispatcher/plan/$poId': {
+      id: '/_shell/dispatcher/plan/$poId'
+      path: '/plan/$poId'
+      fullPath: '/dispatcher/plan/$poId'
+      preLoaderRoute: typeof ShellDispatcherPlanPoIdRouteImport
+      parentRoute: typeof ShellDispatcherRoute
+    }
+    '/_shell/sales/orders/': {
+      id: '/_shell/sales/orders/'
+      path: '/orders'
+      fullPath: '/sales/orders/'
+      preLoaderRoute: typeof ShellSalesOrdersIndexRouteImport
+      parentRoute: typeof ShellSalesRoute
+    }
+    '/_shell/sales/orders/$poId': {
+      id: '/_shell/sales/orders/$poId'
+      path: '/orders/$poId'
+      fullPath: '/sales/orders/$poId'
+      preLoaderRoute: typeof ShellSalesOrdersPoIdRouteImport
+      parentRoute: typeof ShellSalesRoute
+    }
+    '/_shell/sales/orders/new': {
+      id: '/_shell/sales/orders/new'
+      path: '/orders/new'
+      fullPath: '/sales/orders/new'
+      preLoaderRoute: typeof ShellSalesOrdersNewRouteImport
+      parentRoute: typeof ShellSalesRoute
+    }
   }
 }
 
+interface ShellDispatcherRouteChildren {
+  ShellDispatcherPlanPoIdRoute: typeof ShellDispatcherPlanPoIdRoute
+}
+
+const ShellDispatcherRouteChildren: ShellDispatcherRouteChildren = {
+  ShellDispatcherPlanPoIdRoute: ShellDispatcherPlanPoIdRoute,
+}
+
+const ShellDispatcherRouteWithChildren = ShellDispatcherRoute._addFileChildren(
+  ShellDispatcherRouteChildren,
+)
+
+interface ShellSalesRouteChildren {
+  ShellSalesApprovalsRoute: typeof ShellSalesApprovalsRoute
+  ShellSalesCustomersRoute: typeof ShellSalesCustomersRoute
+  ShellSalesIndexRoute: typeof ShellSalesIndexRoute
+  ShellSalesOrdersPoIdRoute: typeof ShellSalesOrdersPoIdRoute
+  ShellSalesOrdersNewRoute: typeof ShellSalesOrdersNewRoute
+  ShellSalesOrdersIndexRoute: typeof ShellSalesOrdersIndexRoute
+}
+
+const ShellSalesRouteChildren: ShellSalesRouteChildren = {
+  ShellSalesApprovalsRoute: ShellSalesApprovalsRoute,
+  ShellSalesCustomersRoute: ShellSalesCustomersRoute,
+  ShellSalesIndexRoute: ShellSalesIndexRoute,
+  ShellSalesOrdersPoIdRoute: ShellSalesOrdersPoIdRoute,
+  ShellSalesOrdersNewRoute: ShellSalesOrdersNewRoute,
+  ShellSalesOrdersIndexRoute: ShellSalesOrdersIndexRoute,
+}
+
+const ShellSalesRouteWithChildren = ShellSalesRoute._addFileChildren(
+  ShellSalesRouteChildren,
+)
+
+interface ShellRouteChildren {
+  ShellBillingRoute: typeof ShellBillingRoute
+  ShellDispatcherRoute: typeof ShellDispatcherRouteWithChildren
+  ShellOwnerRoute: typeof ShellOwnerRoute
+  ShellPortalRoute: typeof ShellPortalRoute
+  ShellProductionRoute: typeof ShellProductionRoute
+  ShellQaRoute: typeof ShellQaRoute
+  ShellReportsRoute: typeof ShellReportsRoute
+  ShellSalesRoute: typeof ShellSalesRouteWithChildren
+}
+
+const ShellRouteChildren: ShellRouteChildren = {
+  ShellBillingRoute: ShellBillingRoute,
+  ShellDispatcherRoute: ShellDispatcherRouteWithChildren,
+  ShellOwnerRoute: ShellOwnerRoute,
+  ShellPortalRoute: ShellPortalRoute,
+  ShellProductionRoute: ShellProductionRoute,
+  ShellQaRoute: ShellQaRoute,
+  ShellReportsRoute: ShellReportsRoute,
+  ShellSalesRoute: ShellSalesRouteWithChildren,
+}
+
+const ShellRouteWithChildren = ShellRoute._addFileChildren(ShellRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ShellRoute: ShellRouteWithChildren,
+  BatchSheetIdRoute: BatchSheetIdRoute,
+  ChallanTripIdRoute: ChallanTripIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
