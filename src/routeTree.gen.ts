@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ShellRouteImport } from './routes/_shell'
+import { Route as ShellDispatcherRouteImport } from './routes/_shell.dispatcher'
 import { Route as ShellOwnerRouteImport } from './routes/_shell.owner'
 
 const IndexRoute = IndexRouteImport.update({
@@ -22,6 +23,11 @@ const ShellRoute = ShellRouteImport.update({
   id: '/_shell',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ShellDispatcherRoute = ShellDispatcherRouteImport.update({
+  id: '/dispatcher',
+  path: '/dispatcher',
+  getParentRoute: () => ShellRoute,
+} as any)
 const ShellOwnerRoute = ShellOwnerRouteImport.update({
   id: '/owner',
   path: '/owner',
@@ -30,24 +36,27 @@ const ShellOwnerRoute = ShellOwnerRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/dispatcher': typeof ShellDispatcherRoute
   '/owner': typeof ShellOwnerRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/dispatcher': typeof ShellDispatcherRoute
   '/owner': typeof ShellOwnerRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_shell': typeof ShellRouteWithChildren
+  '/_shell/dispatcher': typeof ShellDispatcherRoute
   '/_shell/owner': typeof ShellOwnerRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/owner'
+  fullPaths: '/' | '/dispatcher' | '/owner'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/owner'
-  id: '__root__' | '/' | '/_shell' | '/_shell/owner'
+  to: '/' | '/dispatcher' | '/owner'
+  id: '__root__' | '/' | '/_shell' | '/_shell/dispatcher' | '/_shell/owner'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -71,6 +80,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_shell/dispatcher': {
+      id: '/_shell/dispatcher'
+      path: '/dispatcher'
+      fullPath: '/dispatcher'
+      preLoaderRoute: typeof ShellDispatcherRouteImport
+      parentRoute: typeof ShellRoute
+    }
     '/_shell/owner': {
       id: '/_shell/owner'
       path: '/owner'
@@ -82,10 +98,12 @@ declare module '@tanstack/react-router' {
 }
 
 interface ShellRouteChildren {
+  ShellDispatcherRoute: typeof ShellDispatcherRoute
   ShellOwnerRoute: typeof ShellOwnerRoute
 }
 
 const ShellRouteChildren: ShellRouteChildren = {
+  ShellDispatcherRoute: ShellDispatcherRoute,
   ShellOwnerRoute: ShellOwnerRoute,
 }
 
