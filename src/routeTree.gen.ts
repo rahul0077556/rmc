@@ -17,6 +17,7 @@ import { Route as ShellOwnerRouteImport } from './routes/_shell.owner'
 import { Route as ShellPortalRouteImport } from './routes/_shell.portal'
 import { Route as ShellProductionRouteImport } from './routes/_shell.production'
 import { Route as ShellQaRouteImport } from './routes/_shell.qa'
+import { Route as ShellReportsRouteImport } from './routes/_shell.reports'
 import { Route as ShellSalesRouteImport } from './routes/_shell.sales'
 import { Route as BatchSheetIdRouteImport } from './routes/batch-sheet.$id'
 import { Route as ChallanTripIdRouteImport } from './routes/challan.$tripId'
@@ -65,6 +66,11 @@ const ShellProductionRoute = ShellProductionRouteImport.update({
 const ShellQaRoute = ShellQaRouteImport.update({
   id: '/qa',
   path: '/qa',
+  getParentRoute: () => ShellRoute,
+} as any)
+const ShellReportsRoute = ShellReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
   getParentRoute: () => ShellRoute,
 } as any)
 const ShellSalesRoute = ShellSalesRouteImport.update({
@@ -126,6 +132,7 @@ export interface FileRoutesByFullPath {
   '/portal': typeof ShellPortalRoute
   '/production': typeof ShellProductionRoute
   '/qa': typeof ShellQaRoute
+  '/reports': typeof ShellReportsRoute
   '/sales': typeof ShellSalesRouteWithChildren
   '/batch-sheet/$id': typeof BatchSheetIdRoute
   '/challan/$tripId': typeof ChallanTripIdRoute
@@ -145,6 +152,7 @@ export interface FileRoutesByTo {
   '/portal': typeof ShellPortalRoute
   '/production': typeof ShellProductionRoute
   '/qa': typeof ShellQaRoute
+  '/reports': typeof ShellReportsRoute
   '/batch-sheet/$id': typeof BatchSheetIdRoute
   '/challan/$tripId': typeof ChallanTripIdRoute
   '/sales/approvals': typeof ShellSalesApprovalsRoute
@@ -165,6 +173,7 @@ export interface FileRoutesById {
   '/_shell/portal': typeof ShellPortalRoute
   '/_shell/production': typeof ShellProductionRoute
   '/_shell/qa': typeof ShellQaRoute
+  '/_shell/reports': typeof ShellReportsRoute
   '/_shell/sales': typeof ShellSalesRouteWithChildren
   '/batch-sheet/$id': typeof BatchSheetIdRoute
   '/challan/$tripId': typeof ChallanTripIdRoute
@@ -186,6 +195,7 @@ export interface FileRouteTypes {
     | '/portal'
     | '/production'
     | '/qa'
+    | '/reports'
     | '/sales'
     | '/batch-sheet/$id'
     | '/challan/$tripId'
@@ -205,6 +215,7 @@ export interface FileRouteTypes {
     | '/portal'
     | '/production'
     | '/qa'
+    | '/reports'
     | '/batch-sheet/$id'
     | '/challan/$tripId'
     | '/sales/approvals'
@@ -224,6 +235,7 @@ export interface FileRouteTypes {
     | '/_shell/portal'
     | '/_shell/production'
     | '/_shell/qa'
+    | '/_shell/reports'
     | '/_shell/sales'
     | '/batch-sheet/$id'
     | '/challan/$tripId'
@@ -299,6 +311,13 @@ declare module '@tanstack/react-router' {
       path: '/qa'
       fullPath: '/qa'
       preLoaderRoute: typeof ShellQaRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/reports': {
+      id: '/_shell/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof ShellReportsRouteImport
       parentRoute: typeof ShellRoute
     }
     '/_shell/sales': {
@@ -415,6 +434,7 @@ interface ShellRouteChildren {
   ShellPortalRoute: typeof ShellPortalRoute
   ShellProductionRoute: typeof ShellProductionRoute
   ShellQaRoute: typeof ShellQaRoute
+  ShellReportsRoute: typeof ShellReportsRoute
   ShellSalesRoute: typeof ShellSalesRouteWithChildren
 }
 
@@ -425,6 +445,7 @@ const ShellRouteChildren: ShellRouteChildren = {
   ShellPortalRoute: ShellPortalRoute,
   ShellProductionRoute: ShellProductionRoute,
   ShellQaRoute: ShellQaRoute,
+  ShellReportsRoute: ShellReportsRoute,
   ShellSalesRoute: ShellSalesRouteWithChildren,
 }
 
