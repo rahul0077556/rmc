@@ -1,5 +1,5 @@
-import type { LucideIcon, ReactNode } from "lucide-react";
-import { AlertTriangle, Inbox } from "lucide-react";
+import type { ReactNode } from "react";
+import { AlertTriangle, Inbox, type LucideIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function LoadingState({ rows = 4 }: { rows?: number }) {
