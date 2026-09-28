@@ -15,6 +15,8 @@ import { Route as ShellDispatcherRouteImport } from './routes/_shell.dispatcher'
 import { Route as ShellOwnerRouteImport } from './routes/_shell.owner'
 import { Route as ShellProductionRouteImport } from './routes/_shell.production'
 import { Route as ShellQaRouteImport } from './routes/_shell.qa'
+import { Route as BatchSheetIdRouteImport } from './routes/batch-sheet.$id'
+import { Route as ChallanTripIdRouteImport } from './routes/challan.$tripId'
 import { Route as ShellDispatcherPlanPoIdRouteImport } from './routes/_shell.dispatcher.plan.$poId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -46,6 +48,16 @@ const ShellQaRoute = ShellQaRouteImport.update({
   path: '/qa',
   getParentRoute: () => ShellRoute,
 } as any)
+const BatchSheetIdRoute = BatchSheetIdRouteImport.update({
+  id: '/batch-sheet/$id',
+  path: '/batch-sheet/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChallanTripIdRoute = ChallanTripIdRouteImport.update({
+  id: '/challan/$tripId',
+  path: '/challan/$tripId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ShellDispatcherPlanPoIdRoute = ShellDispatcherPlanPoIdRouteImport.update({
   id: '/plan/$poId',
   path: '/plan/$poId',
@@ -58,6 +70,8 @@ export interface FileRoutesByFullPath {
   '/owner': typeof ShellOwnerRoute
   '/production': typeof ShellProductionRoute
   '/qa': typeof ShellQaRoute
+  '/batch-sheet/$id': typeof BatchSheetIdRoute
+  '/challan/$tripId': typeof ChallanTripIdRoute
   '/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
 }
 export interface FileRoutesByTo {
@@ -66,6 +80,8 @@ export interface FileRoutesByTo {
   '/owner': typeof ShellOwnerRoute
   '/production': typeof ShellProductionRoute
   '/qa': typeof ShellQaRoute
+  '/batch-sheet/$id': typeof BatchSheetIdRoute
+  '/challan/$tripId': typeof ChallanTripIdRoute
   '/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
 }
 export interface FileRoutesById {
@@ -76,6 +92,8 @@ export interface FileRoutesById {
   '/_shell/owner': typeof ShellOwnerRoute
   '/_shell/production': typeof ShellProductionRoute
   '/_shell/qa': typeof ShellQaRoute
+  '/batch-sheet/$id': typeof BatchSheetIdRoute
+  '/challan/$tripId': typeof ChallanTripIdRoute
   '/_shell/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
 }
 export interface FileRouteTypes {
@@ -86,6 +104,8 @@ export interface FileRouteTypes {
     | '/owner'
     | '/production'
     | '/qa'
+    | '/batch-sheet/$id'
+    | '/challan/$tripId'
     | '/dispatcher/plan/$poId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -94,6 +114,8 @@ export interface FileRouteTypes {
     | '/owner'
     | '/production'
     | '/qa'
+    | '/batch-sheet/$id'
+    | '/challan/$tripId'
     | '/dispatcher/plan/$poId'
   id:
     | '__root__'
@@ -103,12 +125,16 @@ export interface FileRouteTypes {
     | '/_shell/owner'
     | '/_shell/production'
     | '/_shell/qa'
+    | '/batch-sheet/$id'
+    | '/challan/$tripId'
     | '/_shell/dispatcher/plan/$poId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ShellRoute: typeof ShellRouteWithChildren
+  BatchSheetIdRoute: typeof BatchSheetIdRoute
+  ChallanTripIdRoute: typeof ChallanTripIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -155,6 +181,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellQaRouteImport
       parentRoute: typeof ShellRoute
     }
+    '/batch-sheet/$id': {
+      id: '/batch-sheet/$id'
+      path: '/batch-sheet/$id'
+      fullPath: '/batch-sheet/$id'
+      preLoaderRoute: typeof BatchSheetIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/challan/$tripId': {
+      id: '/challan/$tripId'
+      path: '/challan/$tripId'
+      fullPath: '/challan/$tripId'
+      preLoaderRoute: typeof ChallanTripIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_shell/dispatcher/plan/$poId': {
       id: '/_shell/dispatcher/plan/$poId'
       path: '/plan/$poId'
@@ -196,6 +236,8 @@ const ShellRouteWithChildren = ShellRoute._addFileChildren(ShellRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ShellRoute: ShellRouteWithChildren,
+  BatchSheetIdRoute: BatchSheetIdRoute,
+  ChallanTripIdRoute: ChallanTripIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
