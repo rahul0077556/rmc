@@ -34,14 +34,14 @@ export const Route = createFileRoute("/_shell/sales/orders/new")({
 const schema = z.object({
   customerId: z.string().min(1, "Select a customer"),
   siteId: z.string().min(1, "Select a delivery site"),
-  grade: z.enum(GRADES),
+  grade: z.enum(GRADES as unknown as [Grade, ...Grade[]]),
   quantity: z.coerce.number().positive("Quantity must be greater than zero"),
   ratePerCum: z.coerce.number().positive("Enter a rate"),
   deliveryDate: z.string().min(1, "Choose a delivery date"),
   deliveryTime: z.string().min(1, "Choose a delivery time"),
   purpose: z.enum(["Slab", "Column", "Beam", "Footing", "Other"]),
   pumpRequired: z.boolean(),
-  pumpOwnership: z.enum(["Customer", "Company"]).optional(),
+  pumpOwnership: z.enum(["Customer Pump", "Company Pump"]).optional(),
   pumpType: z.enum(["Horizontal", "Vertical"]).optional(),
   pipelineLength: z.coerce.number().min(0).optional(),
   workersRequired: z.coerce.number().min(0).optional(),
@@ -213,13 +213,13 @@ function CreateOrderPage() {
                 <div className="space-y-1.5">
                   <Label>Ownership</Label>
                   <Select
-                    value={form.watch("pumpOwnership") ?? "Company"}
-                    onValueChange={(v) => form.setValue("pumpOwnership", v as "Customer" | "Company")}
+                    value={form.watch("pumpOwnership") ?? "Company Pump"}
+                    onValueChange={(v) => form.setValue("pumpOwnership", v as "Customer Pump" | "Company Pump")}
                   >
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Company">Company</SelectItem>
-                      <SelectItem value="Customer">Customer</SelectItem>
+                      <SelectItem value="Company Pump">Company</SelectItem>
+                      <SelectItem value="Customer Pump">Customer</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
