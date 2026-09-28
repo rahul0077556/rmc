@@ -13,6 +13,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ShellRouteImport } from './routes/_shell'
 import { Route as ShellDispatcherRouteImport } from './routes/_shell.dispatcher'
 import { Route as ShellOwnerRouteImport } from './routes/_shell.owner'
+import { Route as ShellProductionRouteImport } from './routes/_shell.production'
+import { Route as ShellQaRouteImport } from './routes/_shell.qa'
 import { Route as ShellDispatcherPlanPoIdRouteImport } from './routes/_shell.dispatcher.plan.$poId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -34,6 +36,16 @@ const ShellOwnerRoute = ShellOwnerRouteImport.update({
   path: '/owner',
   getParentRoute: () => ShellRoute,
 } as any)
+const ShellProductionRoute = ShellProductionRouteImport.update({
+  id: '/production',
+  path: '/production',
+  getParentRoute: () => ShellRoute,
+} as any)
+const ShellQaRoute = ShellQaRouteImport.update({
+  id: '/qa',
+  path: '/qa',
+  getParentRoute: () => ShellRoute,
+} as any)
 const ShellDispatcherPlanPoIdRoute = ShellDispatcherPlanPoIdRouteImport.update({
   id: '/plan/$poId',
   path: '/plan/$poId',
@@ -44,12 +56,16 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dispatcher': typeof ShellDispatcherRouteWithChildren
   '/owner': typeof ShellOwnerRoute
+  '/production': typeof ShellProductionRoute
+  '/qa': typeof ShellQaRoute
   '/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dispatcher': typeof ShellDispatcherRouteWithChildren
   '/owner': typeof ShellOwnerRoute
+  '/production': typeof ShellProductionRoute
+  '/qa': typeof ShellQaRoute
   '/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
 }
 export interface FileRoutesById {
@@ -58,19 +74,35 @@ export interface FileRoutesById {
   '/_shell': typeof ShellRouteWithChildren
   '/_shell/dispatcher': typeof ShellDispatcherRouteWithChildren
   '/_shell/owner': typeof ShellOwnerRoute
+  '/_shell/production': typeof ShellProductionRoute
+  '/_shell/qa': typeof ShellQaRoute
   '/_shell/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/dispatcher' | '/owner' | '/dispatcher/plan/$poId'
+  fullPaths:
+    | '/'
+    | '/dispatcher'
+    | '/owner'
+    | '/production'
+    | '/qa'
+    | '/dispatcher/plan/$poId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dispatcher' | '/owner' | '/dispatcher/plan/$poId'
+  to:
+    | '/'
+    | '/dispatcher'
+    | '/owner'
+    | '/production'
+    | '/qa'
+    | '/dispatcher/plan/$poId'
   id:
     | '__root__'
     | '/'
     | '/_shell'
     | '/_shell/dispatcher'
     | '/_shell/owner'
+    | '/_shell/production'
+    | '/_shell/qa'
     | '/_shell/dispatcher/plan/$poId'
   fileRoutesById: FileRoutesById
 }
@@ -109,6 +141,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellOwnerRouteImport
       parentRoute: typeof ShellRoute
     }
+    '/_shell/production': {
+      id: '/_shell/production'
+      path: '/production'
+      fullPath: '/production'
+      preLoaderRoute: typeof ShellProductionRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/qa': {
+      id: '/_shell/qa'
+      path: '/qa'
+      fullPath: '/qa'
+      preLoaderRoute: typeof ShellQaRouteImport
+      parentRoute: typeof ShellRoute
+    }
     '/_shell/dispatcher/plan/$poId': {
       id: '/_shell/dispatcher/plan/$poId'
       path: '/plan/$poId'
@@ -134,11 +180,15 @@ const ShellDispatcherRouteWithChildren = ShellDispatcherRoute._addFileChildren(
 interface ShellRouteChildren {
   ShellDispatcherRoute: typeof ShellDispatcherRouteWithChildren
   ShellOwnerRoute: typeof ShellOwnerRoute
+  ShellProductionRoute: typeof ShellProductionRoute
+  ShellQaRoute: typeof ShellQaRoute
 }
 
 const ShellRouteChildren: ShellRouteChildren = {
   ShellDispatcherRoute: ShellDispatcherRouteWithChildren,
   ShellOwnerRoute: ShellOwnerRoute,
+  ShellProductionRoute: ShellProductionRoute,
+  ShellQaRoute: ShellQaRoute,
 }
 
 const ShellRouteWithChildren = ShellRoute._addFileChildren(ShellRouteChildren)
