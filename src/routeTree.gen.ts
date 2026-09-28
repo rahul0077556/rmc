@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ShellRouteImport } from './routes/_shell'
 import { Route as ShellDispatcherRouteImport } from './routes/_shell.dispatcher'
 import { Route as ShellOwnerRouteImport } from './routes/_shell.owner'
+import { Route as ShellDispatcherPlanPoIdRouteImport } from './routes/_shell.dispatcher.plan.$poId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -33,30 +34,44 @@ const ShellOwnerRoute = ShellOwnerRouteImport.update({
   path: '/owner',
   getParentRoute: () => ShellRoute,
 } as any)
+const ShellDispatcherPlanPoIdRoute = ShellDispatcherPlanPoIdRouteImport.update({
+  id: '/plan/$poId',
+  path: '/plan/$poId',
+  getParentRoute: () => ShellDispatcherRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/dispatcher': typeof ShellDispatcherRoute
+  '/dispatcher': typeof ShellDispatcherRouteWithChildren
   '/owner': typeof ShellOwnerRoute
+  '/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/dispatcher': typeof ShellDispatcherRoute
+  '/dispatcher': typeof ShellDispatcherRouteWithChildren
   '/owner': typeof ShellOwnerRoute
+  '/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_shell': typeof ShellRouteWithChildren
-  '/_shell/dispatcher': typeof ShellDispatcherRoute
+  '/_shell/dispatcher': typeof ShellDispatcherRouteWithChildren
   '/_shell/owner': typeof ShellOwnerRoute
+  '/_shell/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/dispatcher' | '/owner'
+  fullPaths: '/' | '/dispatcher' | '/owner' | '/dispatcher/plan/$poId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dispatcher' | '/owner'
-  id: '__root__' | '/' | '/_shell' | '/_shell/dispatcher' | '/_shell/owner'
+  to: '/' | '/dispatcher' | '/owner' | '/dispatcher/plan/$poId'
+  id:
+    | '__root__'
+    | '/'
+    | '/_shell'
+    | '/_shell/dispatcher'
+    | '/_shell/owner'
+    | '/_shell/dispatcher/plan/$poId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -94,16 +109,35 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellOwnerRouteImport
       parentRoute: typeof ShellRoute
     }
+    '/_shell/dispatcher/plan/$poId': {
+      id: '/_shell/dispatcher/plan/$poId'
+      path: '/plan/$poId'
+      fullPath: '/dispatcher/plan/$poId'
+      preLoaderRoute: typeof ShellDispatcherPlanPoIdRouteImport
+      parentRoute: typeof ShellDispatcherRoute
+    }
   }
 }
 
+interface ShellDispatcherRouteChildren {
+  ShellDispatcherPlanPoIdRoute: typeof ShellDispatcherPlanPoIdRoute
+}
+
+const ShellDispatcherRouteChildren: ShellDispatcherRouteChildren = {
+  ShellDispatcherPlanPoIdRoute: ShellDispatcherPlanPoIdRoute,
+}
+
+const ShellDispatcherRouteWithChildren = ShellDispatcherRoute._addFileChildren(
+  ShellDispatcherRouteChildren,
+)
+
 interface ShellRouteChildren {
-  ShellDispatcherRoute: typeof ShellDispatcherRoute
+  ShellDispatcherRoute: typeof ShellDispatcherRouteWithChildren
   ShellOwnerRoute: typeof ShellOwnerRoute
 }
 
 const ShellRouteChildren: ShellRouteChildren = {
-  ShellDispatcherRoute: ShellDispatcherRoute,
+  ShellDispatcherRoute: ShellDispatcherRouteWithChildren,
   ShellOwnerRoute: ShellOwnerRoute,
 }
 
