@@ -11,8 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ShellRouteImport } from './routes/_shell'
+import { Route as ShellBillingRouteImport } from './routes/_shell.billing'
 import { Route as ShellDispatcherRouteImport } from './routes/_shell.dispatcher'
 import { Route as ShellOwnerRouteImport } from './routes/_shell.owner'
+import { Route as ShellPortalRouteImport } from './routes/_shell.portal'
 import { Route as ShellProductionRouteImport } from './routes/_shell.production'
 import { Route as ShellQaRouteImport } from './routes/_shell.qa'
 import { Route as ShellSalesRouteImport } from './routes/_shell.sales'
@@ -35,6 +37,11 @@ const ShellRoute = ShellRouteImport.update({
   id: '/_shell',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ShellBillingRoute = ShellBillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
+  getParentRoute: () => ShellRoute,
+} as any)
 const ShellDispatcherRoute = ShellDispatcherRouteImport.update({
   id: '/dispatcher',
   path: '/dispatcher',
@@ -43,6 +50,11 @@ const ShellDispatcherRoute = ShellDispatcherRouteImport.update({
 const ShellOwnerRoute = ShellOwnerRouteImport.update({
   id: '/owner',
   path: '/owner',
+  getParentRoute: () => ShellRoute,
+} as any)
+const ShellPortalRoute = ShellPortalRouteImport.update({
+  id: '/portal',
+  path: '/portal',
   getParentRoute: () => ShellRoute,
 } as any)
 const ShellProductionRoute = ShellProductionRouteImport.update({
@@ -108,8 +120,10 @@ const ShellSalesOrdersNewRoute = ShellSalesOrdersNewRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/billing': typeof ShellBillingRoute
   '/dispatcher': typeof ShellDispatcherRouteWithChildren
   '/owner': typeof ShellOwnerRoute
+  '/portal': typeof ShellPortalRoute
   '/production': typeof ShellProductionRoute
   '/qa': typeof ShellQaRoute
   '/sales': typeof ShellSalesRouteWithChildren
@@ -125,8 +139,10 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/billing': typeof ShellBillingRoute
   '/dispatcher': typeof ShellDispatcherRouteWithChildren
   '/owner': typeof ShellOwnerRoute
+  '/portal': typeof ShellPortalRoute
   '/production': typeof ShellProductionRoute
   '/qa': typeof ShellQaRoute
   '/batch-sheet/$id': typeof BatchSheetIdRoute
@@ -143,8 +159,10 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_shell': typeof ShellRouteWithChildren
+  '/_shell/billing': typeof ShellBillingRoute
   '/_shell/dispatcher': typeof ShellDispatcherRouteWithChildren
   '/_shell/owner': typeof ShellOwnerRoute
+  '/_shell/portal': typeof ShellPortalRoute
   '/_shell/production': typeof ShellProductionRoute
   '/_shell/qa': typeof ShellQaRoute
   '/_shell/sales': typeof ShellSalesRouteWithChildren
@@ -162,8 +180,10 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/billing'
     | '/dispatcher'
     | '/owner'
+    | '/portal'
     | '/production'
     | '/qa'
     | '/sales'
@@ -179,8 +199,10 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/billing'
     | '/dispatcher'
     | '/owner'
+    | '/portal'
     | '/production'
     | '/qa'
     | '/batch-sheet/$id'
@@ -196,8 +218,10 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_shell'
+    | '/_shell/billing'
     | '/_shell/dispatcher'
     | '/_shell/owner'
+    | '/_shell/portal'
     | '/_shell/production'
     | '/_shell/qa'
     | '/_shell/sales'
@@ -235,6 +259,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_shell/billing': {
+      id: '/_shell/billing'
+      path: '/billing'
+      fullPath: '/billing'
+      preLoaderRoute: typeof ShellBillingRouteImport
+      parentRoute: typeof ShellRoute
+    }
     '/_shell/dispatcher': {
       id: '/_shell/dispatcher'
       path: '/dispatcher'
@@ -247,6 +278,13 @@ declare module '@tanstack/react-router' {
       path: '/owner'
       fullPath: '/owner'
       preLoaderRoute: typeof ShellOwnerRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/portal': {
+      id: '/_shell/portal'
+      path: '/portal'
+      fullPath: '/portal'
+      preLoaderRoute: typeof ShellPortalRouteImport
       parentRoute: typeof ShellRoute
     }
     '/_shell/production': {
@@ -371,16 +409,20 @@ const ShellSalesRouteWithChildren = ShellSalesRoute._addFileChildren(
 )
 
 interface ShellRouteChildren {
+  ShellBillingRoute: typeof ShellBillingRoute
   ShellDispatcherRoute: typeof ShellDispatcherRouteWithChildren
   ShellOwnerRoute: typeof ShellOwnerRoute
+  ShellPortalRoute: typeof ShellPortalRoute
   ShellProductionRoute: typeof ShellProductionRoute
   ShellQaRoute: typeof ShellQaRoute
   ShellSalesRoute: typeof ShellSalesRouteWithChildren
 }
 
 const ShellRouteChildren: ShellRouteChildren = {
+  ShellBillingRoute: ShellBillingRoute,
   ShellDispatcherRoute: ShellDispatcherRouteWithChildren,
   ShellOwnerRoute: ShellOwnerRoute,
+  ShellPortalRoute: ShellPortalRoute,
   ShellProductionRoute: ShellProductionRoute,
   ShellQaRoute: ShellQaRoute,
   ShellSalesRoute: ShellSalesRouteWithChildren,
