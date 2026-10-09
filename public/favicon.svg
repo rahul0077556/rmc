@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1b4b" />
+      <stop offset="50%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#090d16" />
+    </linearGradient>
+
+    <!-- Top Cube Gradients -->
+    <linearGradient id="cubeTop_top" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a5b4fc" />
+      <stop offset="100%" stop-color="#818cf8" />
+    </linearGradient>
+    <linearGradient id="cubeTop_left" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#4f46e5" />
+    </linearGradient>
+    <linearGradient id="cubeTop_right" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4338ca" />
+      <stop offset="100%" stop-color="#312e81" />
+    </linearGradient>
+
+    <!-- Bottom Left Cube (Cyan/Water/Batch) -->
+    <linearGradient id="cubeLeft_top" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#0ea5e9" />
+    </linearGradient>
+    <linearGradient id="cubeLeft_left" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#0369a1" />
+    </linearGradient>
+    <linearGradient id="cubeLeft_right" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#075985" />
+      <stop offset="100%" stop-color="#0c4a6e" />
+    </linearGradient>
+
+    <!-- Bottom Right Cube (Amber/Aggregate/Sand) -->
+    <linearGradient id="cubeRight_top" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+    <linearGradient id="cubeRight_left" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#b45309" />
+    </linearGradient>
+    <linearGradient id="cubeRight_right" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#92400e" />
+      <stop offset="100%" stop-color="#78350f" />
+    </linearGradient>
+
+    <!-- Subtle Glow Filter -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#6366f1" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- Base Squircle -->
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#bgGrad)" stroke="#312e81" stroke-width="2.5" />
+
+  <!-- Concrete cluster / Isometric Boxes -->
+  <g filter="url(#glow)">
+    <!-- TOP CUBE (Center-X: 64, Peak-Y: 22) -->
+    <!-- Top Face -->
+    <polygon points="64,22 84,33.5 64,45 44,33.5" fill="url(#cubeTop_top)" />
+    <!-- Left Face -->
+    <polygon points="44,33.5 64,45 64,68 44,56.5" fill="url(#cubeTop_left)" />
+    <!-- Right Face -->
+    <polygon points="64,45 84,33.5 84,56.5 64,68" fill="url(#cubeTop_right)" />
+
+    <!-- BOTTOM LEFT CUBE (Center-X: 42, Peak-Y: 57) -->
+    <!-- Top Face -->
+    <polygon points="42,57 62,68.5 42,80 22,68.5" fill="url(#cubeLeft_top)" />
+    <!-- Left Face -->
+    <polygon points="22,68.5 42,80 42,103 22,91.5" fill="url(#cubeLeft_left)" />
+    <!-- Right Face -->
+    <polygon points="42,80 62,68.5 62,91.5 42,103" fill="url(#cubeLeft_right)" />
+
+    <!-- BOTTOM RIGHT CUBE (Center-X: 86, Peak-Y: 57) -->
+    <!-- Top Face -->
+    <polygon points="86,57 106,68.5 86,80 66,68.5" fill="url(#cubeRight_top)" />
+    <!-- Left Face -->
+    <polygon points="66,68.5 86,80 86,103 66,91.5" fill="url(#cubeRight_left)" />
+    <!-- Right Face -->
+    <polygon points="86,80 106,68.5 106,91.5 86,103" fill="url(#cubeRight_right)" />
+  </g>
+
+  <!-- Crisp seam borders between facets -->
+  <g stroke="#0f172a" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Top Cube Edges -->
+    <polygon points="64,22 84,33.5 84,56.5 64,68 44,56.5 44,33.5" />
+    <line x1="64" y1="45" x2="64" y2="68" />
+    <line x1="44" y1="33.5" x2="64" y2="45" />
+    <line x1="84" y1="33.5" x2="64" y2="45" />
+
+    <!-- Bottom Left Cube Edges -->
+    <polygon points="42,57 62,68.5 62,91.5 42,103 22,91.5 22,68.5" />
+    <line x1="42" y1="80" x2="42" y2="103" />
+    <line x1="22" y1="68.5" x2="42" y2="80" />
+    <line x1="62" y1="68.5" x2="42" y2="80" />
+
+    <!-- Bottom Right Cube Edges -->
+    <polygon points="86,57 106,68.5 106,91.5 86,103 66,91.5 66,68.5" />
+    <line x1="86" y1="80" x2="86" y2="103" />
+    <line x1="66" y1="68.5" x2="86" y2="80" />
+    <line x1="106" y1="68.5" x2="86" y2="80" />
+  </g>
+</svg>
