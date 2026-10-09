@@ -99,8 +99,10 @@ export const qaApi = {
           poId: trip.poId,
           sequence: trip.sequence,
           quantity: trip.quantity,
+          tmId: trip.tmId,
+          driverId: trip.driverId,
           plannedTime: new Date().toISOString(),
-          status: "PLANNED",
+          status: "SENT_TO_PRODUCTION",
           lastUpdate: new Date().toISOString(),
         };
         trip.status = "REPLACED";

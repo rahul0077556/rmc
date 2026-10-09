@@ -1,0 +1,54 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: rmc-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: rmc_user
+      POSTGRES_PASSWORD: rmc_password
+      POSTGRES_DB: rmc_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rmc_user -d rmc_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: rmc-backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://rmc_user:rmc_password@postgres:5432/rmc_db
+      SECRET_KEY: rmc-production-secret-key-replace-in-env
+      JWT_SECRET_KEY: rmc-jwt-production-secret-key
+      FLASK_ENV: production
+    ports:
+      - "5001:5001"
+    command: >
+      sh -c "python -m flask --app backend.wsgi seed &&
+             gunicorn --bind 0.0.0.0:5001 --workers 2 backend.wsgi:app"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: rmc-frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  pgdata:

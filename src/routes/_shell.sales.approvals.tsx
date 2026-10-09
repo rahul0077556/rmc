@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -8,6 +8,8 @@ import { LoadingState, ErrorState } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { FilterBar } from "@/components/app/filter-bar";
+import { useListQuery } from "@/hooks/use-list-query";
 import {
   Dialog,
   DialogContent,
@@ -35,8 +37,6 @@ export const Route = createFileRoute("/_shell/sales/approvals")({
     meta: [
       { title: "Approvals · RMC Command Center" },
       { name: "description", content: "Review submitted purchase orders and release them to dispatch." },
-      { property: "og:title", content: "Approvals · RMC Command Center" },
-      { property: "og:description", content: "Review submitted purchase orders and release them to dispatch." },
     ],
   }),
   component: ApprovalsPage,
@@ -44,12 +44,13 @@ export const Route = createFileRoute("/_shell/sales/approvals")({
 
 function ApprovalsPage() {
   const { user } = useAuth();
+  const readOnly = user?.role === "owner";
   const qc = useQueryClient();
   const [approveTarget, setApproveTarget] = useState<OrderRow | null>(null);
   const [rejectTarget, setRejectTarget] = useState<OrderRow | null>(null);
   const [reason, setReason] = useState("");
 
-  const queue = useQuery({ queryKey: ["approvals"], queryFn: () => ordersApi.approvalQueue().then((r) => r.data) });
+  const { params, updateParams, query: queue } = useListQuery(["approvals"], () => ordersApi.approvalQueue().then((r) => r.data));
 
   const approve = useMutation({
     mutationFn: (id: string) => ordersApi.approve(id, user?.name ?? "Sales Manager"),
@@ -71,6 +72,16 @@ function ApprovalsPage() {
     },
   });
 
+  const filteredQueue = useMemo(() => {
+    if (!queue.data) return [];
+    let list = queue.data;
+    if (params.q) {
+      const lower = params.q.toLowerCase();
+      list = list.filter((i) => i.poNumber.toLowerCase().includes(lower) || i.customerName.toLowerCase().includes(lower));
+    }
+    return list;
+  }, [queue.data, params]);
+
   if (queue.isLoading) return <LoadingState rows={5} />;
   if (queue.error || !queue.data) return <ErrorState message="The approval queue could not be loaded." onRetry={() => void queue.refetch()} />;
 
@@ -88,10 +99,10 @@ function ApprovalsPage() {
       align: "right",
       cell: (r) => (
         <div className="flex justify-end gap-1.5">
-          <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => setRejectTarget(r)}>
+          <Button size="sm" variant="ghost" disabled={readOnly} className="text-destructive hover:bg-destructive/10" onClick={() => setRejectTarget(r)}>
             Reject
           </Button>
-          <Button size="sm" onClick={() => setApproveTarget(r)}>
+          <Button size="sm" disabled={readOnly} onClick={() => setApproveTarget(r)}>
             Approve
           </Button>
         </div>
@@ -103,9 +114,15 @@ function ApprovalsPage() {
     <div className="space-y-6">
       <PageHeader title="Approval Queue" subtitle="Submitted orders awaiting sales manager sign-off" />
 
+      <FilterBar
+        search={params.q}
+        onSearchChange={(q) => updateParams({ q })}
+        searchPlaceholder="Search PO or Customer..."
+      />
+
       <DataTable
         columns={columns}
-        rows={queue.data}
+        rows={filteredQueue}
         rowKey={(r) => r.id}
         emptyTitle="Nothing to approve"
         emptyDescription="Submitted purchase orders will appear here for review."

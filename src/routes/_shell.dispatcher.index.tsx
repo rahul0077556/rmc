@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { CheckCircle2, ClipboardList, FlaskConical, PackageCheck, Truck } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
@@ -10,6 +10,8 @@ import { DataTable, type Column } from "@/components/app/data-table";
 import { StatusBadge } from "@/components/app/status-badge";
 import { LoadingState, ErrorState } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
+import { FilterBar } from "@/components/app/filter-bar";
+import { useListQuery } from "@/hooks/use-list-query";
 import {
   Dialog,
   DialogContent,
@@ -26,13 +28,11 @@ import { useAuth } from "@/auth/auth-context";
 import { cum, timeOnly } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/_shell/dispatcher")({
+export const Route = createFileRoute("/_shell/dispatcher/")({
   head: () => ({
     meta: [
       { title: "Dispatch Control · RMC Command Center" },
       { name: "description", content: "Plan trips, assign transit mixers and drivers, and release deliveries." },
-      { property: "og:title", content: "Dispatch Control · RMC Command Center" },
-      { property: "og:description", content: "Plan trips, assign transit mixers and drivers, and release deliveries." },
     ],
   }),
   component: DispatcherPage,
@@ -46,16 +46,16 @@ function DispatcherPage() {
   const [receiver, setReceiver] = useState("");
   const [deliveredQty, setDeliveredQty] = useState("");
 
-  const trips = useQuery({ queryKey: ["trips"], queryFn: () => tripsApi.list().then((r) => r.data) });
+  const { params, updateParams, query: trips } = useListQuery(["trips-list"], () => tripsApi.list().then((r) => r.data));
   const fleet = useQuery({ queryKey: ["fleet"], queryFn: () => tripsApi.fleet().then((r) => r.data) });
-  const orders = useQuery({ queryKey: ["orders"], queryFn: () => ordersApi.list().then((r) => r.data) });
+  const orders = useQuery({ queryKey: ["orders-disp"], queryFn: () => ordersApi.list().then((r) => r.data) });
 
   const advance = useMutation({
     mutationFn: ({ id, status }: { id: string; status: TripRow["status"] }) =>
       tripsApi.setStatus(id, status, user?.name ?? "Dispatcher"),
     onSuccess: (res) => {
       toast.success(res.data?.status === "DISPATCHED" ? "Trip released" : "Trip updated");
-      void qc.invalidateQueries({ queryKey: ["trips"] });
+      void qc.invalidateQueries({ queryKey: ["trips-list"] });
     },
   });
 
@@ -69,10 +69,30 @@ function DispatcherPage() {
     onSuccess: () => {
       toast.success("Delivery recorded");
       setDeliverTrip(null);
-      void qc.invalidateQueries({ queryKey: ["trips"] });
-      void qc.invalidateQueries({ queryKey: ["orders"] });
+      void qc.invalidateQueries({ queryKey: ["trips-list"] });
+      void qc.invalidateQueries({ queryKey: ["orders-disp"] });
     },
   });
+
+  const filteredOrders = useMemo(() => {
+    if (!orders.data) return [];
+    let list = orders.data.filter((o) => ["APPROVED", "IN_PROGRESS"].includes(o.status));
+    if (params.q) {
+      const lower = params.q.toLowerCase();
+      list = list.filter((i) => i.poNumber.toLowerCase().includes(lower) || i.customerName.toLowerCase().includes(lower));
+    }
+    return list;
+  }, [orders.data, params]);
+
+  const releasable = useMemo(() => {
+    if (!trips.data) return [];
+    let list = trips.data.filter((t) => ["QC_APPROVED", "DISPATCHED", "IN_TRANSIT"].includes(t.status));
+    if (params.q) {
+      const lower = params.q.toLowerCase();
+      list = list.filter((i) => i.poNumber.toLowerCase().includes(lower) || i.customerName.toLowerCase().includes(lower) || i.tripNumber.toLowerCase().includes(lower));
+    }
+    return list;
+  }, [trips.data, params]);
 
   if (trips.isLoading || fleet.isLoading || orders.isLoading) return <LoadingState rows={6} />;
   if (trips.error || !trips.data || !fleet.data || !orders.data)
@@ -80,8 +100,6 @@ function DispatcherPage() {
 
   const all = trips.data;
   const count = (s: TripRow["status"][]) => all.filter((t) => s.includes(t.status)).length;
-
-  const queueOrders = orders.data.filter((o) => ["APPROVED", "IN_PROGRESS"].includes(o.status));
 
   const orderColumns: Column<OrderRow>[] = [
     { key: "po", header: "PO Number", cell: (r) => <span className="font-medium">{r.poNumber}</span>, sortValue: (r) => r.poNumber },
@@ -100,14 +118,13 @@ function DispatcherPage() {
           size="sm"
           variant={r.tripCount === 0 ? "default" : "outline"}
           onClick={() => void navigate({ to: "/dispatcher/plan/$poId", params: { poId: r.id } })}
+          disabled={user?.role === "owner"}
         >
           {r.tripCount === 0 ? "Plan trips" : "Review plan"}
         </Button>
       ),
     },
   ];
-
-  const releasable = all.filter((t) => ["QC_APPROVED", "DISPATCHED", "IN_TRANSIT"].includes(t.status));
 
   const releaseColumns: Column<TripRow>[] = [
     { key: "trip", header: "Trip", cell: (r) => <span className="font-medium">{r.tripNumber}</span> },
@@ -129,12 +146,12 @@ function DispatcherPage() {
             </Button>
           )}
           {r.status === "QC_APPROVED" && (
-            <Button size="sm" onClick={() => advance.mutate({ id: r.id, status: "DISPATCHED" })}>
+            <Button size="sm" disabled={user?.role === "owner"} onClick={() => advance.mutate({ id: r.id, status: "DISPATCHED" })}>
               Release
             </Button>
           )}
           {r.status === "DISPATCHED" && (
-            <Button size="sm" variant="outline" onClick={() => advance.mutate({ id: r.id, status: "IN_TRANSIT" })}>
+            <Button size="sm" variant="outline" disabled={user?.role === "owner"} onClick={() => advance.mutate({ id: r.id, status: "IN_TRANSIT" })}>
               In transit
             </Button>
           )}
@@ -142,6 +159,7 @@ function DispatcherPage() {
             <Button
               size="sm"
               variant="outline"
+              disabled={user?.role === "owner"}
               onClick={() => {
                 setDeliverTrip(r);
                 setDeliveredQty(String(r.quantity));
@@ -161,7 +179,7 @@ function DispatcherPage() {
       <PageHeader title="Today's Operations" subtitle="Dispatch control — planning, release and delivery" />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Orders to plan" value={String(queueOrders.filter((o) => o.tripCount === 0).length)} icon={ClipboardList} comparison="approved, unplanned" />
+        <KpiCard label="Orders to plan" value={String(filteredOrders.filter((o) => o.tripCount === 0).length)} icon={ClipboardList} comparison="approved, unplanned" />
         <KpiCard label="Trips in production" value={String(count(["SENT_TO_PRODUCTION", "BATCHING", "LOADED"]))} icon={PackageCheck} comparison="batching now" />
         <KpiCard label="QC pending" value={String(count(["QC_PENDING"]))} icon={FlaskConical} comparison="awaiting quality sign-off" />
         <KpiCard label="Ready for dispatch" value={String(count(["QC_APPROVED"]))} icon={Truck} comparison="QC approved trips" />
@@ -213,12 +231,18 @@ function DispatcherPage() {
           </ul>
         </ChartCard>
       </div>
+      
+      <FilterBar
+        search={params.q}
+        onSearchChange={(q) => updateParams({ q })}
+        searchPlaceholder="Search PO, Trip or Customer..."
+      />
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold">Dispatch queue</h2>
         <DataTable
           columns={orderColumns}
-          rows={queueOrders}
+          rows={filteredOrders}
           rowKey={(r) => r.id}
           emptyTitle="No approved orders waiting"
           emptyDescription="Orders appear here once the sales manager approves them."

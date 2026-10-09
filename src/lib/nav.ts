@@ -9,6 +9,9 @@ import {
   Receipt,
   Truck,
   Users,
+  Warehouse,
+  Landmark,
+  Sparkles
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Role } from "@/types";
@@ -30,9 +33,12 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Dispatch Control", to: "/dispatcher", icon: Truck, roles: ["dispatcher", "owner"], group: "Operations" },
   { label: "Production Queue", to: "/production", icon: Package, roles: ["production", "owner"], group: "Operations" },
   { label: "QA / QC", to: "/qa", icon: FlaskConical, roles: ["qa", "owner"], group: "Operations" },
+  { label: "Store & Weighbridge", to: "/store", icon: Warehouse, roles: ["store", "owner"], group: "Operations" },
   { label: "My Orders", to: "/portal", icon: LayoutDashboard, roles: ["customer"], group: "Operations" },
   { label: "Billing", to: "/billing", icon: Receipt, roles: ["owner", "sales", "sales_manager", "dispatcher"], group: "Commercial" },
-  { label: "Reports", to: "/reports", icon: BarChart3, roles: ["owner", "sales_manager", "production", "qa", "dispatcher"], group: "Insights" },
+  { label: "Account (HR/Payroll)", to: "/account", icon: Landmark, roles: ["account", "owner"], group: "Commercial" },
+  { label: "Reports", to: "/reports", icon: BarChart3, roles: ["sales_manager", "production", "qa", "dispatcher"], group: "Insights" },
+  { label: "AI Insights", to: "/insights", icon: Sparkles, roles: ["owner", "customer", "sales", "sales_manager", "dispatcher", "production", "qa", "store", "account"], group: "Insights" },
 ];
 
 export function navForRole(role: Role): NavItem[] {
@@ -47,4 +53,6 @@ export const ROLE_LABEL: Record<Role, string> = {
   dispatcher: "Dispatcher",
   production: "Production",
   qa: "QA / QC",
+  store: "Store Manager",
+  account: "Accountant"
 };

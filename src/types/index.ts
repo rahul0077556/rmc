@@ -5,7 +5,9 @@ export type Role =
   | "sales_manager"
   | "dispatcher"
   | "production"
-  | "qa";
+  | "qa"
+  | "store"
+  | "account";
 
 export interface User {
   id: string;
@@ -242,6 +244,7 @@ export interface AppNotification {
 export interface ApiResponse<T> {
   data: T;
   message?: string;
+  meta?: Record<string, unknown>;
 }
 
 export interface PaginatedResponse<T> {

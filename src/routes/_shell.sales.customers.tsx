@@ -1,8 +1,11 @@
+import { useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/app/page-header";
 import { DataTable, type Column } from "@/components/app/data-table";
 import { LoadingState, ErrorState } from "@/components/app/states";
+import { FilterBar } from "@/components/app/filter-bar";
+import { useListQuery } from "@/hooks/use-list-query";
 import { customersApi, type CustomerRow } from "@/api/customers";
 import { inr } from "@/lib/format";
 
@@ -11,15 +14,23 @@ export const Route = createFileRoute("/_shell/sales/customers")({
     meta: [
       { title: "Customers · RMC Command Center" },
       { name: "description", content: "Customer accounts, credit terms, sites and active concrete orders." },
-      { property: "og:title", content: "Customers · RMC Command Center" },
-      { property: "og:description", content: "Customer accounts, credit terms, sites and active concrete orders." },
     ],
   }),
   component: CustomersPage,
 });
 
 function CustomersPage() {
-  const customers = useQuery({ queryKey: ["customers"], queryFn: () => customersApi.list().then((r) => r.data) });
+  const { params, updateParams, query: customers } = useListQuery(["customers"], () => customersApi.list().then((r) => r.data));
+
+  const filteredCustomers = useMemo(() => {
+    if (!customers.data) return [];
+    let list = customers.data;
+    if (params.q) {
+      const lower = params.q.toLowerCase();
+      list = list.filter(c => c.name.toLowerCase().includes(lower) || c.contactPerson.toLowerCase().includes(lower) || c.email.toLowerCase().includes(lower) || c.phone.includes(lower));
+    }
+    return list;
+  }, [customers.data, params]);
 
   if (customers.isLoading) return <LoadingState rows={5} />;
   if (customers.error || !customers.data)
@@ -40,11 +51,18 @@ function CustomersPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Customers" subtitle="Accounts, credit terms and delivery sites" />
+      
+      <FilterBar
+        search={params.q}
+        onSearchChange={(q) => updateParams({ q })}
+        searchPlaceholder="Search Customer, Contact or Email..."
+      />
+
       <DataTable
         columns={columns}
-        rows={customers.data}
+        rows={filteredCustomers}
         rowKey={(r) => r.id}
-        emptyTitle="No customers yet"
+        emptyTitle="No customers found"
         emptyDescription="Customer accounts will appear here once created."
       />
     </div>

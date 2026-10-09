@@ -104,7 +104,7 @@ function OwnerDashboardPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <ChartCard title="Orders per date" description="Order count and booked volume" className="lg:col-span-2">
+        <ChartCard title="Daily production rate" description="Batches/orders and booked volume" className="lg:col-span-2">
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={data.ordersPerDate}>
               <defs>

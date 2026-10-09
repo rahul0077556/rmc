@@ -1,15 +1,14 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Search } from "lucide-react";
+import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { DataTable, type Column } from "@/components/app/data-table";
 import { StatusBadge } from "@/components/app/status-badge";
 import { LoadingState, ErrorState } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FilterBar } from "@/components/app/filter-bar";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,9 +19,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ordersApi, type OrderRow } from "@/api/orders";
+import { ordersRepo, type OrderRow } from "@/data/repositories/orders";
 import { customersApi } from "@/api/customers";
 import { useAuth } from "@/auth/auth-context";
+import { useListQuery } from "@/hooks/use-list-query";
 import { GRADES } from "@/lib/mock-data";
 import { cum } from "@/lib/format";
 import type { PoStatus } from "@/types";
@@ -46,17 +46,17 @@ function OrdersPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const readOnly = user?.role === "owner";
-  const [search, setSearch] = useState("");
-  const [customer, setCustomer] = useState("all");
-  const [grade, setGrade] = useState("all");
-  const [status, setStatus] = useState("all");
   const [deleteTarget, setDeleteTarget] = useState<OrderRow | null>(null);
 
-  const orders = useQuery({ queryKey: ["orders"], queryFn: () => ordersApi.list().then((r) => r.data) });
+  const { params, updateParams, query: orders } = useListQuery(
+    ["orders"],
+    (params) => ordersRepo.list(params).then((r) => r.data)
+  );
+
   const customers = useQuery({ queryKey: ["customers"], queryFn: () => customersApi.list().then((r) => r.data) });
 
   const submit = useMutation({
-    mutationFn: (id: string) => ordersApi.submit(id, user?.name ?? "Sales"),
+    mutationFn: (id: string) => ordersRepo.submit(id, user?.name ?? "Sales"),
     onSuccess: () => {
       toast.success("PO submitted successfully");
       void qc.invalidateQueries({ queryKey: ["orders"] });
@@ -64,7 +64,7 @@ function OrdersPage() {
   });
 
   const remove = useMutation({
-    mutationFn: (id: string) => ordersApi.remove(id),
+    mutationFn: (id: string) => ordersRepo.remove(id),
     onSuccess: () => {
       toast.success("Draft PO deleted");
       setDeleteTarget(null);
@@ -72,19 +72,7 @@ function OrdersPage() {
     },
   });
 
-  const rows = useMemo(() => {
-    let list = orders.data ?? [];
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((o) => o.poNumber.toLowerCase().includes(q) || o.customerName.toLowerCase().includes(q));
-    }
-    if (customer !== "all") list = list.filter((o) => o.customerId === customer);
-    if (grade !== "all") list = list.filter((o) => o.grade === grade);
-    if (status !== "all") list = list.filter((o) => o.status === status);
-    return list;
-  }, [orders.data, search, customer, grade, status]);
-
-  if (orders.isLoading) return <LoadingState rows={6} />;
+  if (orders.isLoading || customers.isLoading) return <LoadingState rows={6} />;
   if (orders.error || !orders.data) return <ErrorState message="Purchase orders could not be loaded." onRetry={() => void orders.refetch()} />;
 
   const columns: Column<OrderRow>[] = [
@@ -139,43 +127,38 @@ function OrdersPage() {
         }
       />
 
-      <div className="panel flex flex-wrap items-center gap-2 p-3">
-        <div className="relative min-w-52 flex-1">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search PO number or customer" className="pl-9" />
-        </div>
-        <Select value={customer} onValueChange={setCustomer}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="Customer" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All customers</SelectItem>
-            {(customers.data ?? []).map((c) => (
-              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={grade} onValueChange={setGrade}>
-          <SelectTrigger className="w-36"><SelectValue placeholder="Grade" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All grades</SelectItem>
-            {GRADES.map((g) => (
-              <SelectItem key={g} value={g}>{g}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="w-44"><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            {STATUSES.map((s) => (
-              <SelectItem key={s} value={s}>{s.replace(/_/g, " ")}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <FilterBar
+        search={params.q}
+        onSearchChange={(q) => updateParams({ q })}
+        searchPlaceholder="Search PO number or customer"
+        filters={[
+          {
+            key: "customer",
+            placeholder: "Customer",
+            value: params['customer'],
+            options: (customers.data ?? []).map((c) => ({ label: c.name, value: c.id })),
+            onChange: (customer) => updateParams({ customer }),
+          },
+          {
+            key: "grade",
+            placeholder: "Grade",
+            value: params['grade'],
+            options: GRADES.map((g) => ({ label: g, value: g })),
+            onChange: (grade) => updateParams({ grade }),
+          },
+          {
+            key: "status",
+            placeholder: "Status",
+            value: params['status'],
+            options: STATUSES.map((s) => ({ label: s.replace(/_/g, " "), value: s })),
+            onChange: (status) => updateParams({ status }),
+          }
+        ]}
+      />
 
       <DataTable
         columns={columns}
-        rows={rows}
+        rows={orders.data}
         rowKey={(r) => r.id}
         initialPageSize={10}
         emptyTitle="No orders match these filters"

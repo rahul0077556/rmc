@@ -47,10 +47,10 @@ export const tripsApi = {
   ): Promise<ApiResponse<TripRow[]>> {
     const po = poById(poId);
     if (!po) return respond([]);
-    // replace existing PLANNED trips for this PO
+    // replace existing un-batched trips for this PO
     for (let i = db.trips.length - 1; i >= 0; i--) {
       const t = db.trips[i]!;
-      if (t.poId === poId && t.status === "PLANNED") db.trips.splice(i, 1);
+      if (t.poId === poId && (t.status === "PLANNED" || t.status === "SENT_TO_PRODUCTION")) db.trips.splice(i, 1);
     }
     const created = plan.map((p, i) => {
       const trip: Trip = {
@@ -62,7 +62,7 @@ export const tripsApi = {
         tmId: p.tmId,
         driverId: p.driverId,
         plannedTime: p.plannedTime,
-        status: "PLANNED",
+        status: "SENT_TO_PRODUCTION",
         lastUpdate: new Date().toISOString(),
       };
       return trip;

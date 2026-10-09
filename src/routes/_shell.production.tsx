@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -10,6 +10,8 @@ import { DataTable, type Column } from "@/components/app/data-table";
 import { StatusBadge } from "@/components/app/status-badge";
 import { LoadingState, ErrorState } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
+import { FilterBar } from "@/components/app/filter-bar";
+import { useListQuery } from "@/hooks/use-list-query";
 import {
   Dialog,
   DialogContent,
@@ -28,8 +30,6 @@ export const Route = createFileRoute("/_shell/production")({
     meta: [
       { title: "Production Queue · RMC Command Center" },
       { name: "description", content: "Check materials, run batching and generate batch sheets for each trip." },
-      { property: "og:title", content: "Production Queue · RMC Command Center" },
-      { property: "og:description", content: "Check materials, run batching and generate batch sheets for each trip." },
     ],
   }),
   component: ProductionPage,
@@ -37,11 +37,12 @@ export const Route = createFileRoute("/_shell/production")({
 
 function ProductionPage() {
   const { user } = useAuth();
+  const readOnly = user?.role === "owner";
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [active, setActive] = useState<TripRow | null>(null);
 
-  const queue = useQuery({ queryKey: ["production-queue"], queryFn: () => productionApi.queue().then((r) => r.data) });
+  const { params, updateParams, query: queue } = useListQuery(["production-queue"], () => productionApi.queue().then((r) => r.data));
   const materials = useQuery({
     queryKey: ["material-check", active?.id],
     queryFn: () => productionApi.materialCheck(active!.id).then((r) => r.data),
@@ -76,6 +77,16 @@ function ProductionPage() {
     },
   });
 
+  const filteredQueue = useMemo(() => {
+    if (!queue.data) return [];
+    let list = queue.data;
+    if (params.q) {
+      const lower = params.q.toLowerCase();
+      list = list.filter((i) => i.poNumber.toLowerCase().includes(lower) || i.customerName.toLowerCase().includes(lower) || i.tripNumber.toLowerCase().includes(lower));
+    }
+    return list;
+  }, [queue.data, params]);
+
   if (queue.isLoading) return <LoadingState rows={6} />;
   if (queue.error || !queue.data) return <ErrorState message="The production queue could not be loaded." onRetry={() => void queue.refetch()} />;
 
@@ -98,12 +109,12 @@ function ProductionPage() {
       align: "right",
       cell: (r) => (
         <div className="flex justify-end gap-1.5">
-          {r.status === "PLANNED" && (
+          {r.status === "PLANNED" && !readOnly && (
             <Button size="sm" variant="outline" onClick={() => send.mutate(r.id)}>
               Accept
             </Button>
           )}
-          {["SENT_TO_PRODUCTION", "BATCHING", "LOADED"].includes(r.status) && (
+          {["SENT_TO_PRODUCTION", "BATCHING", "LOADED"].includes(r.status) && !readOnly && (
             <Button size="sm" onClick={() => setActive(r)}>
               Open
             </Button>
@@ -129,9 +140,15 @@ function ProductionPage() {
         <KpiCard label="QC pending" value={String(count(["QC_PENDING"]))} icon={PackageCheck} comparison="sent to quality" />
       </div>
 
+      <FilterBar
+        search={params.q}
+        onSearchChange={(q) => updateParams({ q })}
+        searchPlaceholder="Search PO, Trip or Customer..."
+      />
+
       <DataTable
         columns={columns}
-        rows={rows}
+        rows={filteredQueue}
         rowKey={(r) => r.id}
         initialPageSize={10}
         emptyTitle="Nothing queued for production"

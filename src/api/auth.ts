@@ -1,4 +1,4 @@
-import { respond, fail } from "./client";
+import { apiClient, respond, fail, TOKEN_STORAGE_KEY } from "./client";
 import { PLANT_NAME, customers } from "@/lib/mock-data";
 import type { ApiResponse, Role, User } from "@/types";
 
@@ -20,7 +20,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     label: "Owner",
     email: "owner@rmc.test",
     password: DEMO_PASSWORD,
-    name: "Rahul Wagh",
+    name: "Vikramaditya Singhania",
     home: "/owner",
   },
   {
@@ -28,7 +28,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     label: "Sales",
     email: "sales@rmc.test",
     password: DEMO_PASSWORD,
-    name: "Anita Rao",
+    name: "Ananya Sharma",
     home: "/sales",
   },
   {
@@ -36,7 +36,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     label: "Sales Manager",
     email: "salesmanager@rmc.test",
     password: DEMO_PASSWORD,
-    name: "Vikram Joshi",
+    name: "Devendra Kulkarni",
     home: "/sales/approvals",
   },
   {
@@ -44,7 +44,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     label: "Dispatcher",
     email: "dispatcher@rmc.test",
     password: DEMO_PASSWORD,
-    name: "Kiran Salvi",
+    name: "Mahesh Deshpande",
     home: "/dispatcher",
   },
   {
@@ -52,7 +52,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     label: "Production",
     email: "production@rmc.test",
     password: DEMO_PASSWORD,
-    name: "Sandeep Kale",
+    name: "Siddharth Joshi",
     home: "/production",
   },
   {
@@ -60,24 +60,40 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     label: "QA / QC",
     email: "qa@rmc.test",
     password: DEMO_PASSWORD,
-    name: "Meera Iyer",
+    name: "Dr. Pradeep Sawant",
     home: "/qa",
   },
   {
+    role: "store",
+    label: "Store & Weighbridge",
+    email: "store@rmc.test",
+    password: DEMO_PASSWORD,
+    name: "Rajesh Gupta",
+    home: "/store",
+  },
+  {
+    role: "account",
+    label: "Account (HR/Payroll)",
+    email: "account@rmc.test",
+    password: DEMO_PASSWORD,
+    name: "Priya Nair",
+    home: "/account",
+  },
+  {
     role: "customer",
-    label: "Customer",
+    label: "Customer (Kirloskar Infra)",
     email: "customer1@rmc.test",
     password: DEMO_PASSWORD,
-    name: "Suresh Menon",
+    name: "Rajiv Deshmukh",
     customerId: "CUS-01",
     home: "/portal",
   },
   {
     role: "customer",
-    label: "Customer (Shree Developers)",
+    label: "Customer (VTP Realty)",
     email: "customer2@rmc.test",
     password: DEMO_PASSWORD,
-    name: "Nikhil Deshpande",
+    name: "Sanjay Chordiya",
     customerId: "CUS-02",
     home: "/portal",
   },
@@ -103,14 +119,59 @@ export function customerName(customerId?: string): string {
 }
 
 export const authApi = {
-  login(email: string, password: string): Promise<ApiResponse<User>> {
-    const account = DEMO_ACCOUNTS.find((a) => a.email === email.trim().toLowerCase());
-    if (!account || password !== account.password) {
-      return fail<User>(401, "Invalid email or password. Use a demo account below.");
+  async login(email: string, password: string): Promise<ApiResponse<User>> {
+    try {
+      // Call Flask Backend
+      const res = await apiClient.post("/auth/login", { email, password });
+      const { token, user } = res.data.data;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+      }
+      return {
+        data: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          customerId: user.customer_id,
+          plant: user.plant || PLANT_NAME,
+        },
+        message: "Signed in successfully",
+      };
+    } catch {
+      // Graceful fallback for mock mode if backend server is not running
+      const account = DEMO_ACCOUNTS.find((a) => a.email === email.trim().toLowerCase());
+      if (!account || password !== account.password) {
+        return fail<User>(401, "Invalid email or password. Use a demo account below.");
+      }
+      return respond(accountToUser(account), "Signed in (demo)");
     }
-    return respond(accountToUser(account), "Signed in");
   },
-  logout(): Promise<ApiResponse<null>> {
+
+  async logout(): Promise<ApiResponse<null>> {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+      window.localStorage.removeItem("rmc.session");
+    }
     return respond(null, "Signed out");
+  },
+
+  async me(): Promise<ApiResponse<User | null>> {
+    try {
+      const res = await apiClient.get("/auth/me");
+      const user = res.data.data;
+      return {
+        data: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          customerId: user.customer_id,
+          plant: user.plant || PLANT_NAME,
+        },
+      };
+    } catch {
+      return respond(null);
+    }
   },
 };

@@ -11,16 +11,19 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ShellRouteImport } from './routes/_shell'
+import { Route as ShellAccountRouteImport } from './routes/_shell.account'
 import { Route as ShellBillingRouteImport } from './routes/_shell.billing'
-import { Route as ShellDispatcherRouteImport } from './routes/_shell.dispatcher'
+import { Route as ShellInsightsRouteImport } from './routes/_shell.insights'
 import { Route as ShellOwnerRouteImport } from './routes/_shell.owner'
 import { Route as ShellPortalRouteImport } from './routes/_shell.portal'
 import { Route as ShellProductionRouteImport } from './routes/_shell.production'
 import { Route as ShellQaRouteImport } from './routes/_shell.qa'
 import { Route as ShellReportsRouteImport } from './routes/_shell.reports'
 import { Route as ShellSalesRouteImport } from './routes/_shell.sales'
+import { Route as ShellStoreRouteImport } from './routes/_shell.store'
 import { Route as BatchSheetIdRouteImport } from './routes/batch-sheet.$id'
 import { Route as ChallanTripIdRouteImport } from './routes/challan.$tripId'
+import { Route as ShellDispatcherIndexRouteImport } from './routes/_shell.dispatcher.index'
 import { Route as ShellSalesIndexRouteImport } from './routes/_shell.sales.index'
 import { Route as ShellSalesApprovalsRouteImport } from './routes/_shell.sales.approvals'
 import { Route as ShellSalesCustomersRouteImport } from './routes/_shell.sales.customers'
@@ -38,14 +41,19 @@ const ShellRoute = ShellRouteImport.update({
   id: '/_shell',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ShellAccountRoute = ShellAccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => ShellRoute,
+} as any)
 const ShellBillingRoute = ShellBillingRouteImport.update({
   id: '/billing',
   path: '/billing',
   getParentRoute: () => ShellRoute,
 } as any)
-const ShellDispatcherRoute = ShellDispatcherRouteImport.update({
-  id: '/dispatcher',
-  path: '/dispatcher',
+const ShellInsightsRoute = ShellInsightsRouteImport.update({
+  id: '/insights',
+  path: '/insights',
   getParentRoute: () => ShellRoute,
 } as any)
 const ShellOwnerRoute = ShellOwnerRouteImport.update({
@@ -78,6 +86,11 @@ const ShellSalesRoute = ShellSalesRouteImport.update({
   path: '/sales',
   getParentRoute: () => ShellRoute,
 } as any)
+const ShellStoreRoute = ShellStoreRouteImport.update({
+  id: '/store',
+  path: '/store',
+  getParentRoute: () => ShellRoute,
+} as any)
 const BatchSheetIdRoute = BatchSheetIdRouteImport.update({
   id: '/batch-sheet/$id',
   path: '/batch-sheet/$id',
@@ -87,6 +100,11 @@ const ChallanTripIdRoute = ChallanTripIdRouteImport.update({
   id: '/challan/$tripId',
   path: '/challan/$tripId',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ShellDispatcherIndexRoute = ShellDispatcherIndexRouteImport.update({
+  id: '/dispatcher/',
+  path: '/dispatcher/',
+  getParentRoute: () => ShellRoute,
 } as any)
 const ShellSalesIndexRoute = ShellSalesIndexRouteImport.update({
   id: '/',
@@ -104,9 +122,9 @@ const ShellSalesCustomersRoute = ShellSalesCustomersRouteImport.update({
   getParentRoute: () => ShellSalesRoute,
 } as any)
 const ShellDispatcherPlanPoIdRoute = ShellDispatcherPlanPoIdRouteImport.update({
-  id: '/plan/$poId',
-  path: '/plan/$poId',
-  getParentRoute: () => ShellDispatcherRoute,
+  id: '/dispatcher/plan/$poId',
+  path: '/dispatcher/plan/$poId',
+  getParentRoute: () => ShellRoute,
 } as any)
 const ShellSalesOrdersIndexRoute = ShellSalesOrdersIndexRouteImport.update({
   id: '/orders/',
@@ -126,18 +144,21 @@ const ShellSalesOrdersNewRoute = ShellSalesOrdersNewRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/account': typeof ShellAccountRoute
   '/billing': typeof ShellBillingRoute
-  '/dispatcher': typeof ShellDispatcherRouteWithChildren
+  '/insights': typeof ShellInsightsRoute
   '/owner': typeof ShellOwnerRoute
   '/portal': typeof ShellPortalRoute
   '/production': typeof ShellProductionRoute
   '/qa': typeof ShellQaRoute
   '/reports': typeof ShellReportsRoute
   '/sales': typeof ShellSalesRouteWithChildren
+  '/store': typeof ShellStoreRoute
   '/batch-sheet/$id': typeof BatchSheetIdRoute
   '/challan/$tripId': typeof ChallanTripIdRoute
   '/sales/approvals': typeof ShellSalesApprovalsRoute
   '/sales/customers': typeof ShellSalesCustomersRoute
+  '/dispatcher/': typeof ShellDispatcherIndexRoute
   '/sales/': typeof ShellSalesIndexRoute
   '/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
   '/sales/orders/$poId': typeof ShellSalesOrdersPoIdRoute
@@ -146,17 +167,20 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/account': typeof ShellAccountRoute
   '/billing': typeof ShellBillingRoute
-  '/dispatcher': typeof ShellDispatcherRouteWithChildren
+  '/insights': typeof ShellInsightsRoute
   '/owner': typeof ShellOwnerRoute
   '/portal': typeof ShellPortalRoute
   '/production': typeof ShellProductionRoute
   '/qa': typeof ShellQaRoute
   '/reports': typeof ShellReportsRoute
+  '/store': typeof ShellStoreRoute
   '/batch-sheet/$id': typeof BatchSheetIdRoute
   '/challan/$tripId': typeof ChallanTripIdRoute
   '/sales/approvals': typeof ShellSalesApprovalsRoute
   '/sales/customers': typeof ShellSalesCustomersRoute
+  '/dispatcher': typeof ShellDispatcherIndexRoute
   '/sales': typeof ShellSalesIndexRoute
   '/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
   '/sales/orders/$poId': typeof ShellSalesOrdersPoIdRoute
@@ -167,18 +191,21 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_shell': typeof ShellRouteWithChildren
+  '/_shell/account': typeof ShellAccountRoute
   '/_shell/billing': typeof ShellBillingRoute
-  '/_shell/dispatcher': typeof ShellDispatcherRouteWithChildren
+  '/_shell/insights': typeof ShellInsightsRoute
   '/_shell/owner': typeof ShellOwnerRoute
   '/_shell/portal': typeof ShellPortalRoute
   '/_shell/production': typeof ShellProductionRoute
   '/_shell/qa': typeof ShellQaRoute
   '/_shell/reports': typeof ShellReportsRoute
   '/_shell/sales': typeof ShellSalesRouteWithChildren
+  '/_shell/store': typeof ShellStoreRoute
   '/batch-sheet/$id': typeof BatchSheetIdRoute
   '/challan/$tripId': typeof ChallanTripIdRoute
   '/_shell/sales/approvals': typeof ShellSalesApprovalsRoute
   '/_shell/sales/customers': typeof ShellSalesCustomersRoute
+  '/_shell/dispatcher/': typeof ShellDispatcherIndexRoute
   '/_shell/sales/': typeof ShellSalesIndexRoute
   '/_shell/dispatcher/plan/$poId': typeof ShellDispatcherPlanPoIdRoute
   '/_shell/sales/orders/$poId': typeof ShellSalesOrdersPoIdRoute
@@ -189,18 +216,21 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/account'
     | '/billing'
-    | '/dispatcher'
+    | '/insights'
     | '/owner'
     | '/portal'
     | '/production'
     | '/qa'
     | '/reports'
     | '/sales'
+    | '/store'
     | '/batch-sheet/$id'
     | '/challan/$tripId'
     | '/sales/approvals'
     | '/sales/customers'
+    | '/dispatcher/'
     | '/sales/'
     | '/dispatcher/plan/$poId'
     | '/sales/orders/$poId'
@@ -209,17 +239,20 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/account'
     | '/billing'
-    | '/dispatcher'
+    | '/insights'
     | '/owner'
     | '/portal'
     | '/production'
     | '/qa'
     | '/reports'
+    | '/store'
     | '/batch-sheet/$id'
     | '/challan/$tripId'
     | '/sales/approvals'
     | '/sales/customers'
+    | '/dispatcher'
     | '/sales'
     | '/dispatcher/plan/$poId'
     | '/sales/orders/$poId'
@@ -229,18 +262,21 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_shell'
+    | '/_shell/account'
     | '/_shell/billing'
-    | '/_shell/dispatcher'
+    | '/_shell/insights'
     | '/_shell/owner'
     | '/_shell/portal'
     | '/_shell/production'
     | '/_shell/qa'
     | '/_shell/reports'
     | '/_shell/sales'
+    | '/_shell/store'
     | '/batch-sheet/$id'
     | '/challan/$tripId'
     | '/_shell/sales/approvals'
     | '/_shell/sales/customers'
+    | '/_shell/dispatcher/'
     | '/_shell/sales/'
     | '/_shell/dispatcher/plan/$poId'
     | '/_shell/sales/orders/$poId'
@@ -271,6 +307,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_shell/account': {
+      id: '/_shell/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof ShellAccountRouteImport
+      parentRoute: typeof ShellRoute
+    }
     '/_shell/billing': {
       id: '/_shell/billing'
       path: '/billing'
@@ -278,11 +321,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellBillingRouteImport
       parentRoute: typeof ShellRoute
     }
-    '/_shell/dispatcher': {
-      id: '/_shell/dispatcher'
-      path: '/dispatcher'
-      fullPath: '/dispatcher'
-      preLoaderRoute: typeof ShellDispatcherRouteImport
+    '/_shell/insights': {
+      id: '/_shell/insights'
+      path: '/insights'
+      fullPath: '/insights'
+      preLoaderRoute: typeof ShellInsightsRouteImport
       parentRoute: typeof ShellRoute
     }
     '/_shell/owner': {
@@ -327,6 +370,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellSalesRouteImport
       parentRoute: typeof ShellRoute
     }
+    '/_shell/store': {
+      id: '/_shell/store'
+      path: '/store'
+      fullPath: '/store'
+      preLoaderRoute: typeof ShellStoreRouteImport
+      parentRoute: typeof ShellRoute
+    }
     '/batch-sheet/$id': {
       id: '/batch-sheet/$id'
       path: '/batch-sheet/$id'
@@ -340,6 +390,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/challan/$tripId'
       preLoaderRoute: typeof ChallanTripIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_shell/dispatcher/': {
+      id: '/_shell/dispatcher/'
+      path: '/dispatcher'
+      fullPath: '/dispatcher/'
+      preLoaderRoute: typeof ShellDispatcherIndexRouteImport
+      parentRoute: typeof ShellRoute
     }
     '/_shell/sales/': {
       id: '/_shell/sales/'
@@ -364,10 +421,10 @@ declare module '@tanstack/react-router' {
     }
     '/_shell/dispatcher/plan/$poId': {
       id: '/_shell/dispatcher/plan/$poId'
-      path: '/plan/$poId'
+      path: '/dispatcher/plan/$poId'
       fullPath: '/dispatcher/plan/$poId'
       preLoaderRoute: typeof ShellDispatcherPlanPoIdRouteImport
-      parentRoute: typeof ShellDispatcherRoute
+      parentRoute: typeof ShellRoute
     }
     '/_shell/sales/orders/': {
       id: '/_shell/sales/orders/'
@@ -393,18 +450,6 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface ShellDispatcherRouteChildren {
-  ShellDispatcherPlanPoIdRoute: typeof ShellDispatcherPlanPoIdRoute
-}
-
-const ShellDispatcherRouteChildren: ShellDispatcherRouteChildren = {
-  ShellDispatcherPlanPoIdRoute: ShellDispatcherPlanPoIdRoute,
-}
-
-const ShellDispatcherRouteWithChildren = ShellDispatcherRoute._addFileChildren(
-  ShellDispatcherRouteChildren,
-)
-
 interface ShellSalesRouteChildren {
   ShellSalesApprovalsRoute: typeof ShellSalesApprovalsRoute
   ShellSalesCustomersRoute: typeof ShellSalesCustomersRoute
@@ -428,25 +473,33 @@ const ShellSalesRouteWithChildren = ShellSalesRoute._addFileChildren(
 )
 
 interface ShellRouteChildren {
+  ShellAccountRoute: typeof ShellAccountRoute
   ShellBillingRoute: typeof ShellBillingRoute
-  ShellDispatcherRoute: typeof ShellDispatcherRouteWithChildren
+  ShellInsightsRoute: typeof ShellInsightsRoute
   ShellOwnerRoute: typeof ShellOwnerRoute
   ShellPortalRoute: typeof ShellPortalRoute
   ShellProductionRoute: typeof ShellProductionRoute
   ShellQaRoute: typeof ShellQaRoute
   ShellReportsRoute: typeof ShellReportsRoute
   ShellSalesRoute: typeof ShellSalesRouteWithChildren
+  ShellStoreRoute: typeof ShellStoreRoute
+  ShellDispatcherIndexRoute: typeof ShellDispatcherIndexRoute
+  ShellDispatcherPlanPoIdRoute: typeof ShellDispatcherPlanPoIdRoute
 }
 
 const ShellRouteChildren: ShellRouteChildren = {
+  ShellAccountRoute: ShellAccountRoute,
   ShellBillingRoute: ShellBillingRoute,
-  ShellDispatcherRoute: ShellDispatcherRouteWithChildren,
+  ShellInsightsRoute: ShellInsightsRoute,
   ShellOwnerRoute: ShellOwnerRoute,
   ShellPortalRoute: ShellPortalRoute,
   ShellProductionRoute: ShellProductionRoute,
   ShellQaRoute: ShellQaRoute,
   ShellReportsRoute: ShellReportsRoute,
   ShellSalesRoute: ShellSalesRouteWithChildren,
+  ShellStoreRoute: ShellStoreRoute,
+  ShellDispatcherIndexRoute: ShellDispatcherIndexRoute,
+  ShellDispatcherPlanPoIdRoute: ShellDispatcherPlanPoIdRoute,
 }
 
 const ShellRouteWithChildren = ShellRoute._addFileChildren(ShellRouteChildren)

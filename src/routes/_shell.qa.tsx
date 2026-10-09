@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { BadgeCheck, CircleX, FlaskConical, RefreshCcw, Timer, TriangleAlert } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { KpiCard } from "@/components/app/kpi-card";
-import { ChartCard } from "@/components/app/chart-card";
 import { DataTable, type Column } from "@/components/app/data-table";
 import { StatusBadge } from "@/components/app/status-badge";
 import { LoadingState, ErrorState } from "@/components/app/states";
@@ -15,6 +14,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FilterBar } from "@/components/app/filter-bar";
+import { useListQuery } from "@/hooks/use-list-query";
 import {
   Dialog,
   DialogContent,
@@ -34,8 +35,6 @@ export const Route = createFileRoute("/_shell/qa")({
     meta: [
       { title: "Quality Control · RMC Command Center" },
       { name: "description", content: "Inspect batches, record slump, approve trips and track cube testing." },
-      { property: "og:title", content: "Quality Control · RMC Command Center" },
-      { property: "og:description", content: "Inspect batches, record slump, approve trips and track cube testing." },
     ],
   }),
   component: QaPage,
@@ -54,6 +53,7 @@ const EMPTY: QcInput = {
 
 function QaPage() {
   const { user } = useAuth();
+  const readOnly = user?.role === "owner";
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [active, setActive] = useState<QcQueueRow | null>(null);
@@ -61,8 +61,8 @@ function QaPage() {
   const [cubeTarget, setCubeTarget] = useState<CubeTest | null>(null);
   const [strength, setStrength] = useState("");
 
+  const { params, updateParams, query: queue } = useListQuery(["qa-queue"], () => qaApi.queue().then((r) => r.data));
   const summary = useQuery({ queryKey: ["qa-summary"], queryFn: () => qaApi.summary().then((r) => r.data) });
-  const queue = useQuery({ queryKey: ["qa-queue"], queryFn: () => qaApi.queue().then((r) => r.data) });
   const cubes = useQuery({ queryKey: ["cube-tests"], queryFn: () => qaApi.cubeTests().then((r) => r.data) });
   const matTests = useQuery({ queryKey: ["material-tests"], queryFn: () => qaApi.materialTests().then((r) => r.data) });
 
@@ -87,6 +87,36 @@ function QaPage() {
       void qc.invalidateQueries({ queryKey: ["cube-tests"] });
     },
   });
+
+  const filteredQueue = useMemo(() => {
+    if (!queue.data) return [];
+    let list = queue.data;
+    if (params.q) {
+      const lower = params.q.toLowerCase();
+      list = list.filter((i) => i.batchSheetId.toLowerCase().includes(lower) || i.trip.poNumber.toLowerCase().includes(lower) || i.trip.customerName.toLowerCase().includes(lower) || i.trip.tripNumber.toLowerCase().includes(lower));
+    }
+    return list;
+  }, [queue.data, params]);
+
+  const filteredCubes = useMemo(() => {
+    if (!cubes.data) return [];
+    let list = cubes.data;
+    if (params.q) {
+      const lower = params.q.toLowerCase();
+      list = list.filter((i) => i.batchSheetId.toLowerCase().includes(lower) || i.grade.toLowerCase().includes(lower));
+    }
+    return list;
+  }, [cubes.data, params]);
+
+  const filteredMatTests = useMemo(() => {
+    if (!matTests.data) return [];
+    let list = matTests.data;
+    if (params.q) {
+      const lower = params.q.toLowerCase();
+      list = list.filter((i) => i.material.toLowerCase().includes(lower) || i.test.toLowerCase().includes(lower));
+    }
+    return list;
+  }, [matTests.data, params]);
 
   if (summary.isLoading || queue.isLoading) return <LoadingState rows={6} />;
   if (summary.error || !summary.data || !queue.data)
@@ -115,6 +145,7 @@ function QaPage() {
           </Button>
           <Button
             size="sm"
+            disabled={readOnly}
             onClick={() => {
               setActive(r);
               setForm({ ...EMPTY, slump: SLUMP_TARGET[r.trip.grade as Grade][0] + 20 });
@@ -141,7 +172,7 @@ function QaPage() {
       header: "Action",
       align: "right",
       cell: (r) =>
-        r.result === "PENDING" || r.result === "OVERDUE" ? (
+        (r.result === "PENDING" || r.result === "OVERDUE") && !readOnly ? (
           <Button size="sm" variant="outline" onClick={() => setCubeTarget(r)}>
             Record
           </Button>
@@ -170,6 +201,12 @@ function QaPage() {
         <KpiCard label="Overdue tests" value={String(summary.data.overdue)} icon={TriangleAlert} />
       </div>
 
+      <FilterBar
+        search={params.q}
+        onSearchChange={(q) => updateParams({ q })}
+        searchPlaceholder="Search Batch, Trip or PO..."
+      />
+
       <Tabs defaultValue="queue">
         <TabsList>
           <TabsTrigger value="queue">Inspection queue</TabsTrigger>
@@ -180,7 +217,7 @@ function QaPage() {
         <TabsContent value="queue" className="mt-4">
           <DataTable
             columns={queueColumns}
-            rows={queue.data}
+            rows={filteredQueue}
             rowKey={(r) => r.batchSheetId}
             emptyTitle="No batches awaiting inspection"
             emptyDescription="Batch sheets arrive here as soon as production confirms a load."
@@ -190,10 +227,10 @@ function QaPage() {
         <TabsContent value="cubes" className="mt-4">
           <DataTable
             columns={cubeColumns}
-            rows={cubes.data ?? []}
+            rows={filteredCubes}
             rowKey={(r) => r.id}
             loading={cubes.isLoading}
-            emptyTitle="No cube sets cast yet"
+            emptyTitle="No cube sets found"
             emptyDescription="Cube sets are created automatically when a batch is approved."
           />
         </TabsContent>
@@ -201,10 +238,10 @@ function QaPage() {
         <TabsContent value="materials" className="mt-4">
           <DataTable
             columns={matColumns}
-            rows={matTests.data ?? []}
+            rows={filteredMatTests}
             rowKey={(r) => r.id}
             loading={matTests.isLoading}
-            emptyTitle="No material tests logged"
+            emptyTitle="No material tests found"
             emptyDescription="Cement fineness, sand moisture and aggregate tests appear here."
           />
         </TabsContent>

@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Banknote, CircleDollarSign, Receipt, TriangleAlert } from "lucide-react";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { PageHeader } from "@/components/app/page-header";
 import { KpiCard } from "@/components/app/kpi-card";
 import { DataTable, type Column } from "@/components/app/data-table";
@@ -12,6 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FilterBar } from "@/components/app/filter-bar";
+import { useListQuery } from "@/hooks/use-list-query";
+import { ChartCard } from "@/components/app/chart-card";
 import {
   Dialog,
   DialogContent,
@@ -31,14 +35,14 @@ export const Route = createFileRoute("/_shell/billing")({
     meta: [
       { title: "Billing · RMC Command Center" },
       { name: "description", content: "Invoices, collections and outstanding balances across customers." },
-      { property: "og:title", content: "Billing · RMC Command Center" },
-      { property: "og:description", content: "Invoices, collections and outstanding balances across customers." },
     ],
   }),
   component: BillingPage,
 });
 
 const MODES: Payment["mode"][] = ["Bank Transfer", "Cheque", "Cash", "UPI", "Other"];
+const STATUSES = ["DRAFT", "ISSUED", "PARTIALLY_PAID", "PAID", "OVERDUE", "CANCELLED"];
+const DONUT_COLORS = ["#94a3b8", "#3b82f6", "#eab308", "#22c55e", "#ef4444", "#64748b"];
 
 function BillingPage() {
   const { user } = useAuth();
@@ -49,7 +53,10 @@ function BillingPage() {
   const [mode, setMode] = useState<Payment["mode"]>("Bank Transfer");
   const [reference, setReference] = useState("");
 
-  const invoices = useQuery({ queryKey: ["invoices"], queryFn: () => invoicesApi.list().then((r) => r.data) });
+  const { params, updateParams, query: invoices } = useListQuery(
+    ["invoices-list"],
+    () => invoicesApi.list().then((r) => r.data)
+  );
   const summary = useQuery({ queryKey: ["invoice-summary"], queryFn: () => invoicesApi.summary().then((r) => r.data) });
 
   const pay = useMutation({
@@ -68,6 +75,31 @@ function BillingPage() {
     },
     onError: (err) => toast.error(isApiError(err) ? err.message : "Payment could not be recorded"),
   });
+
+  const filteredInvoices = useMemo(() => {
+    if (!invoices.data) return [];
+    let list = invoices.data;
+    if (params.q) {
+      const lower = params.q.toLowerCase();
+      list = list.filter((i) => i.invoiceNumber.toLowerCase().includes(lower) || i.customerName.toLowerCase().includes(lower));
+    }
+    if (params['status'] && params['status'] !== "all") {
+      list = list.filter((i) => i.status === params['status']);
+    }
+    return list;
+  }, [invoices.data, params]);
+
+  const statusDistribution = useMemo(() => {
+    if (!invoices.data) return [];
+    const counts = {} as Record<string, number>;
+    invoices.data.forEach(i => {
+      counts[i.status] = (counts[i.status] || 0) + 1;
+    });
+    return STATUSES.map(s => ({
+      name: s.replace(/_/g, " "),
+      value: counts[s] || 0
+    })).filter(s => s.value > 0);
+  }, [invoices.data]);
 
   if (invoices.isLoading || summary.isLoading) return <LoadingState rows={5} />;
   if (invoices.error || !invoices.data || !summary.data)
@@ -114,14 +146,63 @@ function BillingPage() {
         <KpiCard label="Overdue" value={inr(summary.data.overdue)} icon={TriangleAlert} />
       </div>
 
-      <DataTable
-        columns={columns}
-        rows={invoices.data}
-        rowKey={(r) => r.id}
-        initialPageSize={10}
-        emptyTitle="No invoices raised"
-        emptyDescription="Invoices appear once deliveries are completed and billed."
+      <FilterBar
+        search={params.q}
+        onSearchChange={(q) => updateParams({ q })}
+        searchPlaceholder="Search invoices or customers..."
+        filters={[
+          {
+            key: "status",
+            placeholder: "Status",
+            value: params['status'],
+            options: STATUSES.map((s) => ({ label: s.replace(/_/g, " "), value: s })),
+            onChange: (status) => updateParams({ status }),
+          }
+        ]}
       />
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className={readOnly ? "lg:col-span-2" : "lg:col-span-3"}>
+          <DataTable
+            columns={columns}
+            rows={filteredInvoices}
+            rowKey={(r) => r.id}
+            initialPageSize={10}
+            emptyTitle="No invoices found"
+            emptyDescription="Adjust your filters or try a different search term."
+          />
+        </div>
+        {readOnly && (
+          <ChartCard title="Invoice status distribution" description="All invoices">
+            <ResponsiveContainer width="100%" height={260}>
+              <PieChart>
+                <Pie data={statusDistribution} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={3} stroke="none">
+                  {statusDistribution.map((entry, i) => (
+                    <Cell key={entry.name} fill={DONUT_COLORS[i % DONUT_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--popover)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 12,
+                    fontSize: 12,
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <ul className="mt-2 grid grid-cols-2 gap-1.5 text-xs">
+              {statusDistribution.map((s, i) => (
+                <li key={s.name} className="flex items-center gap-2 text-muted-foreground">
+                  <span className="size-2 rounded-full" style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }} />
+                  {s.name}
+                  <span className="ml-auto text-foreground">{s.value}</span>
+                </li>
+              ))}
+            </ul>
+          </ChartCard>
+        )}
+      </div>
 
       <Dialog open={target !== null} onOpenChange={(open) => !open && setTarget(null)}>
         <DialogContent>
@@ -165,3 +246,4 @@ function BillingPage() {
     </div>
   );
 }
+

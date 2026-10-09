@@ -32,6 +32,8 @@ import type {
   TransitMixer,
   Trip,
 } from "@/types";
+import type { InventoryItem, WeighbridgeTicket } from "@/api/store";
+import type { Employee, PayrollRun } from "@/api/account";
 
 /** In-memory database for the prototype. Mutations here mirror future API writes. */
 export interface Db {
@@ -50,25 +52,56 @@ export interface Db {
   materialStock: MaterialStock[];
   auditLog: AuditEntry[];
   notifications: AppNotification[];
+  // New modules
+  inventory?: InventoryItem[];
+  weighbridge?: WeighbridgeTicket[];
+  transitMixerPayloads?: any[];
+  employees?: Employee[];
+  payroll?: PayrollRun[];
+  dprRecords?: any[];
+  storeExpenses?: any[];
+  storeAttendance?: any[];
+  weighbridgeSettings?: any;
 }
 
-export const db: Db = {
-  customers,
-  sites,
-  purchaseOrders,
-  trips,
-  batchSheets,
-  qcChecks,
-  cubeTests,
-  materialTests,
-  invoices,
-  payments,
-  transitMixers,
-  drivers,
-  materialStock,
-  auditLog,
-  notifications,
-};
+export function loadDb(): Db {
+  try {
+    const saved = localStorage.getItem("rmc-mock-v2");
+    if (saved) return JSON.parse(saved);
+  } catch (e) {
+    console.error("Failed to parse local storage mock db");
+  }
+  return {
+    customers,
+    sites,
+    purchaseOrders,
+    trips,
+    batchSheets,
+    qcChecks,
+    cubeTests,
+    materialTests,
+    invoices,
+    payments,
+    transitMixers,
+    drivers,
+    materialStock,
+    auditLog,
+    notifications,
+  };
+}
+
+export const db: Db = loadDb();
+
+export function getDb(): Db {
+  return db;
+}
+
+export function saveDb(updatedDb?: Db) {
+  if (updatedDb) {
+    Object.assign(db, updatedDb);
+  }
+  localStorage.setItem("rmc-mock-v2", JSON.stringify(db));
+}
 
 export function customerById(id: string): Customer | undefined {
   return db.customers.find((c) => c.id === id);
@@ -94,4 +127,5 @@ export function recordAudit(actor: string, message: string, entity: string): voi
     message,
     entity,
   });
+  saveDb();
 }

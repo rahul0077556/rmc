@@ -1,13 +1,68 @@
+import axios, { type AxiosRequestConfig, type AxiosResponse } from "axios";
 import type { ApiError, ApiResponse, PaginatedResponse } from "@/types";
+export type { ApiError, ApiResponse, PaginatedResponse };
 
 export const API_BASE_URL = import.meta.env["VITE_API_BASE_URL"] ?? "/api/v1";
+export const TOKEN_STORAGE_KEY = "rmc.jwt_token";
+
+export const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+// Request interceptor to attach JWT token
+apiClient.interceptors.request.use((config) => {
+  if (typeof window !== "undefined") {
+    const token = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (token && config.headers) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  }
+  return config;
+});
+
+// Response interceptor to handle errors gracefully
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 && typeof window !== "undefined") {
+      // Token expired or invalid
+      window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+      window.localStorage.removeItem("rmc.session");
+    }
+    return Promise.reject(error);
+  }
+);
+
+export async function request<T>(config: AxiosRequestConfig): Promise<ApiResponse<T>> {
+  try {
+    const res: AxiosResponse<{ data: T; meta?: Record<string, unknown> }> = await apiClient.request(config);
+    return {
+      data: res.data.data,
+      meta: res.data.meta,
+    };
+  } catch (err: unknown) {
+    if (axios.isAxiosError(err) && err.response?.data?.error) {
+      const errPayload = err.response.data.error;
+      const apiErr: ApiError = {
+        status: err.response.status,
+        message: errPayload.message || "An API error occurred",
+      };
+      throw apiErr;
+    }
+    throw {
+      status: 500,
+      message: err instanceof Error ? err.message : "Network error connecting to backend",
+    } as ApiError;
+  }
+}
 
 /**
- * Mock transport. Every api/* module talks only through these helpers, so the
- * whole app can be pointed at a real Flask REST API by swapping this file for
- * an axios/fetch implementation against API_BASE_URL — no UI changes needed.
+ * Fallback/Mock transport helpers to preserve compatibility across existing components.
  */
-const LATENCY_MS = 220;
+const LATENCY_MS = 150;
 
 export function respond<T>(data: T, message?: string): Promise<ApiResponse<T>> {
   return new Promise((resolve) => {
