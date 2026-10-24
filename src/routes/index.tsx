@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Boxes, Loader2, ShieldCheck, Truck } from "lucide-react";
+import { Boxes, Loader2, ShieldCheck, Truck, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -10,6 +10,7 @@ import { DEMO_ACCOUNTS, DEMO_PASSWORD, homeForRole } from "@/api/auth";
 import { useAuth } from "@/auth/auth-context";
 import { isApiError } from "@/api/client";
 import { PLANT_NAME } from "@/lib/mock-data";
+import { Truck3DCanvas } from "@/components/home/Truck3DCanvas";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -58,71 +59,113 @@ function LoginPage() {
   }
 
   return (
-    <div className="grid min-h-screen bg-background lg:grid-cols-[1.05fr_1fr]">
-      <section className="relative hidden flex-col justify-between overflow-hidden border-r border-border p-10 lg:flex">
+    <div className="grid min-h-screen bg-background lg:grid-cols-[1.18fr_1fr]">
+      {/* LEFT SECTION: 3D HERO SHOWCASE */}
+      <section className="relative hidden flex-col justify-between overflow-hidden border-r border-border p-8 lg:flex xl:p-10">
         <div className="grid-fade absolute inset-0" />
-        <div className="absolute -left-24 top-24 size-[420px] rounded-full bg-primary/12 blur-3xl" />
-        <div className="absolute bottom-0 right-0 size-[360px] rounded-full bg-info/10 blur-3xl" />
+        <div className="absolute -left-24 top-24 size-[420px] rounded-full bg-primary/15 blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 right-0 size-[360px] rounded-full bg-info/10 blur-3xl pointer-events-none" />
 
-        <div className="relative flex items-center gap-3">
-          <span className="brand-gradient flex size-10 items-center justify-center rounded-xl text-primary-foreground">
-            <Boxes className="size-5" />
-          </span>
-          <div>
-            <p className="text-sm font-semibold">RMC Command Center</p>
-            <p className="text-xs text-muted-foreground">Order-to-Delivery Operations Platform</p>
+        {/* Top Branding */}
+        <div className="relative flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="brand-gradient flex size-10 items-center justify-center rounded-xl text-primary-foreground shadow-lg shadow-primary/20">
+              <Boxes className="size-5" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold tracking-tight">RMC Command Center</p>
+              <p className="text-xs text-muted-foreground">{PLANT_NAME}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+            <Sparkles className="size-3.5" />
+            <span>Interactive 3D Fleet Experience</span>
           </div>
         </div>
 
-        <div className="relative max-w-lg">
-          <h1 className="text-4xl font-semibold leading-tight tracking-tight">
-            From Order to Delivery, <span className="text-primary">Under Control.</span>
-          </h1>
-          <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-            One control surface for {PLANT_NAME} — purchase orders, dispatch planning, transit mixer
-            assignment, batching, quality control, challans and collections.
-          </p>
+        {/* Middle: Headline & 3D Truck Model */}
+        <div className="relative my-auto flex flex-col pt-4">
+          <div className="max-w-xl">
+            <h1 className="text-3xl font-semibold leading-tight tracking-tight xl:text-4xl">
+              From Order to Delivery,{" "}
+              <span className="bg-gradient-to-r from-primary via-purple-400 to-indigo-300 bg-clip-text text-transparent">
+                Under Control.
+              </span>
+            </h1>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              Intelligent industrial dispatch & fleet control for {PLANT_NAME} — real-time 3D mixer simulation,
+              batching telemetry, slump & cube quality gates, challans, and collections.
+            </p>
+          </div>
 
-          <div className="mt-8 grid grid-cols-3 gap-3">
+          {/* 3D Interactive Transit Mixer Canvas Viewport */}
+          <div className="relative my-4 h-[380px] w-full xl:h-[430px]">
+            <Truck3DCanvas />
+          </div>
+
+          {/* Key Plant Metrics */}
+          <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "Transit Mixers", value: "12" },
-              { label: "Grades Produced", value: "M15–M40" },
-              { label: "Stages Tracked", value: "12" },
+              { label: "Transit Mixers", value: "18", sub: "Live GPS & Telemetry" },
+              { label: "Grades Produced", value: "M15–M40", sub: "Auto-Batching Scales" },
+              { label: "Stages Tracked", value: "12", sub: "QC-Gated Dispatch" },
             ].map((s) => (
-              <div key={s.label} className="panel px-3 py-3">
-                <p className="text-lg font-semibold">{s.value}</p>
-                <p className="text-[11px] text-muted-foreground">{s.label}</p>
+              <div key={s.label} className="panel px-3.5 py-2.5 transition-all hover:border-primary/40">
+                <p className="text-lg font-semibold tracking-tight text-foreground">{s.value}</p>
+                <p className="text-xs font-medium text-muted-foreground">{s.label}</p>
+                <p className="text-[10px] text-primary/80">{s.sub}</p>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="relative flex items-center gap-6 text-xs text-muted-foreground">
+        {/* Footer Badges */}
+        <div className="relative flex items-center justify-between border-t border-border/60 pt-4 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-2">
-            <Truck className="size-4 text-primary" /> Dispatch to delivery in one timeline
+            <Truck className="size-4 text-primary" /> Dispatch to delivery in one unified timeline
           </span>
           <span className="inline-flex items-center gap-2">
-            <ShieldCheck className="size-4 text-primary" /> QC-gated releases
+            <ShieldCheck className="size-4 text-emerald-400" /> IS 456 / IS 10262 QC verification
           </span>
         </div>
       </section>
 
-      <section className="flex items-center justify-center p-6">
+      {/* RIGHT SECTION: SIGN IN & ROLE PICKER */}
+      <section className="flex flex-col items-center justify-center p-6 sm:p-8 lg:p-10">
         <div className="w-full max-w-sm">
+          {/* Mobile Branding & Mobile 3D Canvas */}
           <div className="mb-6 lg:hidden">
-            <span className="brand-gradient mb-3 flex size-10 items-center justify-center rounded-xl text-primary-foreground">
-              <Boxes className="size-5" />
-            </span>
-            <p className="text-lg font-semibold">RMC Command Center</p>
+            <div className="flex items-center gap-3">
+              <span className="brand-gradient flex size-10 items-center justify-center rounded-xl text-primary-foreground">
+                <Boxes className="size-5" />
+              </span>
+              <div>
+                <p className="text-base font-semibold">RMC Command Center</p>
+                <p className="text-xs text-muted-foreground">{PLANT_NAME}</p>
+              </div>
+            </div>
+
+            {/* Mobile 3D Preview */}
+            <div className="relative mt-4 h-[230px] w-full overflow-hidden rounded-xl border border-border">
+              <Truck3DCanvas />
+            </div>
           </div>
 
-          <h2 className="text-xl font-semibold tracking-tight">Sign in</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Use your plant account to continue.</p>
+          <h2 className="text-2xl font-semibold tracking-tight">Sign in</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Access your plant operations account.</p>
 
           <form onSubmit={submit} className="mt-6 space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <Label htmlFor="email">Email address</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@rmc.test"
+                required
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="password">Password</Label>
@@ -136,14 +179,14 @@ function LoginPage() {
             </div>
 
             <div className="flex items-center justify-between text-sm">
-              <label className="flex items-center gap-2 text-muted-foreground">
+              <label className="flex items-center gap-2 text-muted-foreground cursor-pointer">
                 <Checkbox checked={remember} onCheckedChange={(v) => setRemember(v === true)} />
                 Remember me
               </label>
               <button
                 type="button"
                 className="text-xs text-primary hover:underline"
-                onClick={() => toast.info("Password reset is handled by your plant administrator.")}
+                onClick={() => toast.info("Password reset is managed by your plant administrator.")}
               >
                 Forgot password?
               </button>
@@ -155,18 +198,22 @@ function LoginPage() {
               </p>
             )}
 
-            <Button type="submit" className="w-full" disabled={busy}>
-              {busy && <Loader2 className="size-4 animate-spin" />}
-              Sign in
+            <Button type="submit" className="w-full font-medium" disabled={busy}>
+              {busy && <Loader2 className="mr-2 size-4 animate-spin" />}
+              Sign in to Operations
             </Button>
           </form>
 
-          <div className="mt-8 rounded-xl border border-border bg-surface p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              Demo credentials
-            </p>
+          {/* Quick-Access Role Switcher */}
+          <div className="mt-8 rounded-xl border border-border bg-surface p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Demo Accounts (10 Roles)
+              </p>
+              <span className="text-[11px] font-mono text-primary font-medium">{DEMO_PASSWORD}</span>
+            </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Pick a role to fill in its account. Password: <span className="text-foreground">{DEMO_PASSWORD}</span>
+              Click any role to autofill credentials and explore its dashboard:
             </p>
             <div className="mt-3 flex flex-wrap gap-1.5">
               {DEMO_ACCOUNTS.map((account) => (
@@ -176,8 +223,13 @@ function LoginPage() {
                   onClick={() => {
                     setEmail(account.email);
                     setPassword(account.password);
+                    toast.info(`Filled credentials for ${account.label}`);
                   }}
-                  className="rounded-lg border border-border bg-surface-raised px-2.5 py-1.5 text-xs transition-colors hover:border-primary/50 hover:text-primary"
+                  className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all ${
+                    email === account.email
+                      ? "border-primary bg-primary/15 text-primary shadow-sm"
+                      : "border-border bg-surface-raised text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                  }`}
                 >
                   {account.label}
                 </button>
