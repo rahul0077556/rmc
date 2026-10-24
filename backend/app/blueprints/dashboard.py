@@ -12,7 +12,7 @@ dashboard_bp = Blueprint("dashboard", __name__, url_prefix="/api/v1/dashboard")
 
 @dashboard_bp.route("/owner-summary", methods=["GET"])
 @jwt_required()
-@roles_required("owner", "dispatcher")
+@roles_required()
 def get_owner_summary():
     orders = PurchaseOrder.query.filter_by(is_deleted=False).all()
     invoices = Invoice.query.all()
@@ -33,7 +33,7 @@ def get_owner_summary():
 
 @dashboard_bp.route("/orders-per-date", methods=["GET"])
 @jwt_required()
-@roles_required("owner", "dispatcher")
+@roles_required()
 def get_orders_per_date():
     days = int(request.args.get("days", 30))
     start_date = datetime.now(timezone.utc) - timedelta(days=days)
@@ -59,7 +59,7 @@ def get_orders_per_date():
 
 @dashboard_bp.route("/daily-schedule", methods=["GET"])
 @jwt_required()
-@roles_required("owner", "dispatcher")
+@roles_required()
 def get_daily_schedule():
     target_date_str = request.args.get("date")
     if target_date_str:
@@ -91,7 +91,7 @@ def get_daily_schedule():
 
 @dashboard_bp.route("/payment-status", methods=["GET"])
 @jwt_required()
-@roles_required("owner", "dispatcher")
+@roles_required()
 def get_payment_status():
     invoices = Invoice.query.all()
     total_invoiced = sum(inv.total for inv in invoices)
@@ -130,7 +130,7 @@ def get_payment_status():
 
 @dashboard_bp.route("/percentages", methods=["GET"])
 @jwt_required()
-@roles_required("owner", "dispatcher")
+@roles_required()
 def get_percentages():
     orders = PurchaseOrder.query.filter_by(is_deleted=False).all()
     trips = Trip.query.all()
@@ -184,7 +184,7 @@ def get_percentages():
 
 @dashboard_bp.route("/truck-availability", methods=["GET"])
 @jwt_required()
-@roles_required("owner", "dispatcher")
+@roles_required()
 def get_truck_availability():
     trucks = Truck.query.all()
     drivers = Driver.query.all()

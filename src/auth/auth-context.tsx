@@ -38,6 +38,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     setUser(null);
     window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem("rmc.jwt_token");
+    void authApi.logout();
   }, []);
 
   const value = useMemo<AuthState>(

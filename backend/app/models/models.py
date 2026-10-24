@@ -765,3 +765,232 @@ class AuditLog(db.Model):
             "after": json.loads(self.after_data) if self.after_data else None,
             "createdAt": self.created_at.isoformat()
         }
+
+# --- STORE & WEIGHBRIDGE ---
+class WeighbridgeTicket(TimestampMixin, db.Model):
+    __tablename__ = "weighbridge_tickets"
+
+    ticket_number = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    type = db.Column(db.String(20), nullable=False)  # INWARD, OUTWARD
+    vehicle_number = db.Column(db.String(30), nullable=False, index=True)
+    material = db.Column(db.String(100), nullable=False)
+    supplier_or_customer = db.Column(db.String(150), nullable=False)
+    gross_weight = db.Column(db.Float, default=0.0, nullable=False)
+    tare_weight = db.Column(db.Float, default=0.0, nullable=False)
+    net_weight = db.Column(db.Float, default=0.0, nullable=False)
+    gross_time = db.Column(db.String(30), nullable=False)
+    tare_time = db.Column(db.String(30), nullable=False)
+    status = db.Column(db.String(30), default="COMPLETED", nullable=False)  # PENDING_TARE, COMPLETED
+    variance = db.Column(db.Float, default=0.0, nullable=True)
+    challan_weight = db.Column(db.Float, default=0.0, nullable=True)
+    received_rs = db.Column(db.Float, default=0.0, nullable=True)
+    wb_name = db.Column(db.String(50), default="Weighbridge #1", nullable=True)
+    driver_name = db.Column(db.String(100), nullable=True)
+    watchman_name = db.Column(db.String(100), nullable=True)
+    gate_pass_no = db.Column(db.String(50), nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "ticketNumber": self.ticket_number,
+            "type": self.type,
+            "vehicleNumber": self.vehicle_number,
+            "material": self.material,
+            "supplierOrCustomer": self.supplier_or_customer,
+            "grossWeight": self.gross_weight,
+            "tareWeight": self.tare_weight,
+            "netWeight": self.net_weight,
+            "grossTime": self.gross_time,
+            "tareTime": self.tare_time,
+            "status": self.status,
+            "variance": self.variance or 0,
+            "challanWeight": self.challan_weight or 0,
+            "receivedRs": self.received_rs or 0,
+            "wbName": self.wb_name or "Weighbridge #1",
+            "driverName": self.driver_name or "",
+            "watchmanName": self.watchman_name or "",
+            "gatePassNo": self.gate_pass_no or "",
+            "createdAt": self.created_at.isoformat()
+        }
+
+class TransitMixerPayload(TimestampMixin, db.Model):
+    __tablename__ = "transit_mixer_payloads"
+
+    s_no = db.Column(db.Integer, nullable=False)
+    vehicle_no = db.Column(db.String(30), unique=True, nullable=False, index=True)
+    vehicle_type = db.Column(db.String(50), nullable=False)
+    make = db.Column(db.String(50), nullable=False)  # Ashok Leyland, Benz, TATA
+    location = db.Column(db.String(50), nullable=False)  # Mulkhed, Mhalunge
+    vehicle_tyre_details = db.Column(db.String(30), nullable=False)  # 10 Tyres, 12 Tyres
+    overload_pass = db.Column(db.String(10), default="Yes", nullable=False)  # Yes, No
+    installed_handi_capacity_cum = db.Column(db.Float, nullable=False)
+    rto_gvw_kg = db.Column(db.Float, nullable=False)
+    tare_weight_kg = db.Column(db.Float, nullable=False)
+    weight_of_water_kg = db.Column(db.Float, nullable=False)
+    new_tare_weight_kg = db.Column(db.Float, nullable=False)
+    actual_weight_for_loading_kg = db.Column(db.Float, nullable=False)
+    payload_capacity_rc_gvw_cum = db.Column(db.Float, nullable=False)
+    supply_payload_capacity_overload_pass_cum = db.Column(db.Float, nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "sNo": self.s_no,
+            "vehicleNo": self.vehicle_no,
+            "vehicleType": self.vehicle_type,
+            "make": self.make,
+            "location": self.location,
+            "vehicleTyreDetails": self.vehicle_tyre_details,
+            "overLoadPass": self.overload_pass,
+            "installedHandiCapacityCum": self.installed_handi_capacity_cum,
+            "rtoGvwKg": self.rto_gvw_kg,
+            "tareWeightKg": self.tare_weight_kg,
+            "weightOfWaterKg": self.weight_of_water_kg,
+            "newTareWeightKg": self.new_tare_weight_kg,
+            "actualWeightForLoadingKg": self.actual_weight_for_loading_kg,
+            "payLoadCapacityRcGvwCum": self.payload_capacity_rc_gvw_cum,
+            "supplyPayLoadCapacityOverloadPassCum": self.supply_payload_capacity_overload_pass_cum
+        }
+
+class DprRecord(TimestampMixin, db.Model):
+    __tablename__ = "dpr_records"
+
+    date = db.Column(db.String(20), unique=True, nullable=False, index=True)
+    total_batches = db.Column(db.Integer, default=0, nullable=False)
+    total_cum = db.Column(db.Float, default=0.0, nullable=False)
+    cement_consumed_mt = db.Column(db.Float, default=0.0, nullable=False)
+    fly_ash_consumed_mt = db.Column(db.Float, default=0.0, nullable=False)
+    ggbs_consumed_mt = db.Column(db.Float, default=0.0, nullable=False)
+    sand_consumed_mt = db.Column(db.Float, default=0.0, nullable=False)
+    aggregate_consumed_mt = db.Column(db.Float, default=0.0, nullable=False)
+    water_consumed_kl = db.Column(db.Float, default=0.0, nullable=False)
+    admixture_consumed_kg = db.Column(db.Float, default=0.0, nullable=False)
+    diesel_consumed_ltr = db.Column(db.Float, default=0.0, nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "date": self.date,
+            "totalBatches": self.total_batches,
+            "totalCum": self.total_cum,
+            "cementConsumedMt": self.cement_consumed_mt,
+            "flyAshConsumedMt": self.fly_ash_consumed_mt,
+            "ggbsConsumedMt": self.ggbs_consumed_mt,
+            "sandConsumedMt": self.sand_consumed_mt,
+            "aggregateConsumedMt": self.aggregate_consumed_mt,
+            "waterConsumedKl": self.water_consumed_kl,
+            "admixtureConsumedKg": self.admixture_consumed_kg,
+            "dieselConsumedLtr": self.diesel_consumed_ltr
+        }
+
+class ExpenseRecord(TimestampMixin, db.Model):
+    __tablename__ = "expense_records"
+
+    category = db.Column(db.String(50), nullable=False)
+    vendor = db.Column(db.String(150), nullable=False)
+    bill_no = db.Column(db.String(50), nullable=False)
+    date = db.Column(db.String(20), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(20), default="PAID", nullable=False)
+    description = db.Column(db.Text, default="", nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "category": self.category,
+            "vendor": self.vendor,
+            "billNo": self.bill_no,
+            "date": self.date,
+            "amount": self.amount,
+            "status": self.status,
+            "description": self.description
+        }
+
+class AttendanceRecord(TimestampMixin, db.Model):
+    __tablename__ = "attendance_records"
+
+    type = db.Column(db.String(20), nullable=False)  # DRIVER, STAFF
+    name = db.Column(db.String(100), nullable=False)
+    designation_or_vehicle = db.Column(db.String(100), nullable=False)
+    shift = db.Column(db.String(20), default="Day", nullable=False)
+    trips_or_tasks = db.Column(db.Integer, default=0, nullable=False)
+    status = db.Column(db.String(20), default="PRESENT", nullable=False)  # PRESENT, ABSENT, ON_TRIP
+    sync_source = db.Column(db.String(30), default="UBITECH", nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "type": self.type,
+            "name": self.name,
+            "designationOrVehicle": self.designation_or_vehicle,
+            "shift": self.shift,
+            "tripsOrTasks": self.trips_or_tasks,
+            "status": self.status,
+            "syncSource": self.sync_source
+        }
+
+class WeighbridgeSettings(TimestampMixin, db.Model):
+    __tablename__ = "weighbridge_settings"
+
+    plant_name = db.Column(db.String(150), default="Sai ReadyMix Concrete - Hinjewadi", nullable=False)
+    vendor_software_name = db.Column(db.String(100), default="Sai Weigh Pro v4.2", nullable=False)
+    vendor_company_name = db.Column(db.String(150), default="Sai Scales & Automation Pvt Ltd", nullable=False)
+    customer_care = db.Column(db.String(50), default="+91 20 6789 0100", nullable=False)
+    wb_name = db.Column(db.String(50), default="WB-01 (Inward/Outward Pitless 60T)", nullable=False)
+    com_port = db.Column(db.String(20), default="COM3 / 9600-8-N-1", nullable=False)
+    auto_capture = db.Column(db.Boolean, default=True, nullable=False)
+
+    def to_dict(self):
+        return {
+            "plantName": self.plant_name,
+            "vendorSoftwareName": self.vendor_software_name,
+            "vendorCompanyName": self.vendor_company_name,
+            "customerCare": self.customer_care,
+            "wbName": self.wb_name,
+            "comPort": self.com_port,
+            "autoCapture": self.auto_capture
+        }
+
+# --- HR & PAYROLL ---
+class Employee(TimestampMixin, db.Model):
+    __tablename__ = "employees"
+
+    emp_code = db.Column(db.String(30), unique=True, nullable=False, index=True)
+    name = db.Column(db.String(100), nullable=False)
+    department = db.Column(db.String(50), nullable=False)
+    role = db.Column(db.String(50), nullable=False)
+    join_date = db.Column(db.String(20), nullable=False)
+    status = db.Column(db.String(20), default="ACTIVE", nullable=False)
+    base_salary = db.Column(db.Float, default=0.0, nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.emp_code,
+            "name": self.name,
+            "department": self.department,
+            "role": self.role,
+            "joinDate": self.join_date,
+            "status": self.status,
+            "baseSalary": self.base_salary
+        }
+
+class PayrollRun(TimestampMixin, db.Model):
+    __tablename__ = "payroll_runs"
+
+    payroll_code = db.Column(db.String(30), unique=True, nullable=False, index=True)
+    period = db.Column(db.String(30), nullable=False)
+    total_employees = db.Column(db.Integer, nullable=False)
+    total_amount = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(20), default="PAID", nullable=False)
+    processed_date = db.Column(db.DateTime, nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.payroll_code,
+            "period": self.period,
+            "totalEmployees": self.total_employees,
+            "totalAmount": self.total_amount,
+            "status": self.status,
+            "processedDate": self.processed_date.isoformat() if self.processed_date else None
+        }
+

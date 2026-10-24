@@ -36,7 +36,7 @@ def list_invoices():
 
 @billing_bp.route("", methods=["POST"])
 @jwt_required()
-@roles_required("dispatcher")
+@roles_required("dispatcher", "account", "sales_manager")
 def create_invoice():
     data = request.get_json() or {}
     po_id = data.get("poId")
@@ -126,7 +126,7 @@ def get_invoice(id):
 
 @billing_bp.route("/<id>/payments", methods=["POST"])
 @jwt_required()
-@roles_required("dispatcher")
+@roles_required("dispatcher", "account", "sales_manager")
 def record_payment(id):
     inv = Invoice.query.get(id)
     if not inv:

@@ -1,5 +1,4 @@
-import { respond } from "./client";
-import { db, recordAudit } from "@/lib/store";
+import { request } from "./client";
 import type { ApiResponse, Customer, Site } from "@/types";
 
 export interface CustomerRow extends Customer {
@@ -7,37 +6,88 @@ export interface CustomerRow extends Customer {
   sites: Site[];
 }
 
-function decorate(c: Customer): CustomerRow {
+function decorate(c: any): CustomerRow {
   return {
-    ...c,
-    activeOrders: db.purchaseOrders.filter(
-      (p) => p.customerId === c.id && ["SUBMITTED", "APPROVED", "IN_PROGRESS"].includes(p.status),
-    ).length,
-    sites: db.sites.filter((s) => s.customerId === c.id),
+    id: c.id,
+    name: c.name,
+    contactPerson: c.contactPerson || c.contact_person || "",
+    phone: c.phone || "",
+    email: c.email || "",
+    gstin: c.gstin || "",
+    billingAddress: c.billingAddress || c.address || "",
+    creditDays: c.creditDays ?? c.credit_days ?? 30,
+    creditLimit: c.creditLimit ?? c.credit_limit ?? 0,
+    activeOrders: c.activeOrders ?? 0,
+    sites: (c.sites || []).map((s: any) => ({
+      id: s.id,
+      customerId: s.customerId || s.customer_id || c.id,
+      name: s.name,
+      address: s.address,
+      contactPerson: s.contactPerson || s.contact_person || "",
+      phone: s.phone || "",
+      accessibilityNotes: s.accessibilityNotes || s.accessibility_notes || "",
+    })),
   };
 }
 
 export const customersApi = {
-  list(): Promise<ApiResponse<CustomerRow[]>> {
-    return respond(db.customers.map(decorate));
+  async list(): Promise<ApiResponse<CustomerRow[]>> {
+    const res = await request<CustomerRow[]>({ url: "/customers", method: "GET" });
+    return { data: (res.data || []).map(decorate) };
   },
-  get(id: string): Promise<ApiResponse<CustomerRow | null>> {
-    const c = db.customers.find((x) => x.id === id);
-    return respond(c ? decorate(c) : null);
+
+  async get(id: string): Promise<ApiResponse<CustomerRow | null>> {
+    const res = await request<CustomerRow>({ url: `/customers/${id}`, method: "GET" });
+    return { data: res.data ? decorate(res.data) : null };
   },
-  sites(customerId: string): Promise<ApiResponse<Site[]>> {
-    return respond(db.sites.filter((s) => s.customerId === customerId));
+
+  async sites(customerId: string): Promise<ApiResponse<Site[]>> {
+    const res = await request<Site[]>({ url: `/sites?customerId=${customerId}`, method: "GET" });
+    return {
+      data: (res.data || []).map((s: any) => ({
+        id: s.id,
+        customerId: s.customerId || s.customer_id || customerId,
+        name: s.name,
+        address: s.address,
+        contactPerson: s.contactPerson || s.contact_person || "",
+        phone: s.phone || "",
+        accessibilityNotes: s.accessibilityNotes || s.accessibility_notes || "",
+      })),
+    };
   },
-  create(input: Omit<Customer, "id">, actor: string): Promise<ApiResponse<CustomerRow>> {
-    const customer: Customer = { ...input, id: `CUS-${String(db.customers.length + 1).padStart(2, "0")}` };
-    db.customers.push(customer);
-    recordAudit(actor, `created customer ${customer.name}`, customer.id);
-    return respond(decorate(customer), "Customer created");
+
+  async create(input: Omit<Customer, "id">, _actor?: string): Promise<ApiResponse<CustomerRow>> {
+    const res = await request<CustomerRow>({
+      url: "/customers",
+      method: "POST",
+      data: {
+        name: input.name,
+        contactPerson: input.contactPerson,
+        phone: input.phone,
+        email: input.email,
+        gstin: input.gstin,
+        billingAddress: input.billingAddress,
+        creditDays: input.creditDays,
+        creditLimit: input.creditLimit,
+      },
+    });
+    return { data: decorate(res.data), message: "Customer created successfully" };
   },
-  createSite(input: Omit<Site, "id">, actor: string): Promise<ApiResponse<Site>> {
-    const site: Site = { ...input, id: `SITE-${db.sites.length + 1}` };
-    db.sites.push(site);
-    recordAudit(actor, `created site ${site.name}`, site.id);
-    return respond(site, "Site created");
+
+  async createSite(input: Omit<Site, "id">, _actor?: string): Promise<ApiResponse<Site>> {
+    const res = await request<Site>({
+      url: "/sites",
+      method: "POST",
+      data: {
+        customerId: input.customerId,
+        name: input.name,
+        address: input.address,
+        contactPerson: input.contactPerson,
+        phone: input.phone,
+        accessibilityNotes: input.accessibilityNotes,
+      },
+    });
+    return { data: res.data, message: "Site created successfully" };
   },
 };
+

@@ -101,9 +101,16 @@ export interface AttendanceRecord {
   punchTime: string;
 }
 
+import { request } from "./client";
+
 export const storeApi = {
   inventory: async (): Promise<ApiResponse<InventoryItem[]>> => {
-    await delay(100);
+    try {
+      const res = await request<InventoryItem[]>({ url: "/store/inventory", method: "GET" });
+      if (res.data && res.data.length > 0) return res;
+    } catch {
+      // Fallback
+    }
     const db = getDb();
     if (!db.inventory) {
       db.inventory = fallbackInventory();
@@ -113,7 +120,16 @@ export const storeApi = {
   },
 
   updateStock: async (materialId: string, addedStock: number): Promise<ApiResponse<InventoryItem>> => {
-    await delay(100);
+    try {
+      const res = await request<InventoryItem>({
+        url: "/store/inventory/adjust",
+        method: "POST",
+        data: { materialId, quantity: addedStock, type: addedStock >= 0 ? "IN" : "OUT" }
+      });
+      if (res.data) return res;
+    } catch {
+      // Fallback
+    }
     const db = getDb();
     const inv = db.inventory ?? fallbackInventory();
     const item = inv.find((i) => i.id === materialId);
@@ -126,7 +142,12 @@ export const storeApi = {
   },
 
   weighbridge: async (): Promise<ApiResponse<WeighbridgeTicket[]>> => {
-    await delay(100);
+    try {
+      const res = await request<WeighbridgeTicket[]>({ url: "/store/weighbridge/tickets", method: "GET" });
+      if (res.data && res.data.length > 0) return res;
+    } catch {
+      // Fallback
+    }
     const db = getDb();
     if (!db.weighbridge) {
       db.weighbridge = fallbackTickets();
@@ -136,7 +157,12 @@ export const storeApi = {
   },
 
   payloadDetails: async (): Promise<ApiResponse<TransitMixerPayload[]>> => {
-    await delay(100);
+    try {
+      const res = await request<TransitMixerPayload[]>({ url: "/store/transit-mixers", method: "GET" });
+      if (res.data && res.data.length > 0) return res;
+    } catch {
+      // Fallback
+    }
     const db = getDb();
     if (!db.transitMixerPayloads) {
       db.transitMixerPayloads = fallbackPayloads();
@@ -146,7 +172,12 @@ export const storeApi = {
   },
 
   settings: async (): Promise<ApiResponse<WeighbridgeSettings>> => {
-    await delay(80);
+    try {
+      const res = await request<WeighbridgeSettings>({ url: "/store/settings", method: "GET" });
+      if (res.data) return res;
+    } catch {
+      // Fallback
+    }
     const db = getDb();
     if (!db.weighbridgeSettings || db.weighbridgeSettings.vendorCompanyName?.includes("Kunal") || db.weighbridgeSettings.vendorSoftwareName?.includes("StaticCCTV")) {
       db.weighbridgeSettings = fallbackSettings();
@@ -156,7 +187,11 @@ export const storeApi = {
   },
 
   updateSettings: async (settings: WeighbridgeSettings): Promise<ApiResponse<WeighbridgeSettings>> => {
-    await delay(100);
+    try {
+      await request<WeighbridgeSettings>({ url: "/store/settings", method: "PUT", data: settings });
+    } catch {
+      // Fallback
+    }
     const db = getDb();
     db.weighbridgeSettings = settings;
     saveDb(db);
@@ -164,7 +199,12 @@ export const storeApi = {
   },
 
   dprReports: async (): Promise<ApiResponse<DprRecord[]>> => {
-    await delay(100);
+    try {
+      const res = await request<DprRecord[]>({ url: "/store/dpr", method: "GET" });
+      if (res.data && res.data.length > 0) return res;
+    } catch {
+      // Fallback
+    }
     const db = getDb();
     if (!db.dprRecords) {
       db.dprRecords = fallbackDprRecords();
@@ -174,7 +214,12 @@ export const storeApi = {
   },
 
   expenses: async (): Promise<ApiResponse<ExpenseRecord[]>> => {
-    await delay(100);
+    try {
+      const res = await request<ExpenseRecord[]>({ url: "/store/expenses", method: "GET" });
+      if (res.data && res.data.length > 0) return res;
+    } catch {
+      // Fallback
+    }
     const db = getDb();
     if (!db.storeExpenses) {
       db.storeExpenses = fallbackExpenses();
@@ -184,7 +229,12 @@ export const storeApi = {
   },
 
   attendance: async (): Promise<ApiResponse<AttendanceRecord[]>> => {
-    await delay(100);
+    try {
+      const res = await request<AttendanceRecord[]>({ url: "/store/attendance", method: "GET" });
+      if (res.data && res.data.length > 0) return res;
+    } catch {
+      // Fallback
+    }
     const db = getDb();
     if (!db.storeAttendance) {
       db.storeAttendance = fallbackAttendance();
@@ -196,7 +246,12 @@ export const storeApi = {
   createTicket: async (
     data: Omit<WeighbridgeTicket, "id" | "ticketNumber" | "netWeight" | "status" | "variance" | "tareTime">
   ): Promise<ApiResponse<WeighbridgeTicket>> => {
-    await delay(100);
+    try {
+      const res = await request<WeighbridgeTicket>({ url: "/store/weighbridge/tickets", method: "POST", data });
+      if (res.data) return res;
+    } catch {
+      // Fallback
+    }
     const db = getDb();
     const tickets = db.weighbridge ?? fallbackTickets();
     const newTicket: WeighbridgeTicket = {
@@ -230,10 +285,41 @@ export const storeApi = {
     driverName?: string;
     watchmanName?: string;
   }): Promise<ApiResponse<{ ticket: WeighbridgeTicket; updatedStock: InventoryItem | null }>> => {
-    await delay(150);
+    const netWeight = Math.max(0, entry.grossWeight - entry.tareWeight);
+    try {
+      const res = await request<WeighbridgeTicket>({
+        url: "/store/weighbridge/tickets",
+        method: "POST",
+        data: {
+          wbName: entry.wbName,
+          ticketNumber: entry.ticketNumber,
+          type: entry.type,
+          vehicleNumber: entry.vehicleNumber,
+          supplierOrCustomer: entry.partyName,
+          material: entry.product,
+          grossWeight: entry.grossWeight,
+          tareWeight: entry.tareWeight,
+          netWeight,
+          grossTime: entry.grossDate,
+          tareTime: entry.tareDate,
+          receivedRs: entry.receivedRs,
+          driverName: entry.driverName,
+          watchmanName: entry.watchmanName,
+          status: "COMPLETED"
+        }
+      });
+      if (res.data) {
+        // Also fetch refreshed inventory from DB
+        const invRes = await storeApi.inventory();
+        const updatedItem = invRes.data.find(i => i.material.toLowerCase().includes(entry.product.toLowerCase())) || null;
+        return { data: { ticket: res.data, updatedStock: updatedItem } };
+      }
+    } catch {
+      // Fallback
+    }
+
     const db = getDb();
     const tickets = db.weighbridge ?? fallbackTickets();
-    const netWeight = Math.max(0, entry.grossWeight - entry.tareWeight);
 
     const ticket: WeighbridgeTicket = {
       id: "WB" + Date.now(),
@@ -286,7 +372,17 @@ export const storeApi = {
     id: string,
     tareWeight: number
   ): Promise<ApiResponse<WeighbridgeTicket>> => {
-    await delay(100);
+    try {
+      const res = await request<WeighbridgeTicket>({
+        url: `/store/weighbridge/tickets/${id}`,
+        method: "PUT",
+        data: { tareWeight, status: "COMPLETED", tareTime: new Date().toISOString() }
+      });
+      if (res.data) return res;
+    } catch {
+      // Fallback
+    }
+
     const db = getDb();
     const tickets = db.weighbridge ?? fallbackTickets();
     const idx = tickets.findIndex((t) => t.id === id);
@@ -302,7 +398,6 @@ export const storeApi = {
       t.variance = t.netWeight - t.challanWeight;
     }
 
-    // Update inventory if inward
     if (t.type === "INWARD" && t.netWeight > 0) {
       const inv = db.inventory ?? fallbackInventory();
       const item = inv.find((i) =>

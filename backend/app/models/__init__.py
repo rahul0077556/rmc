@@ -24,7 +24,15 @@ from backend.app.models.models import (
     InvoiceLine,
     Payment,
     NotificationLog,
-    AuditLog
+    AuditLog,
+    WeighbridgeTicket,
+    TransitMixerPayload,
+    DprRecord,
+    ExpenseRecord,
+    AttendanceRecord,
+    WeighbridgeSettings,
+    Employee,
+    PayrollRun
 )
 
 __all__ = [
@@ -54,5 +62,13 @@ __all__ = [
     "InvoiceLine",
     "Payment",
     "NotificationLog",
-    "AuditLog"
+    "AuditLog",
+    "WeighbridgeTicket",
+    "TransitMixerPayload",
+    "DprRecord",
+    "ExpenseRecord",
+    "AttendanceRecord",
+    "WeighbridgeSettings",
+    "Employee",
+    "PayrollRun"
 ]

@@ -1,8 +1,6 @@
-import { addDays, format } from "date-fns";
-import { respond } from "./client";
-import { db, recordAudit } from "@/lib/store";
+import { request } from "./client";
 import { decorateTrip, type TripRow } from "./trips";
-import type { ApiResponse, CubeTest, MaterialTest, QcCheck, Trip } from "@/types";
+import type { ApiResponse, CubeTest, Grade, MaterialTest, QcCheck } from "@/types";
 
 export interface QcQueueRow {
   batchSheetId: string;
@@ -22,7 +20,7 @@ export interface QcInput {
 }
 
 export const qaApi = {
-  summary(): Promise<
+  async summary(): Promise<
     ApiResponse<{
       pending: number;
       approved: number;
@@ -32,123 +30,185 @@ export const qaApi = {
       overdue: number;
     }>
   > {
-    return respond({
-      pending: db.trips.filter((t) => t.status === "QC_PENDING").length,
-      approved: db.qcChecks.filter((q) => q.decision === "APPROVED").length,
-      rejected: db.qcChecks.filter((q) => q.decision === "REJECTED").length,
-      recheck: db.trips.filter((t) => t.status === "CORRECTING").length,
-      cubeDue: db.cubeTests.filter((c) => c.result === "PENDING").length,
-      overdue: db.cubeTests.filter((c) => c.result === "OVERDUE").length,
-    });
-  },
+    const queueRes = await this.queue();
+    const cubeRes = await this.cubeTests();
+    const queue = queueRes.data || [];
+    const cubes = cubeRes.data || [];
 
-  queue(): Promise<ApiResponse<QcQueueRow[]>> {
-    const rows = db.batchSheets
-      .filter((b) => b.qcStatus === "PENDING")
-      .map((b) => {
-        const trip = db.trips.find((t) => t.id === b.tripId);
-        return trip ? { batchSheetId: b.id, trip: decorateTrip(trip) } : null;
-      })
-      .filter((r): r is QcQueueRow => r !== null);
-    return respond(rows);
-  },
+    const pending = queue.filter((q) => q.trip.status === "QC_PENDING").length;
+    const recheck = queue.filter((q) => q.trip.status === "CORRECTING").length;
+    const rejected = queue.filter((q) => q.trip.status === "QC_REJECTED").length;
+    const cubeDue = cubes.filter((c) => c.result === "PENDING").length;
+    const overdue = cubes.filter((c) => c.result === "OVERDUE").length;
+    const approved = cubes.filter((c) => c.result === "PASS").length;
 
-  submitCheck(batchSheetId: string, input: QcInput, actor: string): Promise<ApiResponse<QcCheck | null>> {
-    const sheet = db.batchSheets.find((b) => b.id === batchSheetId);
-    const trip = sheet ? db.trips.find((t) => t.id === sheet.tripId) : undefined;
-    if (!sheet || !trip) return respond(null);
-
-    const check: QcCheck = {
-      id: `QC-${batchSheetId}`,
-      batchSheetId,
-      tripId: trip.id,
-      ...input,
-      checkedBy: actor,
-      checkedAt: new Date().toISOString(),
+    return {
+      data: {
+        pending,
+        approved,
+        rejected,
+        recheck,
+        cubeDue,
+        overdue,
+      },
     };
-    db.qcChecks.push(check);
+  },
 
-    if (input.decision === "APPROVED") {
-      sheet.qcStatus = "APPROVED";
-      trip.status = "QC_APPROVED";
-      const po = db.purchaseOrders.find((p) => p.id === trip.poId);
-      if (po) {
-        const castDate = new Date();
-        ([3, 7, 28] as const).forEach((age) => {
-          const test: CubeTest = {
-            id: `CT-${batchSheetId}-${age}`,
-            batchSheetId,
-            grade: po.grade,
-            castDate: format(castDate, "yyyy-MM-dd"),
-            cubeCount: 9,
-            age,
-            dueDate: format(addDays(castDate, age), "yyyy-MM-dd"),
-            result: "PENDING",
-          };
-          db.cubeTests.push(test);
+  async queue(): Promise<ApiResponse<QcQueueRow[]>> {
+    const res = await request<any[]>({ url: "/qa/queue", method: "GET" });
+    const trips = res.data || [];
+    const rows: QcQueueRow[] = trips.map((t: any) => ({
+      batchSheetId: t.batchSheetId || t.id,
+      trip: decorateTrip(t),
+    }));
+    return { data: rows };
+  },
+
+  async submitCheck(batchSheetId: string, input: QcInput, _actor?: string): Promise<ApiResponse<QcCheck | null>> {
+    const queueRes = await this.queue();
+    const item = (queueRes.data || []).find((q) => q.batchSheetId === batchSheetId);
+    const tripId = item?.trip?.id;
+
+    const res = await request<any>({
+      url: "/qa/checks",
+      method: "POST",
+      data: {
+        tripId: tripId || batchSheetId,
+        batchSheetId,
+        physicalInspection: input.physicalInspection,
+        slump: input.slump,
+        bleeding: input.bleeding,
+        wrongMix: input.wrongMix,
+        admixtureType: input.admixtureType,
+        admixtureQty: input.admixtureQuantity,
+        decision: input.decision === "APPROVED" ? "APPROVE" : "REJECT",
+        rejectAction: input.rejectionAction,
+        remarks: input.remarks,
+      },
+    });
+
+    const qcData = res.data?.qcCheck || res.data;
+    const check: QcCheck | null = qcData
+      ? {
+          id: qcData.id,
+          batchSheetId: qcData.batchSheetId || batchSheetId,
+          tripId: qcData.tripId || tripId || "",
+          physicalInspection: qcData.physicalInspection || input.physicalInspection,
+          slump: qcData.slump ?? input.slump,
+          bleeding: qcData.bleeding || input.bleeding,
+          wrongMix: qcData.wrongMix || input.wrongMix,
+          admixtureType: qcData.admixtureType || input.admixtureType,
+          admixtureQuantity: qcData.admixtureQuantity ?? input.admixtureQuantity,
+          remarks: qcData.remarks || input.remarks,
+          decision: (qcData.decision === "APPROVE" ? "APPROVED" : qcData.decision) || input.decision,
+          rejectionAction: qcData.rejectAction || input.rejectionAction,
+          checkedBy: qcData.qcSign || qcData.checkedBy || "QC Engineer",
+          checkedAt: qcData.checkedAt || new Date().toISOString(),
+        }
+      : null;
+
+    return {
+      data: check,
+      message:
+        input.decision === "APPROVED"
+          ? "QC approved"
+          : input.rejectionAction === "REPLACE"
+            ? "Trip rejected — replacement trip created"
+            : "Trip rejected — correction requested",
+    };
+  },
+
+  async cubeTests(): Promise<ApiResponse<CubeTest[]>> {
+    const res = await request<any[]>({ url: "/qa/cube-sets", method: "GET" });
+    const sets = res.data || [];
+    const flattened: CubeTest[] = [];
+
+    sets.forEach((set: any) => {
+      const tests = set.tests || [];
+      tests.forEach((t: any) => {
+        flattened.push({
+          id: t.id,
+          batchSheetId: set.batchSheetId,
+          grade: (set.grade || "M25") as Grade,
+          castDate: set.castDate,
+          cubeCount: set.cubeCount || 6,
+          age: t.ageDays as 3 | 7 | 28,
+          dueDate: t.dueDate,
+          testedOn: t.testedOn,
+          strength: t.strengthMpa,
+          result: t.result as "PENDING" | "PASS" | "FAIL" | "OVERDUE",
         });
-      }
-      recordAudit(actor, `approved ${trip.tripNumber}`, trip.tripNumber);
-    } else {
-      sheet.qcStatus = "REJECTED";
-      trip.status = "QC_REJECTED";
-      if (input.rejectionAction === "REPLACE") {
-        const replacement: Trip = {
-          id: `TRIP-2026-${String(db.trips.length + 1).padStart(5, "0")}`,
-          tripNumber: `TRIP-2026-${String(db.trips.length + 1).padStart(5, "0")}`,
-          poId: trip.poId,
-          sequence: trip.sequence,
-          quantity: trip.quantity,
-          tmId: trip.tmId,
-          driverId: trip.driverId,
-          plannedTime: new Date().toISOString(),
-          status: "SENT_TO_PRODUCTION",
-          lastUpdate: new Date().toISOString(),
-        };
-        trip.status = "REPLACED";
-        trip.replacedByTripId = replacement.id;
-        db.trips.push(replacement);
-      } else {
-        trip.status = "CORRECTING";
-      }
-      recordAudit(actor, `rejected ${trip.tripNumber}`, trip.tripNumber);
-    }
-    trip.lastUpdate = new Date().toISOString();
+      });
+    });
 
-    return respond(
-      check,
-      input.decision === "APPROVED"
-        ? "QC approved"
-        : input.rejectionAction === "REPLACE"
-          ? "Trip rejected — replacement trip created"
-          : "Trip rejected — correction requested",
-    );
+    return { data: flattened.sort((a, b) => a.dueDate.localeCompare(b.dueDate)) };
   },
 
-  cubeTests(): Promise<ApiResponse<CubeTest[]>> {
-    return respond([...db.cubeTests].sort((a, b) => a.dueDate.localeCompare(b.dueDate)));
+  async recordCube(id: string, strength: number, _actor?: string): Promise<ApiResponse<CubeTest | null>> {
+    const res = await request<any>({
+      url: `/qa/cube-tests/${id}/result`,
+      method: "POST",
+      data: {
+        strengthMpa: strength,
+      },
+    });
+
+    const t = res.data;
+    const test: CubeTest | null = t
+      ? {
+          id: t.id,
+          batchSheetId: t.batchSheetId || "",
+          grade: (t.grade || "M25") as Grade,
+          castDate: t.castDate || new Date().toISOString().slice(0, 10),
+          cubeCount: 6,
+          age: t.ageDays as 3 | 7 | 28,
+          dueDate: t.dueDate,
+          testedOn: t.testedOn,
+          strength: t.strengthMpa,
+          result: t.result,
+        }
+      : null;
+
+    return { data: test, message: "Cube test result recorded" };
   },
 
-  recordCube(id: string, strength: number, actor: string): Promise<ApiResponse<CubeTest | null>> {
-    const test = db.cubeTests.find((c) => c.id === id);
-    if (test) {
-      test.strength = strength;
-      test.testedOn = format(new Date(), "yyyy-MM-dd");
-      const target = Number(test.grade.slice(1)) * (test.age === 3 ? 0.45 : test.age === 7 ? 0.65 : 1);
-      test.result = strength >= target ? "PASS" : "FAIL";
-      recordAudit(actor, `recorded ${test.age}-day cube result for ${test.batchSheetId}`, test.batchSheetId);
-    }
-    return respond(test ?? null, "Cube test recorded");
+  async materialTests(): Promise<ApiResponse<MaterialTest[]>> {
+    const res = await request<any[]>({ url: "/qa/material-tests", method: "GET" });
+    const tests = (res.data || []).map((m: any) => ({
+      id: m.id,
+      material: m.material,
+      test: m.testName || m.test || "",
+      result: m.result,
+      testDate: m.testedOn || m.testDate || "",
+      remarks: m.remarks || "",
+    }));
+    return { data: tests.sort((a, b) => b.testDate.localeCompare(a.testDate)) };
   },
 
-  materialTests(): Promise<ApiResponse<MaterialTest[]>> {
-    return respond([...db.materialTests].sort((a, b) => b.testDate.localeCompare(a.testDate)));
-  },
-
-  addMaterialTest(input: Omit<MaterialTest, "id">, actor: string): Promise<ApiResponse<MaterialTest>> {
-    const test: MaterialTest = { ...input, id: `MT-${String(db.materialTests.length + 1).padStart(3, "0")}` };
-    db.materialTests.unshift(test);
-    recordAudit(actor, `logged ${input.test} test for ${input.material}`, test.id);
-    return respond(test, "Material test recorded");
+  async addMaterialTest(input: Omit<MaterialTest, "id">, _actor?: string): Promise<ApiResponse<MaterialTest>> {
+    const res = await request<any>({
+      url: "/qa/material-tests",
+      method: "POST",
+      data: {
+        material: input.material,
+        testName: input.test,
+        result: input.result,
+        testedOn: input.testDate,
+        remarks: input.remarks,
+      },
+    });
+    const m = res.data;
+    return {
+      data: {
+        id: m.id,
+        material: m.material,
+        test: m.testName || input.test,
+        result: m.result,
+        testDate: m.testedOn || input.testDate,
+        remarks: m.remarks || "",
+      },
+      message: "Material test recorded successfully",
+    };
   },
 };
+

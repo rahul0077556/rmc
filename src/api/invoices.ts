@@ -1,90 +1,105 @@
-import { addDays, format } from "date-fns";
-import { respond, fail } from "./client";
-import { db, recordAudit } from "@/lib/store";
-import type { ApiResponse, Invoice, Payment } from "@/types";
+import { request } from "./client";
+import type { ApiResponse, Invoice, InvoiceStatus, Payment } from "@/types";
 
 export interface InvoiceRow extends Invoice {
   customerName: string;
   outstanding: number;
+  paymentsList?: Payment[];
 }
 
-function decorate(inv: Invoice): InvoiceRow {
+function decorate(inv: any): InvoiceRow {
+  const total = inv.total ?? inv.amount ?? 0;
+  const paid = inv.paidAmount ?? inv.paid ?? 0;
+  const outstanding = inv.outstandingAmount ?? Math.max(0, total - paid);
+  const tripIds = inv.lines ? inv.lines.map((l: any) => l.tripId || l.id) : (inv.tripIds || []);
+  const paymentsList = (inv.payments || []).map((p: any) => ({
+    id: p.id,
+    invoiceId: p.invoiceId || inv.id,
+    amount: p.amount,
+    paidDate: p.paidOn || p.paidDate || p.createdAt?.slice(0, 10),
+    mode: p.mode || "NEFT",
+    reference: p.reference || "",
+  }));
+
   return {
-    ...inv,
-    customerName: db.customers.find((c) => c.id === inv.customerId)?.name ?? "—",
-    outstanding: inv.amount - inv.paid,
+    id: inv.id,
+    invoiceNumber: inv.invoiceNumber || inv.invoice_number || inv.id,
+    poId: inv.poId || inv.po_id,
+    customerId: inv.customerId || inv.customer_id,
+    customerName: inv.customerName || inv.customer_name || "—",
+    issueDate: inv.issueDate || inv.issue_date,
+    dueDate: inv.dueDate || inv.due_date,
+    amount: total,
+    paid: paid,
+    outstanding: outstanding,
+    status: (inv.status || "ISSUED") as InvoiceStatus,
+    tripIds: tripIds,
+    paymentsList,
   };
 }
 
 export const invoicesApi = {
-  list(customerId?: string): Promise<ApiResponse<InvoiceRow[]>> {
-    let rows = [...db.invoices].sort((a, b) => b.issueDate.localeCompare(a.issueDate));
-    if (customerId) rows = rows.filter((i) => i.customerId === customerId);
-    return respond(rows.map(decorate));
+  async list(customerId?: string): Promise<ApiResponse<InvoiceRow[]>> {
+    const url = customerId ? `/invoices?customerId=${customerId}` : "/invoices";
+    const res = await request<any[]>({ url, method: "GET" });
+    const rows = (res.data || []).map(decorate);
+    return { data: rows.sort((a, b) => b.issueDate.localeCompare(a.issueDate)) };
   },
 
-  get(id: string): Promise<ApiResponse<InvoiceRow | null>> {
-    const inv = db.invoices.find((i) => i.id === id);
-    return respond(inv ? decorate(inv) : null);
+  async get(id: string): Promise<ApiResponse<InvoiceRow | null>> {
+    const res = await request<any>({ url: `/invoices/${id}`, method: "GET" });
+    return { data: res.data ? decorate(res.data) : null };
   },
 
-  summary(customerId?: string): Promise<
+  async summary(customerId?: string): Promise<
     ApiResponse<{ invoiced: number; received: number; outstanding: number; overdue: number }>
   > {
-    const rows = customerId ? db.invoices.filter((i) => i.customerId === customerId) : db.invoices;
+    const res = await this.list(customerId);
+    const rows = res.data || [];
     const invoiced = rows.reduce((s, i) => s + i.amount, 0);
     const received = rows.reduce((s, i) => s + i.paid, 0);
-    return respond({
-      invoiced,
-      received,
-      outstanding: invoiced - received,
-      overdue: rows.filter((i) => i.status === "OVERDUE").reduce((s, i) => s + (i.amount - i.paid), 0),
-    });
-  },
+    const overdue = rows.filter((i) => i.status === "OVERDUE").reduce((s, i) => s + i.outstanding, 0);
 
-  createFromPo(poId: string, actor: string): Promise<ApiResponse<InvoiceRow>> {
-    const po = db.purchaseOrders.find((p) => p.id === poId)!;
-    const deliveredTrips = db.trips.filter((t) => t.poId === poId && t.status === "DELIVERED");
-    const qty = deliveredTrips.reduce((s, t) => s + (t.deliveredQuantity ?? t.quantity), 0);
-    const amount = Math.round(qty * po.ratePerCum * 1.18);
-    const customer = db.customers.find((c) => c.id === po.customerId)!;
-    const invoiceNumber = `INV-2026-${String(db.invoices.length + 1).padStart(4, "0")}`;
-    const invoice: Invoice = {
-      id: invoiceNumber,
-      invoiceNumber,
-      poId,
-      customerId: po.customerId,
-      issueDate: format(new Date(), "yyyy-MM-dd"),
-      dueDate: format(addDays(new Date(), customer.creditDays), "yyyy-MM-dd"),
-      amount,
-      paid: 0,
-      status: "ISSUED",
-      tripIds: deliveredTrips.map((t) => t.id),
+    return {
+      data: {
+        invoiced,
+        received,
+        outstanding: invoiced - received,
+        overdue,
+      },
     };
-    db.invoices.unshift(invoice);
-    recordAudit(actor, `created ${invoiceNumber} for ${po.poNumber}`, invoiceNumber);
-    return respond(decorate(invoice), "Invoice created");
   },
 
-  recordPayment(
+  async createFromPo(poId: string, _actor?: string): Promise<ApiResponse<InvoiceRow>> {
+    const res = await request<any>({
+      url: "/invoices",
+      method: "POST",
+      data: { poId },
+    });
+    return { data: decorate(res.data), message: "Invoice created from delivered trips" };
+  },
+
+  async recordPayment(
     invoiceId: string,
     input: { amount: number; paidDate: string; mode: Payment["mode"]; reference: string },
-    actor: string,
+    _actor?: string,
   ): Promise<ApiResponse<InvoiceRow>> {
-    const invoice = db.invoices.find((i) => i.id === invoiceId);
-    if (!invoice) return fail<InvoiceRow>(404, "Invoice not found");
-    const outstanding = invoice.amount - invoice.paid;
-    if (input.amount > outstanding) {
-      return fail<InvoiceRow>(400, "Payment cannot exceed the outstanding amount");
-    }
-    invoice.paid += input.amount;
-    invoice.status = invoice.paid >= invoice.amount ? "PAID" : "PARTIALLY_PAID";
-    db.payments.unshift({ id: `PAY-${Date.now()}`, invoiceId, ...input });
-    recordAudit(actor, `recorded payment on ${invoice.invoiceNumber}`, invoice.invoiceNumber);
-    return respond(decorate(invoice), "Payment recorded");
+    const res = await request<any>({
+      url: `/invoices/${invoiceId}/payments`,
+      method: "POST",
+      data: {
+        amount: input.amount,
+        paidOn: input.paidDate,
+        mode: input.mode,
+        reference: input.reference,
+      },
+    });
+    return { data: decorate(res.data), message: "Payment recorded successfully" };
   },
 
-  payments(invoiceId: string): Promise<ApiResponse<Payment[]>> {
-    return respond(db.payments.filter((p) => p.invoiceId === invoiceId));
+  async payments(invoiceId: string): Promise<ApiResponse<Payment[]>> {
+    const res = await this.get(invoiceId);
+    return { data: res.data?.paymentsList || [] };
   },
 };
+

@@ -6,7 +6,9 @@ from backend.app.models.models import (
     Plant, User, Customer, Site, Grade, MixDesign, Material,
     Truck, Driver, PurchaseOrder, Trip, BatchSheet, BatchSheetRevision,
     QcCheck, CubeSet, CubeTest, MaterialTest, Challan, Invoice,
-    InvoiceLine, Payment, NotificationLog, Sequence, StockTransaction
+    InvoiceLine, Payment, NotificationLog, Sequence, StockTransaction,
+    WeighbridgeTicket, TransitMixerPayload, DprRecord, ExpenseRecord,
+    AttendanceRecord, WeighbridgeSettings, Employee, PayrollRun
 )
 
 @click.command("seed")
@@ -22,11 +24,11 @@ def seed_cli():
 
     # 1. PLANT
     plant = Plant(
-        name="Apex Ready-Mix Concrete Plant - Pune",
+        name="Sai ReadyMix Concrete Plant - Pune",
         address="Plot 42, Hinjewadi Industrial Phase II, Pune, Maharashtra 411057",
         gstin="27AABCA1234F1Z9",
         phone="+91 20 6789 0100",
-        email="plant.admin@apexrmc.in"
+        email="plant.admin@saireadymix.in"
     )
     db.session.add(plant)
 
@@ -36,6 +38,8 @@ def seed_cli():
         {"name": "River Sand (Zone II)", "unit": "kg", "current_stock": 320000.0, "reorder_level": 80000.0},
         {"name": "Aggregate 10mm", "unit": "kg", "current_stock": 260000.0, "reorder_level": 60000.0},
         {"name": "Aggregate 20mm", "unit": "kg", "current_stock": 380000.0, "reorder_level": 90000.0},
+        {"name": "Fly Ash (Class F)", "unit": "kg", "current_stock": 95000.0, "reorder_level": 30000.0},
+        {"name": "GGBS (Slag)", "unit": "kg", "current_stock": 110000.0, "reorder_level": 35000.0},
         {"name": "Water", "unit": "l", "current_stock": 500000.0, "reorder_level": 50000.0},
         {"name": "Admixture (PCE)", "unit": "l", "current_stock": 4200.0, "reorder_level": 800.0},
     ]
@@ -218,6 +222,8 @@ def seed_cli():
         {"name": "Mahesh Deshpande", "email": "dispatcher@rmc.test", "role": "dispatcher", "mgr": False, "cust": None},
         {"name": "Siddharth Joshi", "email": "production@rmc.test", "role": "production", "mgr": False, "cust": None},
         {"name": "Dr. Pradeep Sawant", "email": "qa@rmc.test", "role": "qa", "mgr": False, "cust": None},
+        {"name": "Rajesh Gupta", "email": "store@rmc.test", "role": "store", "mgr": False, "cust": None},
+        {"name": "Priya Nair", "email": "account@rmc.test", "role": "account", "mgr": False, "cust": None},
         {"name": "Rajiv Deshmukh (Customer)", "email": "customer1@rmc.test", "role": "customer", "mgr": False, "cust": customers[0]},
         {"name": "Sanjay Chordiya (Customer)", "email": "customer2@rmc.test", "role": "customer", "mgr": False, "cust": customers[1]},
     ]
@@ -553,6 +559,200 @@ def seed_cli():
     db.session.add(Sequence(name="BATCH", year=year, last_value=batch_counter))
     db.session.add(Sequence(name="CHALLAN", year=year, last_value=challan_counter))
     db.session.add(Sequence(name="INVOICE", year=year, last_value=inv_counter))
+
+    # 9. SEED STORE & WEIGHBRIDGE DATA
+    click.echo("Seeding Store, Weighbridge, DPR, Calibration and Expenses...")
+    
+    # Weighbridge settings
+    db.session.add(WeighbridgeSettings(
+        plant_name="Sai ReadyMix Concrete - Hinjewadi",
+        vendor_software_name="Sai Weigh Pro v4.2",
+        vendor_company_name="Sai Scales & Automation Pvt Ltd",
+        customer_care="+91 20 6789 0100",
+        wb_name="WB-01 (Inward/Outward Pitless 60T)",
+        com_port="COM3 / 9600-8-N-1",
+        auto_capture=True
+    ))
+
+    # Weighbridge tickets (10 realistic tickets)
+    wb_tickets_data = [
+        {"num": "WB-2026-00089", "type": "INWARD", "veh": "MH 12 QX 9821", "mat": "River Sand (Zone II)", "party": "Nira Sands & Minerals", "gross": 34850, "tare": 12150, "net": 22700, "status": "COMPLETED", "driver": "Ramdas Kadam", "challan": 22500, "gate_pass": "GP-4421"},
+        {"num": "WB-2026-00090", "type": "INWARD", "veh": "MH 14 BN 4410", "mat": "Cement (OPC 53)", "party": "UltraTech Bulk Terminal", "gross": 42200, "tare": 14100, "net": 28100, "status": "COMPLETED", "driver": "Anil Jadhav", "challan": 28000, "gate_pass": "GP-4422"},
+        {"num": "WB-2026-00091", "type": "INWARD", "veh": "MH 12 KP 3302", "mat": "Aggregate 20mm", "party": "Vetal Hill Stone Crushers", "gross": 36100, "tare": 11900, "net": 24200, "status": "COMPLETED", "driver": "Santosh Gaikwad", "challan": 24000, "gate_pass": "GP-4423"},
+        {"num": "WB-2026-00092", "type": "INWARD", "veh": "MH 14 EM 8841", "mat": "Aggregate 10mm", "party": "Vetal Hill Stone Crushers", "gross": 33400, "tare": 11800, "net": 21600, "status": "COMPLETED", "driver": "Dnyaneshwar Gore", "challan": 21500, "gate_pass": "GP-4424"},
+        {"num": "WB-2026-00093", "type": "INWARD", "veh": "MH 12 AB 6712", "mat": "Fly Ash (Class F)", "party": "Dirk India / Pozzocrete", "gross": 38900, "tare": 13400, "net": 25500, "status": "COMPLETED", "driver": "Suresh More", "challan": 25000, "gate_pass": "GP-4425"},
+        {"num": "WB-2026-00094", "type": "INWARD", "veh": "MH 14 RQ 1290", "mat": "GGBS (Slag)", "party": "JSW Cement Ltd", "gross": 39500, "tare": 13600, "net": 25900, "status": "COMPLETED", "driver": "Pravin Salunke", "challan": 25500, "gate_pass": "GP-4426"},
+        {"num": "WB-2026-00095", "type": "INWARD", "veh": "MH 12 RN 5510", "mat": "River Sand (Zone II)", "party": "Bhima River Aggregate Co", "gross": 35200, "tare": 12000, "net": 23200, "status": "COMPLETED", "driver": "Gopal Shinde", "challan": 23000, "gate_pass": "GP-4427"},
+        {"num": "WB-2026-00096", "type": "INWARD", "veh": "MH 14 TR 7840", "mat": "Cement (OPC 53)", "party": "Ambuja Cements Ltd", "gross": 41800, "tare": 13900, "net": 27900, "status": "COMPLETED", "driver": "Mahesh Pawar", "challan": 28000, "gate_pass": "GP-4428"},
+        {"num": "WB-2026-00097", "type": "INWARD", "veh": "MH 12 PQ 2011", "mat": "Aggregate 20mm", "party": "Sahyadri Mines & Minerals", "gross": 35800, "tare": 11950, "net": 23850, "status": "COMPLETED", "driver": "Sunil Thorat", "challan": 23800, "gate_pass": "GP-4429"},
+        {"num": "WB-2026-00098", "type": "INWARD", "veh": "MH 12 XY 4401", "mat": "Admixture (PCE)", "party": "Fosroc Chemicals India", "gross": 18200, "tare": 14200, "net": 4000, "status": "COMPLETED", "driver": "Kailash Patil", "challan": 4000, "gate_pass": "GP-4430"},
+    ]
+    for idx, t_d in enumerate(wb_tickets_data):
+        ticket_dt = (now - timedelta(days=idx % 5, hours=idx * 2)).strftime("%Y-%m-%d %H:%M:%S")
+        db.session.add(WeighbridgeTicket(
+            ticket_number=t_d["num"],
+            type=t_d["type"],
+            vehicle_number=t_d["veh"],
+            material=t_d["mat"],
+            supplier_or_customer=t_d["party"],
+            gross_weight=t_d["gross"],
+            tare_weight=t_d["tare"],
+            net_weight=t_d["net"],
+            gross_time=ticket_dt,
+            tare_time=ticket_dt,
+            status=t_d["status"],
+            variance=t_d["net"] - t_d["challan"],
+            challan_weight=t_d["challan"],
+            received_rs=0.0,
+            wb_name="Weighbridge #1",
+            driver_name=t_d["driver"],
+            watchman_name="Ganesh K",
+            gate_pass_no=t_d["gate_pass"]
+        ))
+
+    # All 18 Transit Mixer Payloads (matching Sai ReadyMix sheet)
+    tm_payloads_data = [
+        {"sNo": 7, "vehicleNo": "MH 14 GU 3506", "vehicleType": "TM", "make": "Ashok Leyland", "location": "Mulkhed", "vehicleTyreDetails": "10 Tyres", "overLoadPass": "No", "installedHandiCapacityCum": 6, "rtoGvwKg": 28000, "tareWeightKg": 11600, "weightOfWaterKg": 500, "newTareWeightKg": 12100, "actualWeightForLoadingKg": 15900, "payLoadCapacityRcGvwCum": 6, "supplyPayLoadCapacityOverloadPassCum": 6},
+        {"sNo": 8, "vehicleNo": "MH 14 GU 3507", "vehicleType": "TM", "make": "Ashok Leyland", "location": "Mulkhed", "vehicleTyreDetails": "10 Tyres", "overLoadPass": "No", "installedHandiCapacityCum": 6, "rtoGvwKg": 28000, "tareWeightKg": 11600, "weightOfWaterKg": 500, "newTareWeightKg": 12100, "actualWeightForLoadingKg": 15900, "payLoadCapacityRcGvwCum": 6, "supplyPayLoadCapacityOverloadPassCum": 6},
+        {"sNo": 9, "vehicleNo": "MH 14 HG 3501", "vehicleType": "TM", "make": "Benz", "location": "Mulkhed", "vehicleTyreDetails": "10 Tyres", "overLoadPass": "Yes", "installedHandiCapacityCum": 8, "rtoGvwKg": 28000, "tareWeightKg": 12400, "weightOfWaterKg": 500, "newTareWeightKg": 12900, "actualWeightForLoadingKg": 15100, "payLoadCapacityRcGvwCum": 6, "supplyPayLoadCapacityOverloadPassCum": 8},
+        {"sNo": 10, "vehicleNo": "MH 14 HG 3502", "vehicleType": "TM", "make": "Benz", "location": "Mulkhed", "vehicleTyreDetails": "10 Tyres", "overLoadPass": "Yes", "installedHandiCapacityCum": 8, "rtoGvwKg": 28000, "tareWeightKg": 12400, "weightOfWaterKg": 500, "newTareWeightKg": 12900, "actualWeightForLoadingKg": 15100, "payLoadCapacityRcGvwCum": 6, "supplyPayLoadCapacityOverloadPassCum": 8},
+        {"sNo": 11, "vehicleNo": "MH 14 HG 3503", "vehicleType": "TM", "make": "Benz", "location": "Mulkhed", "vehicleTyreDetails": "10 Tyres", "overLoadPass": "Yes", "installedHandiCapacityCum": 8, "rtoGvwKg": 28000, "tareWeightKg": 12400, "weightOfWaterKg": 500, "newTareWeightKg": 12900, "actualWeightForLoadingKg": 15100, "payLoadCapacityRcGvwCum": 6, "supplyPayLoadCapacityOverloadPassCum": 8},
+        {"sNo": 12, "vehicleNo": "MH 14 HG 3504", "vehicleType": "TM", "make": "Benz", "location": "Mulkhed", "vehicleTyreDetails": "10 Tyres", "overLoadPass": "Yes", "installedHandiCapacityCum": 8, "rtoGvwKg": 28000, "tareWeightKg": 12400, "weightOfWaterKg": 500, "newTareWeightKg": 12900, "actualWeightForLoadingKg": 15100, "payLoadCapacityRcGvwCum": 6, "supplyPayLoadCapacityOverloadPassCum": 8},
+        {"sNo": 13, "vehicleNo": "MH 14 KA 3514", "vehicleType": "TM", "make": "Benz", "location": "Mulkhed", "vehicleTyreDetails": "10 Tyres", "overLoadPass": "Yes", "installedHandiCapacityCum": 8, "rtoGvwKg": 28000, "tareWeightKg": 12400, "weightOfWaterKg": 500, "newTareWeightKg": 12900, "actualWeightForLoadingKg": 15100, "payLoadCapacityRcGvwCum": 6, "supplyPayLoadCapacityOverloadPassCum": 8},
+        {"sNo": 14, "vehicleNo": "MH 14 KA 3515", "vehicleType": "TM", "make": "Benz", "location": "Mulkhed", "vehicleTyreDetails": "10 Tyres", "overLoadPass": "Yes", "installedHandiCapacityCum": 8, "rtoGvwKg": 28000, "tareWeightKg": 12400, "weightOfWaterKg": 500, "newTareWeightKg": 12900, "actualWeightForLoadingKg": 15100, "payLoadCapacityRcGvwCum": 6, "supplyPayLoadCapacityOverloadPassCum": 8},
+        {"sNo": 15, "vehicleNo": "MH 14 KA 3516", "vehicleType": "TM", "make": "Benz", "location": "Mulkhed", "vehicleTyreDetails": "10 Tyres", "overLoadPass": "Yes", "installedHandiCapacityCum": 8, "rtoGvwKg": 28000, "tareWeightKg": 12400, "weightOfWaterKg": 500, "newTareWeightKg": 12900, "actualWeightForLoadingKg": 15100, "payLoadCapacityRcGvwCum": 6, "supplyPayLoadCapacityOverloadPassCum": 8},
+        {"sNo": 16, "vehicleNo": "MH 14 LB 3529", "vehicleType": "TM", "make": "TATA", "location": "Mulkhed", "vehicleTyreDetails": "10 Tyres", "overLoadPass": "Yes", "installedHandiCapacityCum": 7, "rtoGvwKg": 28000, "tareWeightKg": 12000, "weightOfWaterKg": 500, "newTareWeightKg": 12500, "actualWeightForLoadingKg": 15500, "payLoadCapacityRcGvwCum": 6, "supplyPayLoadCapacityOverloadPassCum": 7},
+        {"sNo": 17, "vehicleNo": "MH 14 LB 3530", "vehicleType": "TM", "make": "TATA", "location": "Mulkhed", "vehicleTyreDetails": "10 Tyres", "overLoadPass": "Yes", "installedHandiCapacityCum": 7, "rtoGvwKg": 28000, "tareWeightKg": 12000, "weightOfWaterKg": 500, "newTareWeightKg": 12500, "actualWeightForLoadingKg": 15500, "payLoadCapacityRcGvwCum": 6, "supplyPayLoadCapacityOverloadPassCum": 7},
+        {"sNo": 18, "vehicleNo": "MH 14 LB 3531", "vehicleType": "TM", "make": "TATA", "location": "Mulkhed", "vehicleTyreDetails": "10 Tyres", "overLoadPass": "Yes", "installedHandiCapacityCum": 7, "rtoGvwKg": 28000, "tareWeightKg": 12000, "weightOfWaterKg": 500, "newTareWeightKg": 12500, "actualWeightForLoadingKg": 15500, "payLoadCapacityRcGvwCum": 6, "supplyPayLoadCapacityOverloadPassCum": 7},
+        {"sNo": 19, "vehicleNo": "MH 14 LB 3532", "vehicleType": "TM", "make": "TATA", "location": "Mulkhed", "vehicleTyreDetails": "10 Tyres", "overLoadPass": "Yes", "installedHandiCapacityCum": 7, "rtoGvwKg": 28000, "tareWeightKg": 12000, "weightOfWaterKg": 500, "newTareWeightKg": 12500, "actualWeightForLoadingKg": 15500, "payLoadCapacityRcGvwCum": 6, "supplyPayLoadCapacityOverloadPassCum": 7},
+        {"sNo": 20, "vehicleNo": "MH 14 LB 3533", "vehicleType": "TM", "make": "TATA", "location": "Mulkhed", "vehicleTyreDetails": "10 Tyres", "overLoadPass": "Yes", "installedHandiCapacityCum": 7, "rtoGvwKg": 28000, "tareWeightKg": 12000, "weightOfWaterKg": 500, "newTareWeightKg": 12500, "actualWeightForLoadingKg": 15500, "payLoadCapacityRcGvwCum": 6, "supplyPayLoadCapacityOverloadPassCum": 7},
+        {"sNo": 21, "vehicleNo": "MH 14 MH 3536", "vehicleType": "TM", "make": "TATA", "location": "Mhalunge", "vehicleTyreDetails": "12 Tyres", "overLoadPass": "Yes", "installedHandiCapacityCum": 9, "rtoGvwKg": 35000, "tareWeightKg": 13900, "weightOfWaterKg": 500, "newTareWeightKg": 14400, "actualWeightForLoadingKg": 20600, "payLoadCapacityRcGvwCum": 8, "supplyPayLoadCapacityOverloadPassCum": 9},
+        {"sNo": 22, "vehicleNo": "MH 14 MH 3537", "vehicleType": "TM", "make": "TATA", "location": "Mhalunge", "vehicleTyreDetails": "12 Tyres", "overLoadPass": "Yes", "installedHandiCapacityCum": 9, "rtoGvwKg": 35000, "tareWeightKg": 13900, "weightOfWaterKg": 500, "newTareWeightKg": 14400, "actualWeightForLoadingKg": 20600, "payLoadCapacityRcGvwCum": 8, "supplyPayLoadCapacityOverloadPassCum": 9},
+        {"sNo": 23, "vehicleNo": "MH 14 MH 3538", "vehicleType": "TM", "make": "TATA", "location": "Mhalunge", "vehicleTyreDetails": "12 Tyres", "overLoadPass": "Yes", "installedHandiCapacityCum": 9, "rtoGvwKg": 35000, "tareWeightKg": 13900, "weightOfWaterKg": 500, "newTareWeightKg": 14400, "actualWeightForLoadingKg": 20600, "payLoadCapacityRcGvwCum": 8, "supplyPayLoadCapacityOverloadPassCum": 9},
+        {"sNo": 24, "vehicleNo": "MH 14 MH 3539", "vehicleType": "TM", "make": "TATA", "location": "Mhalunge", "vehicleTyreDetails": "12 Tyres", "overLoadPass": "Yes", "installedHandiCapacityCum": 9, "rtoGvwKg": 35000, "tareWeightKg": 13900, "weightOfWaterKg": 500, "newTareWeightKg": 14400, "actualWeightForLoadingKg": 20600, "payLoadCapacityRcGvwCum": 8, "supplyPayLoadCapacityOverloadPassCum": 9},
+    ]
+    for p_d in tm_payloads_data:
+        db.session.add(TransitMixerPayload(
+            s_no=p_d["sNo"],
+            vehicle_no=p_d["vehicleNo"],
+            vehicle_type=p_d["vehicleType"],
+            make=p_d["make"],
+            location=p_d["location"],
+            vehicle_tyre_details=p_d["vehicleTyreDetails"],
+            overload_pass=p_d["overLoadPass"],
+            installed_handi_capacity_cum=p_d["installedHandiCapacityCum"],
+            rto_gvw_kg=p_d["rtoGvwKg"],
+            tare_weight_kg=p_d["tareWeightKg"],
+            weight_of_water_kg=p_d["weightOfWaterKg"],
+            new_tare_weight_kg=p_d["newTareWeightKg"],
+            actual_weight_for_loading_kg=p_d["actualWeightForLoadingKg"],
+            payload_capacity_rc_gvw_cum=p_d["payLoadCapacityRcGvwCum"],
+            supply_payload_capacity_overload_pass_cum=p_d["supplyPayLoadCapacityOverloadPassCum"]
+        ))
+
+    # DPR Records (past 5 days)
+    for i in range(5):
+        d_day = (today - timedelta(days=i)).strftime("%Y-%m-%d")
+        db.session.add(DprRecord(
+            date=d_day,
+            total_batches=42 - (i * 3),
+            total_cum=278.0 - (i * 18),
+            cement_consumed_mt=88.5 - (i * 5),
+            fly_ash_consumed_mt=24.2 - (i * 1.5),
+            ggbs_consumed_mt=18.6 - (i * 1.2),
+            sand_consumed_mt=195.0 - (i * 12),
+            aggregate_consumed_mt=320.0 - (i * 20),
+            water_consumed_kl=48.0 - (i * 3),
+            admixture_consumed_kg=1250 - (i * 80),
+            diesel_consumed_ltr=450 - (i * 25)
+        ))
+
+    # Expenses (past 6 bills)
+    expenses_data = [
+        {"cat": "Diesel", "vendor": "Indian Oil Corporation Bulk Fuel", "bill": "IOC-7721", "days_ago": 0, "amt": 142000, "status": "PAID", "desc": "1500 Liters High Speed Diesel for Batching Plant & Genset"},
+        {"cat": "Cement / Materials", "vendor": "UltraTech Cement Ltd", "bill": "UTC-9831", "days_ago": 1, "amt": 385000, "status": "PAID", "desc": "70 MT OPC 53 Grade Bulk Tanker Supply"},
+        {"cat": "Aggregate", "vendor": "Vetal Hill Stone Crushers", "bill": "VSC-1149", "days_ago": 2, "amt": 188000, "status": "PAID", "desc": "120 MT 10mm & 20mm Blue Metal Aggregates"},
+        {"cat": "Fly Ash / GGBS", "vendor": "Dirk India / Pozzocrete", "bill": "DI-5502", "days_ago": 3, "amt": 68000, "status": "PAID", "desc": "35 MT Classified Fly Ash (Class F)"},
+        {"cat": "Vehicle Maintenance", "vendor": "Mahalaxmi Auto Spares & Garage", "bill": "MAG-882", "days_ago": 4, "amt": 32000, "status": "PAID", "desc": "TM MH 14 KA 3514 Hydraulic Pump Hose & Drum Rollers Greasing"},
+        {"cat": "Land Bills", "vendor": "MSEDCL (Maharashtra State Electricity)", "bill": "MSE-918231", "days_ago": 5, "amt": 88400, "status": "PAID", "desc": "Plant HT Industrial Power Bill"}
+    ]
+    for ex in expenses_data:
+        db.session.add(ExpenseRecord(
+            category=ex["cat"],
+            vendor=ex["vendor"],
+            bill_no=ex["bill"],
+            date=(today - timedelta(days=ex["days_ago"])).strftime("%Y-%m-%d"),
+            amount=ex["amt"],
+            status=ex["status"],
+            description=ex["desc"]
+        ))
+
+    # Attendance (staff & drivers)
+    att_data = [
+        {"type": "DRIVER", "name": "Sanjay Shinde", "veh": "TM: MH 14 GU 3506", "shift": "Day", "trips": 4, "status": "PRESENT"},
+        {"type": "DRIVER", "name": "Rahul Jadhav", "veh": "TM: MH 14 HG 3501", "shift": "Day", "trips": 5, "status": "ON_TRIP"},
+        {"type": "DRIVER", "name": "Kailash Patil", "veh": "TM: MH 14 KA 3514", "shift": "Day", "trips": 3, "status": "ON_TRIP"},
+        {"type": "DRIVER", "name": "Amol More", "veh": "TM: MH 14 LB 3529", "shift": "Day", "trips": 4, "status": "PRESENT"},
+        {"type": "DRIVER", "name": "Dnyaneshwar Gore", "veh": "TM: MH 14 MH 3536", "shift": "Night", "trips": 0, "status": "PRESENT"},
+        {"type": "STAFF", "name": "Rajesh Gupta", "veh": "Storekeeper / Materials Manager", "shift": "Day", "trips": 12, "status": "PRESENT"},
+        {"type": "STAFF", "name": "Suresh Chavan", "veh": "Batching Plant Operator", "shift": "Day", "trips": 38, "status": "PRESENT"},
+        {"type": "STAFF", "name": "Ganesh Shinde", "veh": "Weighbridge Watchman & Security", "shift": "Day", "trips": 18, "status": "PRESENT"},
+        {"type": "STAFF", "name": "Mahesh Kadam", "veh": "Loader Operator (Aggregates)", "shift": "Day", "trips": 22, "status": "PRESENT"}
+    ]
+    for at in att_data:
+        db.session.add(AttendanceRecord(
+            type=at["type"],
+            name=at["name"],
+            designation_or_vehicle=at["veh"],
+            shift=at["shift"],
+            trips_or_tasks=at["trips"],
+            status=at["status"],
+            sync_source="UBITECH"
+        ))
+
+    # 10. SEED HR & PAYROLL DATA
+    click.echo("Seeding HR Employees and Payroll runs...")
+    employees_data = [
+        {"id": "EMP001", "name": "Vikramaditya Singhania", "dept": "Management", "role": "Owner / Managing Director", "join": "2020-01-15", "status": "ACTIVE", "salary": 180000.0},
+        {"id": "EMP002", "name": "Devendra Kulkarni", "dept": "Sales", "role": "Sales Manager", "join": "2021-03-10", "status": "ACTIVE", "salary": 85000.0},
+        {"id": "EMP003", "name": "Dr. Pradeep Sawant", "dept": "Quality", "role": "QA / QC Lead Engineer", "join": "2021-06-22", "status": "ACTIVE", "salary": 75000.0},
+        {"id": "EMP004", "name": "Siddharth Joshi", "dept": "Production", "role": "Batching Plant Head", "join": "2020-11-05", "status": "ACTIVE", "salary": 65000.0},
+        {"id": "EMP005", "name": "Mahesh Deshpande", "dept": "Logistics", "role": "Dispatcher & Fleet Lead", "join": "2022-02-14", "status": "ACTIVE", "salary": 60000.0},
+        {"id": "EMP006", "name": "Rajesh Gupta", "dept": "Store", "role": "Store & Weighbridge Manager", "join": "2022-08-01", "status": "ACTIVE", "salary": 50000.0},
+        {"id": "EMP007", "name": "Priya Nair", "dept": "Accounts", "role": "HR & Payroll Lead", "join": "2022-09-15", "status": "ACTIVE", "salary": 55000.0},
+        {"id": "EMP008", "name": "Ananya Sharma", "dept": "Sales", "role": "Sales Officer", "join": "2023-01-10", "status": "ACTIVE", "salary": 45000.0},
+    ]
+    for emp in employees_data:
+        db.session.add(Employee(
+            emp_code=emp["id"],
+            name=emp["name"],
+            department=emp["dept"],
+            role=emp["role"],
+            join_date=emp["join"],
+            status=emp["status"],
+            base_salary=emp["salary"]
+        ))
+
+    # Payroll Runs
+    prev_month = (today - timedelta(days=30)).strftime("%b %Y")
+    curr_month = today.strftime("%b %Y")
+    total_payroll = sum(e["salary"] for e in employees_data)
+    db.session.add(PayrollRun(
+        payroll_code=f"PR_{(today - timedelta(days=30)).strftime('%Y%m')}",
+        period=prev_month,
+        total_employees=len(employees_data),
+        total_amount=total_payroll,
+        status="PAID",
+        processed_date=now - timedelta(days=25)
+    ))
+    db.session.add(PayrollRun(
+        payroll_code=f"PR_{today.strftime('%Y%m')}",
+        period=curr_month,
+        total_employees=len(employees_data),
+        total_amount=total_payroll,
+        status="DRAFT",
+        processed_date=None
+    ))
 
     db.session.commit()
     click.echo("Database successfully seeded with realistic RMC data!")

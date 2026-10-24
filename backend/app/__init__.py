@@ -63,6 +63,8 @@ def create_app(config_class=None):
     from backend.app.blueprints.reports import reports_bp
     from backend.app.blueprints.notifications import notifications_bp
     from backend.app.blueprints.customer_portal import portal_bp
+    from backend.app.blueprints.store import store_bp
+    from backend.app.blueprints.account import account_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(master_bp)
@@ -75,6 +77,8 @@ def create_app(config_class=None):
     app.register_blueprint(reports_bp)
     app.register_blueprint(notifications_bp)
     app.register_blueprint(portal_bp)
+    app.register_blueprint(store_bp)
+    app.register_blueprint(account_bp)
 
     # Healthcheck
     @app.route("/api/health", methods=["GET"])

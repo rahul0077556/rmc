@@ -1,11 +1,13 @@
-import { respond } from "./client";
-import { db, poById, recordAudit } from "@/lib/store";
-import { GRADE_RATE } from "@/lib/mock-data";
+import { request } from "./client";
 import type { ApiResponse, Grade, PurchaseOrder, PoStatus } from "@/types";
 
 export interface OrderRow extends PurchaseOrder {
   customerName: string;
   siteName: string;
+  siteAddress?: string;
+  balanceQuantity?: number;
+  approvalRemarks?: string;
+  cancelReason?: string;
   tripCount: number;
 }
 
@@ -29,83 +31,133 @@ export interface CreateOrderInput {
   status: Extract<PoStatus, "DRAFT" | "SUBMITTED">;
 }
 
-function decorate(po: PurchaseOrder): OrderRow {
+function decorate(po: any): OrderRow {
   return {
-    ...po,
-    customerName: db.customers.find((c) => c.id === po.customerId)?.name ?? "—",
-    siteName: db.sites.find((s) => s.id === po.siteId)?.name ?? "—",
-    tripCount: db.trips.filter((t) => t.poId === po.id).length,
+    id: po.id,
+    poNumber: po.poNumber || po.id,
+    customerId: po.customerId,
+    customerName: po.customerName || "—",
+    siteId: po.siteId,
+    siteName: po.siteName || "—",
+    siteAddress: po.siteAddress,
+    grade: po.grade || "M25",
+    quantity: po.quantity ?? po.quantity_cum ?? 0,
+    deliveredQuantity: po.deliveredQuantity ?? 0,
+    balanceQuantity: po.balanceQuantity ?? 0,
+    ratePerCum: po.ratePerCum ?? 0,
+    deliveryDate: po.deliveryDate || (po.deliveryDateTime ? po.deliveryDateTime.slice(0, 10) : ""),
+    deliveryTime: po.deliveryTime || (po.deliveryDateTime ? po.deliveryDateTime.slice(11, 16) : "09:00"),
+    purpose: po.purpose || "Slab",
+    pumpRequired: Boolean(po.pumpRequired),
+    pumpOwnership: po.pumpOwnership,
+    pumpType: po.pumpType,
+    pipelineLength: po.pipelineLength,
+    workersRequired: po.workersRequired,
+    paymentTerms: po.paymentTerms || `${po.paymentTermsDays || 30} Days`,
+    reference: po.reference || "",
+    notes: po.notes || "",
+    status: po.status as PoStatus,
+    tripCount: po.tripCount ?? 0,
+    createdBy: po.createdBy,
+    createdAt: po.createdAt || new Date().toISOString(),
+    submittedAt: po.submittedAt,
+    approvedAt: po.approvedAt,
+    approvedBy: po.approvedBy,
+    approvalRemarks: po.approvalRemarks,
+    rejectionReason: po.rejectionReason,
+    cancelReason: po.cancelReason,
   };
 }
 
 export const ordersApi = {
-  list(filter?: { customerId?: string; status?: PoStatus }): Promise<ApiResponse<OrderRow[]>> {
-    let rows = [...db.purchaseOrders].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    if (filter?.customerId) rows = rows.filter((r) => r.customerId === filter.customerId);
-    if (filter?.status) rows = rows.filter((r) => r.status === filter.status);
-    return respond(rows.map(decorate));
+  async list(filter?: { customerId?: string; status?: PoStatus }): Promise<ApiResponse<OrderRow[]>> {
+    const params = new URLSearchParams();
+    if (filter?.customerId) params.append("customerId", filter.customerId);
+    if (filter?.status) params.append("status", filter.status);
+
+    const res = await request<any[]>({ url: `/purchase-orders?${params.toString()}`, method: "GET" });
+    const rows = res.data || [];
+    return { data: rows.map(decorate) };
   },
 
-  get(id: string): Promise<ApiResponse<OrderRow | null>> {
-    const po = poById(id);
-    return respond(po ? decorate(po) : null);
+  async get(id: string): Promise<ApiResponse<OrderRow | null>> {
+    const res = await request<any>({ url: `/purchase-orders/${id}`, method: "GET" });
+    return { data: res.data ? decorate(res.data) : null };
   },
 
-  approvalQueue(): Promise<ApiResponse<OrderRow[]>> {
-    return respond(db.purchaseOrders.filter((p) => p.status === "SUBMITTED").map(decorate));
+  async approvalQueue(): Promise<ApiResponse<OrderRow[]>> {
+    const res = await request<any[]>({ url: `/purchase-orders?status=SUBMITTED`, method: "GET" });
+    const rows = res.data || [];
+    return { data: rows.map(decorate) };
   },
 
-  create(input: CreateOrderInput, createdBy: string): Promise<ApiResponse<OrderRow>> {
-    const seq = db.purchaseOrders.length + 1;
-    const po: PurchaseOrder = {
-      ...input,
-      id: `PO-2026-${String(seq).padStart(4, "0")}`,
-      poNumber: `PO-2026-${String(seq).padStart(4, "0")}`,
-      ratePerCum: input.ratePerCum || GRADE_RATE[input.grade],
-      deliveredQuantity: 0,
-      createdBy,
-      createdAt: new Date().toISOString(),
-      submittedAt: input.status === "SUBMITTED" ? new Date().toISOString() : undefined,
+  async create(input: CreateOrderInput, _createdBy?: string): Promise<ApiResponse<OrderRow>> {
+    const res = await request<any>({
+      url: "/purchase-orders",
+      method: "POST",
+      data: {
+        customerId: input.customerId,
+        siteId: input.siteId,
+        grade: input.grade,
+        quantity: input.quantity,
+        ratePerCum: input.ratePerCum,
+        deliveryDate: input.deliveryDate,
+        deliveryTime: input.deliveryTime,
+        purpose: input.purpose,
+        pumpRequired: input.pumpRequired,
+        pumpOwnership: input.pumpOwnership,
+        pumpType: input.pumpType,
+        pipelineLength: input.pipelineLength,
+        workersRequired: input.workersRequired,
+        paymentTermsDays: parseInt(input.paymentTerms.replace(/\D/g, "") || "30", 10),
+        notes: input.notes,
+      },
+    });
+
+    let po = res.data;
+    if (input.status === "SUBMITTED" && po?.id) {
+      const submitRes = await request<any>({
+        url: `/purchase-orders/${po.id}/submit`,
+        method: "POST",
+      });
+      if (submitRes.data) po = submitRes.data;
+    }
+
+    return {
+      data: decorate(po),
+      message: input.status === "DRAFT" ? "PO saved as draft in database" : "PO submitted successfully to database",
     };
-    db.purchaseOrders.unshift(po);
-    recordAudit(createdBy, `created ${po.poNumber}`, po.poNumber);
-    return respond(decorate(po), input.status === "DRAFT" ? "PO saved as draft" : "PO submitted successfully");
   },
 
-  submit(id: string, actor: string): Promise<ApiResponse<OrderRow | null>> {
-    const po = poById(id);
-    if (po) {
-      po.status = "SUBMITTED";
-      po.submittedAt = new Date().toISOString();
-      recordAudit(actor, `submitted ${po.poNumber}`, po.poNumber);
-    }
-    return respond(po ? decorate(po) : null, "PO submitted successfully");
+  async submit(id: string, _actor?: string): Promise<ApiResponse<OrderRow | null>> {
+    const res = await request<any>({ url: `/purchase-orders/${id}/submit`, method: "POST" });
+    return { data: res.data ? decorate(res.data) : null, message: "PO submitted successfully in database" };
   },
 
-  approve(id: string, actor: string): Promise<ApiResponse<OrderRow | null>> {
-    const po = poById(id);
-    if (po) {
-      po.status = "APPROVED";
-      po.approvedAt = new Date().toISOString();
-      po.approvedBy = actor;
-      recordAudit(actor, `approved ${po.poNumber}`, po.poNumber);
-    }
-    return respond(po ? decorate(po) : null, "PO approved and sent to Dispatch");
+  async approve(id: string, _actor?: string): Promise<ApiResponse<OrderRow | null>> {
+    const res = await request<any>({
+      url: `/purchase-orders/${id}/approve`,
+      method: "POST",
+      data: { remarks: "Approved by manager" },
+    });
+    return { data: res.data ? decorate(res.data) : null, message: "PO approved and sent to Dispatch" };
   },
 
-  reject(id: string, reason: string, actor: string): Promise<ApiResponse<OrderRow | null>> {
-    const po = poById(id);
-    if (po) {
-      po.status = "REJECTED";
-      po.rejectionReason = reason;
-      recordAudit(actor, `rejected ${po.poNumber}`, po.poNumber);
-    }
-    return respond(po ? decorate(po) : null, "PO rejected");
+  async reject(id: string, reason: string, _actor?: string): Promise<ApiResponse<OrderRow | null>> {
+    const res = await request<any>({
+      url: `/purchase-orders/${id}/reject`,
+      method: "POST",
+      data: { reason },
+    });
+    return { data: res.data ? decorate(res.data) : null, message: "PO rejected in database" };
   },
 
-  remove(id: string): Promise<ApiResponse<null>> {
-    const idx = db.purchaseOrders.findIndex((p) => p.id === id);
-    if (idx >= 0) db.purchaseOrders.splice(idx, 1);
-    return respond(null, "Draft PO deleted");
+  async remove(id: string): Promise<ApiResponse<null>> {
+    await request<null>({
+      url: `/purchase-orders/${id}/cancel`,
+      method: "POST",
+      data: { reason: "User cancelled" },
+    });
+    return { data: null, message: "PO cancelled in database" };
   },
 };

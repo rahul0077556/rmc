@@ -1,6 +1,4 @@
-import { respond } from "./client";
-import { db, poById, recordAudit } from "@/lib/store";
-import { MIX_DESIGN } from "@/lib/mock-data";
+import { request } from "./client";
 import { decorateTrip, type TripRow } from "./trips";
 import type { ApiResponse, BatchSheet, Grade, MaterialLine } from "@/types";
 
@@ -13,92 +11,97 @@ export interface MaterialCheckRow {
   shortfall: number;
 }
 
-export function requirementFor(grade: Grade, quantity: number): MaterialCheckRow[] {
-  return MIX_DESIGN[grade].map((m) => {
-    const required = Math.round(m.perCum * quantity * 10) / 10;
-    const stock = db.materialStock.find((s) => s.material === m.material);
-    const available = stock?.available ?? 0;
-    return {
-      material: m.material,
-      required,
-      available,
-      unit: m.unit,
-      sufficient: available >= required,
-      shortfall: Math.max(0, Math.round((required - available) * 10) / 10),
-    };
-  });
-}
-
 export const productionApi = {
-  queue(): Promise<ApiResponse<TripRow[]>> {
-    return respond(
-      db.trips
-        .filter((t) => ["SENT_TO_PRODUCTION", "BATCHING", "LOADED", "QC_PENDING", "PLANNED"].includes(t.status))
-        .sort((a, b) => a.plannedTime.localeCompare(b.plannedTime))
-        .map(decorateTrip),
-    );
+  async queue(): Promise<ApiResponse<TripRow[]>> {
+    const res = await request<any[]>({ url: "/production/queue", method: "GET" });
+    const rows = res.data || [];
+    return { data: rows.map(decorateTrip) };
   },
 
-  materialCheck(tripId: string): Promise<ApiResponse<MaterialCheckRow[]>> {
-    const trip = db.trips.find((t) => t.id === tripId);
-    const po = trip ? poById(trip.poId) : undefined;
-    if (!trip || !po) return respond([]);
-    return respond(requirementFor(po.grade, trip.quantity));
-  },
-
-  startBatching(tripId: string, actor: string): Promise<ApiResponse<TripRow | null>> {
-    const trip = db.trips.find((t) => t.id === tripId);
-    if (trip) {
-      trip.status = "BATCHING";
-      trip.lastUpdate = new Date().toISOString();
-      recordAudit(actor, `started batching for ${trip.tripNumber}`, trip.tripNumber);
+  async materialCheck(tripId: string): Promise<ApiResponse<MaterialCheckRow[]>> {
+    try {
+      const res = await request<any>({
+        url: `/production/trips/${tripId}/check-materials`,
+        method: "POST",
+      });
+      const data = res.data;
+      if (data && data.requiredMaterials) {
+        const rows: MaterialCheckRow[] = data.requiredMaterials.map((rm: any) => {
+          const sf = (data.shortfalls || []).find((s: any) => s.material === rm.material);
+          const shortfall = sf ? sf.shortfall : 0;
+          return {
+            material: rm.material,
+            required: rm.required,
+            available: rm.available,
+            unit: rm.unit,
+            sufficient: shortfall === 0,
+            shortfall,
+          };
+        });
+        return { data: rows };
+      }
+    } catch {
+      // Fallback
     }
-    return respond(trip ? decorateTrip(trip) : null, "Batching started");
+    return { data: [] };
   },
 
-  confirmLoaded(tripId: string, actor: string): Promise<ApiResponse<BatchSheet | null>> {
-    const trip = db.trips.find((t) => t.id === tripId);
-    const po = trip ? poById(trip.poId) : undefined;
-    if (!trip || !po) return respond(null);
-
-    const materials: MaterialLine[] = MIX_DESIGN[po.grade].map((m) => {
-      const theoretical = Math.round(m.perCum * trip.quantity * 10) / 10;
-      const actual = Math.round(theoretical * (1 + (Math.random() * 0.014 - 0.006)) * 10) / 10;
-      return { material: m.material, unit: m.unit, theoretical, actual };
+  async startBatching(tripId: string, _actor?: string): Promise<ApiResponse<TripRow | null>> {
+    const res = await request<any>({
+      url: `/production/trips/${tripId}/start-batching`,
+      method: "POST",
     });
+    const trip = res.data?.trip || res.data;
+    return { data: trip ? decorateTrip(trip) : null, message: "Batching started in plant" };
+  },
 
-    const batchNumber = `BS-2026-${String(db.batchSheets.length + 1).padStart(5, "0")}`;
-    const sheet: BatchSheet = {
-      id: batchNumber,
-      batchNumber,
-      tripId,
+  async confirmLoaded(tripId: string, _actor?: string): Promise<ApiResponse<BatchSheet | null>> {
+    const res = await request<any>({
+      url: `/production/trips/${tripId}/confirm-loaded`,
+      method: "POST",
+      data: {},
+    });
+    const sheet = res.data?.batchSheet || res.data;
+    return { data: sheet, message: "Batch sheet generated and truck loaded" };
+  },
+
+  async batchSheet(id: string): Promise<ApiResponse<(BatchSheet & { trip: TripRow }) | null>> {
+    const res = await request<any>({ url: `/batch-sheets/${id}`, method: "GET" });
+    const data = res.data;
+    if (!data) return { data: null };
+
+    const trip = data.trip ? decorateTrip(data.trip) : ({ id: data.tripId } as TripRow);
+    const materials: MaterialLine[] = (data.materials || []).map((m: any) => ({
+      material: m.material,
+      unit: m.unit,
+      theoretical: m.theoretical,
+      actual: m.actual,
+    }));
+
+    const sheet: BatchSheet & { trip: TripRow } = {
+      id: data.id,
+      batchNumber: data.batchNumber || data.id,
+      tripId: data.tripId,
       materials,
-      batchTime: new Date().toISOString(),
-      operator: actor,
-      qcStatus: "PENDING",
+      batchTime: data.batchTime || new Date().toISOString(),
+      operator: data.operator || "Auto AJAX Batcher",
+      qcStatus: data.qcStatus || "PENDING",
+      trip,
     };
-    db.batchSheets.push(sheet);
-    trip.batchSheetId = batchNumber;
-    trip.status = "QC_PENDING";
-    trip.lastUpdate = new Date().toISOString();
 
-    materials.forEach((m) => {
-      const stock = db.materialStock.find((s) => s.material === m.material);
-      if (stock) stock.available = Math.max(0, Math.round((stock.available - m.actual) * 10) / 10);
-    });
-
-    recordAudit(actor, `generated Batch Sheet ${batchNumber}`, batchNumber);
-    return respond(sheet, "Batch sheet generated");
+    return { data: sheet };
   },
 
-  batchSheet(id: string): Promise<ApiResponse<(BatchSheet & { trip: TripRow }) | null>> {
-    const sheet = db.batchSheets.find((b) => b.id === id);
-    const trip = sheet ? db.trips.find((t) => t.id === sheet.tripId) : undefined;
-    if (!sheet || !trip) return respond(null);
-    return respond({ ...sheet, trip: decorateTrip(trip) });
-  },
-
-  stock(): Promise<ApiResponse<typeof db.materialStock>> {
-    return respond(db.materialStock);
+  async stock(): Promise<ApiResponse<any[]>> {
+    const res = await request<any>({ url: "/store/inventory", method: "GET" });
+    const raw = res.data?.materials || res.data || [];
+    const stockList = Array.isArray(raw)
+      ? raw.map((m: any) => ({
+          material: m.name || m.material,
+          available: m.available ?? m.stock ?? 0,
+          unit: m.unit || "kg",
+        }))
+      : [];
+    return { data: stockList };
   },
 };
