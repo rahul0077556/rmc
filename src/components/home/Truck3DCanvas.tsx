@@ -27,9 +27,9 @@ export function Truck3DCanvas() {
   const [drumMode, setDrumMode] = useState<"mix" | "agitate" | "discharge" | "stopped">("mix");
   const [lightsOn, setLightsOn] = useState(true);
   const [strobeOn, setStrobeOn] = useState(true);
-  const [lightEnv, setLightEnv] = useState<LightEnv>("night");
+  const [lightEnv, setLightEnv] = useState<LightEnv>("day");
   const [currentView, setCurrentView] = useState<CameraView>("hero");
-  const [autoRotate, setAutoRotate] = useState(true);
+  const [autoRotate, setAutoRotate] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
 
   // Dynamic Telemetry State
@@ -44,13 +44,13 @@ export function Truck3DCanvas() {
   });
 
   // Mutable refs for high-frequency animation loop
-  const drumSpeedRef = useRef(2.2);
+  const drumSpeedRef = useRef(2.4);
   const lightsRef = useRef(true);
   const strobeRef = useRef(true);
-  const envRef = useRef<LightEnv>("night");
-  const autoRotateRef = useRef(true);
-  const targetCameraPos = useRef(new THREE.Vector3(7.5, 3.8, 8.5));
-  const targetLookAt = useRef(new THREE.Vector3(0, 1.2, 0));
+  const envRef = useRef<LightEnv>("day");
+  const autoRotateRef = useRef(false);
+  const targetCameraPos = useRef(new THREE.Vector3(8.2, 3.4, 7.8));
+  const targetLookAt = useRef(new THREE.Vector3(0.2, 1.4, 0));
   const audioCtxRef = useRef<AudioContext | null>(null);
   const engineGainRef = useRef<GainNode | null>(null);
 
@@ -239,6 +239,11 @@ export function Truck3DCanvas() {
     rimLight.position.set(-10, 8, -8);
     scene.add(rimLight);
 
+    // Front Cab Key / Fill Light
+    const cabFillLight = new THREE.DirectionalLight(0xfffaed, 2.2);
+    cabFillLight.position.set(8, 7, 7);
+    scene.add(cabFillLight);
+
     // Underbody neon glow
     const underLight = new THREE.PointLight(0x6366f1, 2.0, 7);
     underLight.position.set(0, 0.35, 0);
@@ -267,8 +272,14 @@ export function Truck3DCanvas() {
     scene.add(rightStrobeLight);
 
     // --- MATERIALS PALETTE ---
+    const cabUpperMaterial = new THREE.MeshStandardMaterial({
+      color: 0xf8fafc, // Crisp High-Gloss White Cabin
+      roughness: 0.16,
+      metalness: 0.35,
+    });
+
     const paintMaterial = new THREE.MeshStandardMaterial({
-      color: 0x6d28d9, // RMC Electric Purple Corporate Livery
+      color: 0x7c3aed, // RMC Electric Purple Corporate Livery
       roughness: 0.22,
       metalness: 0.6,
     });
@@ -396,9 +407,9 @@ export function Truck3DCanvas() {
     cabSkirt.position.set(0, -0.45, 0);
     cabGroup.add(cabSkirt);
 
-    // Upper cab / roof
+    // Upper cab / roof (Crisp High-Gloss White)
     const cabUpperGeo = new THREE.BoxGeometry(1.7, 0.95, 1.95);
-    const cabUpper = new THREE.Mesh(cabUpperGeo, paintMaterial);
+    const cabUpper = new THREE.Mesh(cabUpperGeo, cabUpperMaterial);
     cabUpper.position.set(-0.15, 0.95, 0);
     cabUpper.castShadow = true;
     cabGroup.add(cabUpper);
@@ -718,6 +729,10 @@ export function Truck3DCanvas() {
     wheelPositions.forEach((pos) => {
       const wheelHub = new THREE.Group();
       wheelHub.position.set(pos.x, 0.55, pos.z);
+      if (pos.x > 2.0) {
+        // Front steering axle: turn wheels slightly outwards for dynamic stance
+        wheelHub.rotation.y = 0.08;
+      }
 
       const tire = new THREE.Mesh(tireGeo, tireMaterial);
       tire.rotation.x = Math.PI / 2;
@@ -939,35 +954,41 @@ export function Truck3DCanvas() {
       // 1. Dynamic Lighting Adjustment based on Environment Mode
       switch (envRef.current) {
         case "day":
-          scene.fog!.color.set(0x1a202c);
+          scene.fog!.color.set(0x181c28);
           ambientLight.color.set(0xffffff);
-          ambientLight.intensity = 1.2;
+          ambientLight.intensity = 1.35;
           sunLight.color.set(0xfffaed);
-          sunLight.intensity = 2.4;
+          sunLight.intensity = 2.6;
           sunLight.position.set(12, 18, 10);
-          rimLight.intensity = 0.8;
+          cabFillLight.intensity = 2.2;
+          rimLight.intensity = 1.0;
+          underLight.intensity = 1.2;
           roadMat.color.set(0x282c38);
           break;
         case "sunset":
           scene.fog!.color.set(0x261424);
           ambientLight.color.set(0xfbcfe8);
-          ambientLight.intensity = 0.9;
+          ambientLight.intensity = 1.1;
           sunLight.color.set(0xf97316);
-          sunLight.intensity = 3.2;
+          sunLight.intensity = 3.4;
           sunLight.position.set(15, 6, 8);
+          cabFillLight.intensity = 1.8;
           rimLight.color.set(0xec4899);
-          rimLight.intensity = 2.0;
+          rimLight.intensity = 2.2;
+          underLight.intensity = 2.0;
           roadMat.color.set(0x221822);
           break;
         case "night":
           scene.fog!.color.set(0x0a0b12);
-          ambientLight.color.set(0x312e81);
-          ambientLight.intensity = 0.65;
+          ambientLight.color.set(0x4338ca);
+          ambientLight.intensity = 0.95;
           sunLight.color.set(0x60a5fa);
-          sunLight.intensity = 0.9;
+          sunLight.intensity = 1.2;
           sunLight.position.set(10, 15, 8);
+          cabFillLight.intensity = 0.9;
           rimLight.color.set(0x8b5cf6);
-          rimLight.intensity = 2.8;
+          rimLight.intensity = 3.2;
+          underLight.intensity = 3.5;
           roadMat.color.set(0x12141c);
           break;
       }
@@ -996,14 +1017,19 @@ export function Truck3DCanvas() {
         truckGroup.position.y = Math.sin(elapsed * 16) * 0.005;
       }
 
-      // 5. Auto-Rotate Turntable or User Drag
+      // 5. Turntable Orbit or Natural Driving Sway + User Drag
       if (autoRotateRef.current && !isDragging) {
-        truckYaw += 0.004;
+        truckYaw += 0.005;
       } else if (!isDragging) {
-        truckYaw *= 0.96;
-        truckPitch *= 0.96;
+        truckYaw *= 0.95;
+        truckPitch *= 0.95;
       }
-      truckGroup.rotation.y = truckYaw;
+
+      const sway = isRoadMoving && !autoRotateRef.current && !isDragging
+        ? Math.sin(elapsed * 1.5) * 0.02
+        : 0;
+
+      truckGroup.rotation.y = truckYaw + sway;
       truckGroup.rotation.z = truckPitch;
 
       // 6. Smooth Camera Transition
