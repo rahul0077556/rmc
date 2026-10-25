@@ -65,11 +65,13 @@ export interface Db {
 }
 
 export function loadDb(): Db {
-  try {
-    const saved = localStorage.getItem("rmc-mock-v2");
-    if (saved) return JSON.parse(saved);
-  } catch (e) {
-    console.error("Failed to parse local storage mock db");
+  if (typeof window !== "undefined") {
+    try {
+      const saved = window.localStorage.getItem("rmc-mock-v2");
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // ignore parse errors and fallback to defaults
+    }
   }
   return {
     customers,

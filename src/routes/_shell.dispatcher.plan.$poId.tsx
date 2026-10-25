@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { MessageSquare, Plus, Trash2 } from "lucide-react";
+import { Loader2, MessageSquare, Plus, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { ChartCard } from "@/components/app/chart-card";
 import { LoadingState, ErrorState } from "@/components/app/states";
@@ -91,9 +91,10 @@ function PlanPage() {
   }, [order.data, trucksQuery.data, driversQuery.data, trips.length]);
 
   const savePlan = useMutation({
-    mutationFn: () =>
-      tripsApi.plan(
-        poId,
+    mutationFn: () => {
+      const targetPoId = order.data?.id || poId;
+      return tripsApi.plan(
+        targetPoId,
         trips.map((t) => ({
           quantity: t.quantity,
           tmId: t.tmId || undefined,
@@ -101,12 +102,17 @@ function PlanPage() {
           plannedTime: t.plannedTime,
         })),
         user?.name ?? "Dispatcher",
-      ),
+      );
+    },
     onSuccess: () => {
-      toast.success("Trip assigned successfully");
+      toast.success("Trips assigned & sent to production successfully!");
       void qc.invalidateQueries({ queryKey: ["trips"] });
       void qc.invalidateQueries({ queryKey: ["orders"] });
+      void qc.invalidateQueries({ queryKey: ["production-queue"] });
       setSent(true);
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Failed to send trips to production. Please verify truck & driver assignments.");
     },
   });
 
@@ -256,7 +262,15 @@ function PlanPage() {
           </ChartCard>
 
           <Button className="w-full" disabled={!allChecked || trips.length === 0 || savePlan.isPending} onClick={() => savePlan.mutate()}>
-            <MessageSquare className="size-4" /> Send to production
+            {savePlan.isPending ? (
+              <>
+                <Loader2 className="size-4 animate-spin" /> Sending to production...
+              </>
+            ) : (
+              <>
+                <MessageSquare className="size-4" /> Send to production
+              </>
+            )}
           </Button>
           {!allChecked && (
             <p className="text-center text-xs text-muted-foreground">Complete every verification item to continue.</p>

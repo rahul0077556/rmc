@@ -50,7 +50,7 @@ def create_trip():
     if not po_id or quantity_cum <= 0:
         return error_response(code="VALIDATION_ERROR", message="PO ID and valid quantity (>0) are required.")
 
-    po = PurchaseOrder.query.get(po_id)
+    po = PurchaseOrder.query.filter((PurchaseOrder.id == po_id) | (PurchaseOrder.po_number == po_id)).first()
     if not po or po.is_deleted:
         return error_response(code="NOT_FOUND", message="Purchase order not found.", status_code=404)
 
@@ -113,7 +113,7 @@ def create_trip():
 
     trip = Trip(
         trip_number=trip_number,
-        po_id=po_id,
+        po_id=po.id,
         truck_id=tm_id,
         driver_id=driver_id,
         sequence=seq_num,
