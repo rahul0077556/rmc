@@ -55,13 +55,17 @@ export const qaApi = {
   },
 
   async queue(): Promise<ApiResponse<QcQueueRow[]>> {
-    const res = await request<any[]>({ url: "/qa/queue", method: "GET" });
-    const trips = res.data || [];
-    const rows: QcQueueRow[] = trips.map((t: any) => ({
-      batchSheetId: t.batchSheetId || t.id,
-      trip: decorateTrip(t),
-    }));
-    return { data: rows };
+    try {
+      const res = await request<any[]>({ url: "/qa/queue", method: "GET" });
+      const trips = res.data || [];
+      const rows: QcQueueRow[] = trips.map((t: any) => ({
+        batchSheetId: t.batchSheetId || t.id,
+        trip: decorateTrip(t),
+      }));
+      return { data: rows };
+    } catch {
+      return { data: [] };
+    }
   },
 
   async submitCheck(batchSheetId: string, input: QcInput, _actor?: string): Promise<ApiResponse<QcCheck | null>> {

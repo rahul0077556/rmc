@@ -13,9 +13,13 @@ export interface MaterialCheckRow {
 
 export const productionApi = {
   async queue(): Promise<ApiResponse<TripRow[]>> {
-    const res = await request<any[]>({ url: "/production/queue", method: "GET" });
-    const rows = res.data || [];
-    return { data: rows.map(decorateTrip) };
+    try {
+      const res = await request<any[]>({ url: "/production/queue", method: "GET" });
+      const rows = res.data || [];
+      return { data: rows.map(decorateTrip) };
+    } catch {
+      return { data: [] };
+    }
   },
 
   async materialCheck(tripId: string): Promise<ApiResponse<MaterialCheckRow[]>> {

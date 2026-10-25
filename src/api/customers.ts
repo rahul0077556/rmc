@@ -32,8 +32,12 @@ function decorate(c: any): CustomerRow {
 
 export const customersApi = {
   async list(): Promise<ApiResponse<CustomerRow[]>> {
-    const res = await request<CustomerRow[]>({ url: "/customers", method: "GET" });
-    return { data: (res.data || []).map(decorate) };
+    try {
+      const res = await request<CustomerRow[]>({ url: "/customers", method: "GET" });
+      return { data: (res.data || []).map(decorate) };
+    } catch {
+      return { data: [] };
+    }
   },
 
   async get(id: string): Promise<ApiResponse<CustomerRow | null>> {

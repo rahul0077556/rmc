@@ -62,16 +62,20 @@ export interface FleetSummary {
 
 export const tripsApi = {
   async list(filter?: { status?: TripStatus[]; poId?: string }): Promise<ApiResponse<TripRow[]>> {
-    const params = new URLSearchParams();
-    if (filter?.poId) params.append("poId", filter.poId);
-    if (filter?.status && filter.status.length === 1 && filter.status[0]) params.append("status", filter.status[0]);
+    try {
+      const params = new URLSearchParams();
+      if (filter?.poId) params.append("poId", filter.poId);
+      if (filter?.status && filter.status.length === 1 && filter.status[0]) params.append("status", filter.status[0]);
 
-    const res = await request<any[]>({ url: `/trips?${params.toString()}`, method: "GET" });
-    let rows = res.data || [];
-    if (filter?.status && filter.status.length > 1) {
-      rows = rows.filter((t: any) => filter.status!.includes(t.status));
+      const res = await request<any[]>({ url: `/trips?${params.toString()}`, method: "GET" });
+      let rows = res.data || [];
+      if (filter?.status && filter.status.length > 1) {
+        rows = rows.filter((t: any) => filter.status!.includes(t.status));
+      }
+      return { data: rows.map(decorateTrip) };
+    } catch {
+      return { data: [] };
     }
-    return { data: rows.map(decorateTrip) };
   },
 
   async fleet(): Promise<ApiResponse<FleetSummary>> {

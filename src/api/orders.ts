@@ -71,13 +71,17 @@ function decorate(po: any): OrderRow {
 
 export const ordersApi = {
   async list(filter?: { customerId?: string; status?: PoStatus }): Promise<ApiResponse<OrderRow[]>> {
-    const params = new URLSearchParams();
-    if (filter?.customerId) params.append("customerId", filter.customerId);
-    if (filter?.status) params.append("status", filter.status);
+    try {
+      const params = new URLSearchParams();
+      if (filter?.customerId) params.append("customerId", filter.customerId);
+      if (filter?.status) params.append("status", filter.status);
 
-    const res = await request<any[]>({ url: `/purchase-orders?${params.toString()}`, method: "GET" });
-    const rows = res.data || [];
-    return { data: rows.map(decorate) };
+      const res = await request<any[]>({ url: `/purchase-orders?${params.toString()}`, method: "GET" });
+      const rows = res.data || [];
+      return { data: rows.map(decorate) };
+    } catch {
+      return { data: [] };
+    }
   },
 
   async get(id: string): Promise<ApiResponse<OrderRow | null>> {
@@ -86,9 +90,13 @@ export const ordersApi = {
   },
 
   async approvalQueue(): Promise<ApiResponse<OrderRow[]>> {
-    const res = await request<any[]>({ url: `/purchase-orders?status=SUBMITTED`, method: "GET" });
-    const rows = res.data || [];
-    return { data: rows.map(decorate) };
+    try {
+      const res = await request<any[]>({ url: `/purchase-orders?status=SUBMITTED`, method: "GET" });
+      const rows = res.data || [];
+      return { data: rows.map(decorate) };
+    } catch {
+      return { data: [] };
+    }
   },
 
   async create(input: CreateOrderInput, _createdBy?: string): Promise<ApiResponse<OrderRow>> {
