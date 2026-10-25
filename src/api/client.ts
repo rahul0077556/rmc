@@ -2,7 +2,15 @@ import axios, { type AxiosRequestConfig, type AxiosResponse } from "axios";
 import type { ApiError, ApiResponse, PaginatedResponse } from "@/types";
 export type { ApiError, ApiResponse, PaginatedResponse };
 
-export const API_BASE_URL = import.meta.env["VITE_API_BASE_URL"] ?? "/api/v1";
+function normalizeBaseUrl(url?: string): string {
+  if (!url) return "/api/v1";
+  const trimmed = url.trim().replace(/\/+$/, "");
+  if (trimmed.endsWith("/api/v1")) return trimmed;
+  if (trimmed === "/api" || trimmed.endsWith("/api")) return `${trimmed}/v1`;
+  return `${trimmed}/api/v1`;
+}
+
+export const API_BASE_URL = normalizeBaseUrl(import.meta.env["VITE_API_BASE_URL"]);
 export const TOKEN_STORAGE_KEY = "rmc.jwt_token";
 
 export const apiClient = axios.create({
