@@ -57,6 +57,7 @@ import { useAuth } from "@/auth/auth-context";
 import { inr, dt, num } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
+
 export const Route = createFileRoute("/_shell/store")({
   head: () => ({
     meta: [
@@ -70,7 +71,6 @@ export const Route = createFileRoute("/_shell/store")({
 function StorePage() {
   const { user } = useAuth();
   const readOnly = user?.role === "owner";
-  const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<"terminal" | "payloads" | "inventory" | "dpr" | "expenses" | "attendance">("terminal");
 
   // Query Data

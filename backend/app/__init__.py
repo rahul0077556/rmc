@@ -22,7 +22,7 @@ def create_app(config_class=None):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
-    cors.init_app(app, resources={r"/api/*": {"origins": "*"}})
+    cors.init_app(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
     swagger.init_app(app)
 
     # JWT Error Handlers
@@ -80,7 +80,9 @@ def create_app(config_class=None):
     app.register_blueprint(store_bp)
     app.register_blueprint(account_bp)
 
-    # Healthcheck
+    # Healthcheck endpoints (Fly.io and monitoring)
+    @app.route("/", methods=["GET"])
+    @app.route("/health", methods=["GET"])
     @app.route("/api/health", methods=["GET"])
     def health():
         return jsonify({"status": "healthy", "service": "rmc-backend", "version": "1.0.0"})

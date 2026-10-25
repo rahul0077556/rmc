@@ -6,11 +6,14 @@ class Config:
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "rmc-jwt-dev-secret-key-change-in-prod")
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=8)
     
-    # Database config: default SQLite for instant dev, Postgres in container/prod
-    SQLALCHEMY_DATABASE_URI = os.getenv(
-        "DATABASE_URL", 
-        f"sqlite:///{os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'rmc.db'))}"
-    )
+    # Database config:
+    # 1. DATABASE_URL if provided (PostgreSQL on Fly.io / Supabase / Neon)
+    # 2. /data/rmc.db if persistent Fly volume is mounted at /data
+    # 3. Default local backend/rmc.db
+    _local_db = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "rmc.db"))
+    _volume_db = "/data/rmc.db"
+    _default_db = f"sqlite:///{_volume_db if os.path.isdir('/data') else _local_db}"
+    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", _default_db)
     # Fix for postgres:// to postgresql:// if needed
     if SQLALCHEMY_DATABASE_URI.startswith("postgres://"):
         SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace("postgres://", "postgresql://", 1)

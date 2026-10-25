@@ -37,7 +37,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "My Orders", to: "/portal", icon: LayoutDashboard, roles: ["customer"], group: "Operations" },
   { label: "Billing", to: "/billing", icon: Receipt, roles: ["owner", "sales", "sales_manager", "dispatcher"], group: "Commercial" },
   { label: "Account (HR/Payroll)", to: "/account", icon: Landmark, roles: ["account", "owner"], group: "Commercial" },
-  { label: "Reports", to: "/reports", icon: BarChart3, roles: ["sales_manager", "production", "qa", "dispatcher"], group: "Insights" },
+  { label: "Reports", to: "/reports", icon: BarChart3, roles: ["owner", "sales_manager", "production", "qa", "dispatcher", "store", "account", "sales"], group: "Insights" },
   { label: "AI Insights", to: "/insights", icon: Sparkles, roles: ["owner", "customer", "sales", "sales_manager", "dispatcher", "production", "qa", "store", "account"], group: "Insights" },
 ];
 

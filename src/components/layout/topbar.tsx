@@ -17,6 +17,7 @@ import { ROLE_LABEL } from "@/lib/nav";
 import { db } from "@/lib/store";
 import { dt } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { ThemeSwitcher } from "@/components/app/ThemeSwitcher";
 
 export function Topbar({ onMenu }: { onMenu: () => void }) {
   const { user, logout } = useAuth();
@@ -45,6 +46,8 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
         <Building2 className="size-3.5 text-primary" />
         <span className="max-w-[190px] truncate">{user.plant}</span>
       </div>
+
+      <ThemeSwitcher className="hidden sm:flex" />
 
       <Popover>
         <PopoverTrigger asChild>

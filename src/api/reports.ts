@@ -1,48 +1,160 @@
-import { request } from "./client";
+import { request, apiClient } from "./client";
 import type { ApiResponse } from "@/types";
+
+export type ReportDepartment = "All" | "Store" | "Dispatch" | "HR" | "QA/QC";
 
 export interface ReportDefinition {
   id: string;
+  backendKey: string;
   title: string;
   description: string;
-  group: "Production" | "Quality" | "Materials" | "Commercial";
+  department: "Store" | "Dispatch" | "HR" | "QA/QC";
+  departments: ("Store" | "Dispatch" | "HR" | "QA/QC")[]; // supports multiple depts like 12 (Dispatch & QA/QC)
 }
 
 export const REPORTS: ReportDefinition[] = [
-  { id: "daily-production", title: "Daily Production / Batch Report", description: "Every batch produced per day with grade and quantity.", group: "Production" },
-  { id: "material-consumption", title: "Material Consumption Report", description: "Cement, sand, aggregate and admixture consumed.", group: "Materials" },
-  { id: "theoretical-actual", title: "Theoretical vs Actual Consumption", description: "Batch-wise variance against mix design.", group: "Materials" },
-  { id: "batch-register", title: "Batch Sheet Register", description: "Register of all generated batch sheets.", group: "Production" },
-  { id: "cube-strength", title: "Cube Strength Report", description: "3 / 7 / 28 day compressive strength results.", group: "Quality" },
-  { id: "cube-schedule", title: "Cube Testing Schedule", description: "Upcoming and overdue cube tests.", group: "Quality" },
-  { id: "tm-quality", title: "TM Quality Check Report", description: "Slump, bleeding and inspection outcomes per TM.", group: "Quality" },
-  { id: "rejected-tm", title: "Rejected / Corrected TM Report", description: "Rejections with corrective action taken.", group: "Quality" },
-  { id: "grade-summary", title: "Grade-wise Production Summary", description: "Volume produced by concrete grade.", group: "Production" },
-  { id: "customer-supply", title: "Customer-wise Supply Report", description: "Quantity supplied against each customer PO.", group: "Commercial" },
-  { id: "material-stock", title: "Material Stock Report", description: "Closing stock of all raw materials.", group: "Materials" },
-  { id: "admixture", title: "Admixture Addition Report", description: "Admixture dosage per batch.", group: "Materials" },
-  { id: "challan-register", title: "Delivery Challan Register", description: "All challans issued with dispatch times.", group: "Commercial" },
+  // STORE SECTION
+  {
+    id: "mpr-report",
+    backendKey: "mpr_report",
+    title: "MPR Report (Store)",
+    description: "Material Purchase & Requisition Report (Opening stock, Receipts, Plant Consumption, Closing Stock, Reorder Level)",
+    department: "Store",
+    departments: ["Store"],
+  },
+  {
+    id: "hr-report-store",
+    backendKey: "hr_report_store",
+    title: "HR Report (Store)",
+    description: "Driver & Transit Mixer monthly trip performance, diesel average, and trip incentive summary (As per MUL HR Reports)",
+    department: "Store",
+    departments: ["Store", "HR"],
+  },
+  {
+    id: "tm-average-report",
+    backendKey: "tm_average_report",
+    title: "TM Average Report (Store)",
+    description: "Vehicle running kilometers, handi rotating hours, diesel consumption & fuel mileage reconciliation (As per MUL TM Average Summary)",
+    department: "Store",
+    departments: ["Store"],
+  },
+
+  // DISPATCH SECTION
+  {
+    id: "schedule-and-production",
+    backendKey: "schedule_and_production",
+    title: "Schedule and Production",
+    description: "Daily dispatch schedules vs plant batching performance, lead times and pour milestones",
+    department: "Dispatch",
+    departments: ["Dispatch"],
+  },
+  {
+    id: "zone-02-pump",
+    backendKey: "zone_02_pump",
+    title: "Zone 02 Pump Report",
+    description: "Concrete boom pump & stationary line pump utilization, pipeline lengths, pumping speed and revenue in Zone 02",
+    department: "Dispatch",
+    departments: ["Dispatch"],
+  },
+  {
+    id: "daywise-production",
+    backendKey: "daywise_production",
+    title: "Day Wise Production Report",
+    description: "Day-wise plant concrete production breakdown across grades M15–M40 and special mixes",
+    department: "Dispatch",
+    departments: ["Dispatch", "QA/QC"],
+  },
+
+  // HR SECTION
+  {
+    id: "staff-attendance",
+    backendKey: "staff_attendance",
+    title: "Staff Attendance",
+    description: "Daily plant operational, management and lab staff biometric attendance roster",
+    department: "HR",
+    departments: ["HR"],
+  },
+  {
+    id: "sunday-working",
+    backendKey: "sunday_working",
+    title: "Sunday Working",
+    description: "Sunday, weekend and statutory holiday operational duty, overtime hours and comp-off ledger",
+    department: "HR",
+    departments: ["HR"],
+  },
+  {
+    id: "mul-attendance",
+    backendKey: "mul_attendance",
+    title: "MUL Attendance",
+    description: "Mulkhed Plant workforce, drivers and helpers daily muster roll & asset assignment",
+    department: "HR",
+    departments: ["HR"],
+  },
+
+  // QA/QC SECTION
+  {
+    id: "strength-data-since",
+    backendKey: "strength_data_since",
+    title: "Strength Data Since",
+    description: "Cumulative concrete compressive strength results (3/7/28-day tests) vs IS 456 target characteristic strength",
+    department: "QA/QC",
+    departments: ["QA/QC"],
+  },
+  {
+    id: "consumption-crb75",
+    backendKey: "consumption_crb75",
+    title: "Consumption CRB-75 Plant",
+    description: "Raw material batch consumption, moisture correction and telemetry for CRB-75 Plant",
+    department: "QA/QC",
+    departments: ["QA/QC"],
+  },
+  {
+    id: "consumption-sp30",
+    backendKey: "consumption_sp30",
+    title: "Consumption SP-30 Plant",
+    description: "Raw material batch consumption and design variance reconciliation for SP-30 Batching Plant",
+    department: "QA/QC",
+    departments: ["QA/QC"],
+  },
+  {
+    id: "material-rejected",
+    backendKey: "material_rejected",
+    title: "Material Rejected Report",
+    description: "Log of non-conforming batches, rejected transit mixer slurries, and quarry raw material gate rejections",
+    department: "QA/QC",
+    departments: ["QA/QC", "Store"],
+  },
 ];
 
-const REPORT_KEY_MAP: Record<string, string> = {
-  "daily-production": "daily_production",
-  "material-consumption": "material_consumption",
-  "theoretical-actual": "theoretical_vs_actual",
-  "batch-register": "batch_sheet_register",
-  "cube-strength": "cube_strength",
-  "cube-schedule": "cube_schedule",
-  "tm-quality": "tm_qc_checks",
-  "rejected-tm": "rejected_tms",
-  "grade-summary": "gradewise_production",
-  "customer-supply": "customer_supply",
-  "material-stock": "material_stock",
-  "admixture": "admixture_addition",
-  "challan-register": "challan_register",
-};
+export function getReportsForRole(role?: string): ReportDefinition[] {
+  if (!role || role === "owner") return REPORTS;
+  if (role === "store") return REPORTS.filter((r) => r.departments.includes("Store"));
+  if (role === "dispatcher") return REPORTS.filter((r) => r.departments.includes("Dispatch"));
+  if (role === "account") return REPORTS.filter((r) => r.departments.includes("HR"));
+  if (role === "qa") return REPORTS.filter((r) => r.departments.includes("QA/QC"));
+  if (role === "production") {
+    return REPORTS.filter((r) =>
+      ["schedule-and-production", "consumption-crb75", "consumption-sp30", "daywise-production"].includes(r.id)
+    );
+  }
+  if (role === "sales" || role === "sales_manager") {
+    return REPORTS.filter((r) =>
+      ["schedule-and-production", "daywise-production", "zone-02-pump"].includes(r.id)
+    );
+  }
+  return REPORTS;
+}
+
+export const REPORT_KEY_MAP: Record<string, string> = Object.fromEntries(
+  REPORTS.map((r) => [r.id, r.backendKey])
+);
 
 export interface ReportResult {
   columns: string[];
   rows: (string | number)[][];
+  totalRows?: number;
+  from?: string;
+  to?: string;
 }
 
 export const reportsApi = {
@@ -62,8 +174,26 @@ export const reportsApi = {
       data: {
         columns: result?.columns || ["Column 1", "Column 2"],
         rows: result?.rows || [],
+        totalRows: result?.totalRows,
+        from: result?.from,
+        to: result?.to,
       },
     };
+  },
+
+  async downloadExcel(id: string, from: string, to: string, filename: string): Promise<void> {
+    const backendKey = REPORT_KEY_MAP[id] || id.replace(/-/g, "_");
+    const response = await apiClient.get(`/reports/${backendKey}?from=${from}&to=${to}&format=xlsx`, {
+      responseType: "blob",
+    });
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `${filename}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
   },
 };
 
@@ -79,4 +209,3 @@ export function toCsv(result: ReportResult): string {
   );
   return [header, ...rows].join("\n");
 }
-

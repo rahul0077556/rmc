@@ -98,6 +98,7 @@ function AccountPage() {
           emptyDescription="Payroll history will appear here."
         />
       </section>
+
     </div>
   );
 }

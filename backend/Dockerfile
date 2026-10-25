@@ -5,16 +5,23 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Place files in /app/backend so backend.wsgi import works properly
+COPY . /app/backend/
 
+ENV PYTHONPATH=/app
 ENV FLASK_APP=backend.wsgi:app
 ENV PYTHONUNBUFFERED=1
+ENV PORT=5001
+
+RUN chmod +x /app/backend/entrypoint.sh
 
 EXPOSE 5001
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--workers", "2", "backend.wsgi:app"]
+ENTRYPOINT ["/app/backend/entrypoint.sh"]
+
