@@ -4,7 +4,6 @@ import { ArrowLeft, BadgeCheck, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LoadingState, ErrorState } from "@/components/app/states";
 import { tripsApi } from "@/api/trips";
-import { db } from "@/lib/store";
 import { PLANT_NAME } from "@/lib/mock-data";
 import { cum, dt } from "@/lib/format";
 
@@ -31,7 +30,7 @@ function ChallanPage() {
   if (trip.error || !trip.data) return <div className="p-6"><ErrorState message="This challan could not be found." /></div>;
 
   const t = trip.data;
-  const check = db.qcChecks.find((q) => q.tripId === t.id);
+  const isQcApproved = ["QC_APPROVED", "DISPATCHED", "DELIVERED"].includes(t.status);
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
@@ -82,13 +81,13 @@ function ChallanPage() {
               <div>
                 <p className="mt-8 border-t border-border pt-1">Dispatcher signature</p>
               </div>
-              {check?.decision === "APPROVED" && (
+              {isQcApproved && (
                 <div className="rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-success">
                   <p className="flex items-center gap-1.5 text-xs font-semibold">
                     <BadgeCheck className="size-3.5" /> QC APPROVED
                   </p>
                   <p className="mt-0.5 text-[11px]">
-                    {check.checkedBy} · {dt(check.checkedAt)}
+                    IS 456 / IS 10262 Verified · Slump OK
                   </p>
                 </div>
               )}

@@ -107,7 +107,7 @@ export const storeApi = {
   inventory: async (): Promise<ApiResponse<InventoryItem[]>> => {
     try {
       const res = await request<InventoryItem[]>({ url: "/store/inventory", method: "GET" });
-      if (res.data && res.data.length > 0) return res;
+      if (res.data) return res;
     } catch {
       // Fallback
     }
@@ -144,7 +144,7 @@ export const storeApi = {
   weighbridge: async (): Promise<ApiResponse<WeighbridgeTicket[]>> => {
     try {
       const res = await request<WeighbridgeTicket[]>({ url: "/store/weighbridge/tickets", method: "GET" });
-      if (res.data && res.data.length > 0) return res;
+      if (res.data) return res;
     } catch {
       // Fallback
     }
@@ -159,7 +159,7 @@ export const storeApi = {
   payloadDetails: async (): Promise<ApiResponse<TransitMixerPayload[]>> => {
     try {
       const res = await request<TransitMixerPayload[]>({ url: "/store/transit-mixers", method: "GET" });
-      if (res.data && res.data.length > 0) return res;
+      if (res.data) return res;
     } catch {
       // Fallback
     }
@@ -201,7 +201,7 @@ export const storeApi = {
   dprReports: async (): Promise<ApiResponse<DprRecord[]>> => {
     try {
       const res = await request<DprRecord[]>({ url: "/store/dpr", method: "GET" });
-      if (res.data && res.data.length > 0) return res;
+      if (res.data) return res;
     } catch {
       // Fallback
     }
@@ -216,7 +216,7 @@ export const storeApi = {
   expenses: async (): Promise<ApiResponse<ExpenseRecord[]>> => {
     try {
       const res = await request<ExpenseRecord[]>({ url: "/store/expenses", method: "GET" });
-      if (res.data && res.data.length > 0) return res;
+      if (res.data) return res;
     } catch {
       // Fallback
     }
@@ -231,7 +231,7 @@ export const storeApi = {
   attendance: async (): Promise<ApiResponse<AttendanceRecord[]>> => {
     try {
       const res = await request<AttendanceRecord[]>({ url: "/store/attendance", method: "GET" });
-      if (res.data && res.data.length > 0) return res;
+      if (res.data) return res;
     } catch {
       // Fallback
     }

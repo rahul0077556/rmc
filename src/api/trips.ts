@@ -90,6 +90,16 @@ export const tripsApi = {
     };
   },
 
+  async trucks(): Promise<ApiResponse<{ id: string; tmNumber: string; capacity: number; status: string }[]>> {
+    const res = await request<any[]>({ url: "/trucks", method: "GET" });
+    return { data: res.data || [] };
+  },
+
+  async drivers(): Promise<ApiResponse<{ id: string; name: string; phone: string; licenseNo: string; status: string }[]>> {
+    const res = await request<any[]>({ url: "/drivers", method: "GET" });
+    return { data: res.data || [] };
+  },
+
   async get(id: string): Promise<ApiResponse<TripRow | null>> {
     const res = await request<any>({ url: `/trips/${id}`, method: "GET" });
     return { data: res.data ? decorateTrip(res.data) : null };

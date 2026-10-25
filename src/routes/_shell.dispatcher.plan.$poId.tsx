@@ -22,7 +22,6 @@ import {
 import { ordersApi } from "@/api/orders";
 import { tripsApi } from "@/api/trips";
 import { useAuth } from "@/auth/auth-context";
-import { db } from "@/lib/store";
 import { cum } from "@/lib/format";
 
 export const Route = createFileRoute("/_shell/dispatcher/plan/$poId")({
@@ -64,6 +63,8 @@ function PlanPage() {
   const [sent, setSent] = useState(false);
 
   const order = useQuery({ queryKey: ["order", poId], queryFn: () => ordersApi.get(poId).then((r) => r.data) });
+  const trucksQuery = useQuery({ queryKey: ["trucks-plan"], queryFn: () => tripsApi.trucks().then((r) => r.data) });
+  const driversQuery = useQuery({ queryKey: ["drivers-plan"], queryFn: () => tripsApi.drivers().then((r) => r.data) });
 
   useEffect(() => {
     const po = order.data;
@@ -76,16 +77,18 @@ function PlanPage() {
       left -= per;
     }
     const base = new Date(`${po.deliveryDate}T${po.deliveryTime || "09:00"}:00`);
+    const availableTrucks = (trucksQuery.data || []).filter((t) => t.status === "AVAILABLE");
+    const availableDrivers = (driversQuery.data || []).filter((d) => d.status === "AVAILABLE");
     setTrips(
       parts.map((q, i) => ({
         key: `t${i}`,
         quantity: q,
-        tmId: db.transitMixers.filter((t) => t.status === "AVAILABLE")[i]?.id ?? "",
-        driverId: db.drivers.filter((d) => d.status === "AVAILABLE")[i]?.id ?? "",
+        tmId: availableTrucks[i]?.id ?? "",
+        driverId: availableDrivers[i]?.id ?? "",
         plannedTime: new Date(base.getTime() + i * 90 * 60000).toISOString(),
       })),
     );
-  }, [order.data, trips.length]);
+  }, [order.data, trucksQuery.data, driversQuery.data, trips.length]);
 
   const savePlan = useMutation({
     mutationFn: () =>
@@ -113,7 +116,6 @@ function PlanPage() {
   const po = order.data;
   const planned = trips.reduce((s, t) => s + t.quantity, 0);
   const allChecked = checks.every(Boolean);
-  const site = db.sites.find((s) => s.id === po.siteId);
 
   return (
     <div className="space-y-6">
@@ -184,9 +186,9 @@ function PlanPage() {
                         <SelectValue placeholder="Assign TM" />
                       </SelectTrigger>
                       <SelectContent>
-                        {db.transitMixers.map((tm) => (
+                        {(trucksQuery.data || []).map((tm) => (
                           <SelectItem key={tm.id} value={tm.id}>
-                            {tm.code} · {tm.capacity} cum
+                            {tm.tmNumber} · {tm.capacity} cum
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -202,7 +204,7 @@ function PlanPage() {
                         <SelectValue placeholder="Assign driver" />
                       </SelectTrigger>
                       <SelectContent>
-                        {db.drivers.map((d) => (
+                        {(driversQuery.data || []).map((d) => (
                           <SelectItem key={d.id} value={d.id}>
                             {d.name}
                           </SelectItem>
@@ -249,9 +251,8 @@ function PlanPage() {
             </ul>
           </ChartCard>
 
-          <ChartCard title="Site accessibility" description={site?.name ?? "Site"}>
-            <p className="text-sm text-muted-foreground">{site?.accessibilityNotes ?? "No access notes recorded."}</p>
-            <p className="mt-2 text-xs text-muted-foreground">{site?.address}</p>
+          <ChartCard title="Site accessibility" description={po.siteName}>
+            <p className="text-sm text-muted-foreground">{po.siteAddress ?? "Standard transit mixer and concrete pump access."}</p>
           </ChartCard>
 
           <Button className="w-full" disabled={!allChecked || trips.length === 0 || savePlan.isPending} onClick={() => savePlan.mutate()}>
@@ -281,8 +282,8 @@ function PlanPage() {
             </p>
             {trips.map((t, i) => (
               <p key={t.key} className="text-muted-foreground">
-                Trip {i + 1}: {cum(t.quantity)} · {db.transitMixers.find((tm) => tm.id === t.tmId)?.code ?? "TM pending"} ·{" "}
-                {db.drivers.find((d) => d.id === t.driverId)?.name ?? "Driver pending"} · {t.plannedTime.slice(11, 16)}
+                Trip {i + 1}: {cum(t.quantity)} · {trucksQuery.data?.find((tm) => tm.id === t.tmId)?.tmNumber ?? "TM pending"} ·{" "}
+                {driversQuery.data?.find((d) => d.id === t.driverId)?.name ?? "Driver pending"} · {t.plannedTime.slice(11, 16)}
               </p>
             ))}
           </div>
