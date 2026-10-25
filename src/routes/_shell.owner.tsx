@@ -61,12 +61,12 @@ function OwnerDashboardPage() {
   if (error || !data) return <ErrorState message="Plant metrics could not be loaded." onRetry={() => void refetch()} />;
 
   const scheduleColumns: Column<ScheduleRow>[] = [
-    { key: "time", header: "Time", cell: (r) => <span className="font-medium">{r.time}</span>, sortValue: (r) => r.time },
-    { key: "customer", header: "Customer", cell: (r) => r.customer, sortValue: (r) => r.customer },
-    { key: "po", header: "PO Number", cell: (r) => <span className="text-muted-foreground">{r.po}</span> },
-    { key: "grade", header: "Grade", cell: (r) => r.grade },
-    { key: "qty", header: "Quantity", align: "right", cell: (r) => cum(r.quantity), sortValue: (r) => r.quantity },
-    { key: "tm", header: "TM", cell: (r) => r.tm },
+    { key: "time", header: "Time", cell: (r) => <span className="font-medium whitespace-nowrap">{r.time}</span>, sortValue: (r) => r.time },
+    { key: "customer", header: "Customer", cell: (r) => <span className="font-medium min-w-[140px] block">{r.customer}</span>, sortValue: (r) => r.customer },
+    { key: "po", header: "PO Number", cell: (r) => <span className="text-muted-foreground whitespace-nowrap font-mono text-xs">{r.po}</span> },
+    { key: "grade", header: "Grade", cell: (r) => <span className="whitespace-nowrap font-semibold">{r.grade}</span> },
+    { key: "qty", header: "Quantity", align: "right", cell: (r) => <span className="whitespace-nowrap">{cum(r.quantity)}</span>, sortValue: (r) => r.quantity },
+    { key: "tm", header: "TM", cell: (r) => <span className="whitespace-nowrap">{r.tm}</span> },
     { key: "status", header: "Status", align: "center", cell: (r) => <StatusBadge status={r.status} /> },
   ];
 

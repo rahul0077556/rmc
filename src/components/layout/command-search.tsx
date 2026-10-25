@@ -67,7 +67,7 @@ export function CommandSearch() {
         className="flex h-9 w-full max-w-md items-center gap-2 rounded-lg border border-border bg-surface-raised px-3 text-sm text-muted-foreground transition-colors hover:border-primary/40"
       >
         <Search className="size-4" />
-        <span className="truncate">Search PO, trip, batch sheet, challan, invoice…</span>
+        <span className="truncate text-xs sm:text-sm">Search plant records (PO, trip, challan…)</span>
       </button>
       <CommandDialog open={open} onOpenChange={setOpen}>
         <CommandInput placeholder="Search across plant records…" />

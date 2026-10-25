@@ -147,6 +147,7 @@ function LoginPage() {
   const [password, setPassword] = useState(DEMO_PASSWORD);
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [busyCardId, setBusyCardId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -171,6 +172,16 @@ function LoginPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function handleCardClick(card: (typeof DEPARTMENT_ROLES)[0]) {
+    setSelectedRole(card);
+    setEmail(card.email);
+    setPassword(DEMO_PASSWORD);
+    setError(null);
+    setBusyCardId(card.id);
+    await submit(undefined, card.email, DEMO_PASSWORD);
+    setBusyCardId(null);
   }
 
   function handleSelectRole(item: (typeof DEPARTMENT_ROLES)[0]) {
@@ -198,25 +209,27 @@ function LoginPage() {
         <div className="absolute bottom-0 right-10 w-[600px] h-[350px] bg-indigo-600/10 blur-[140px] rounded-full pointer-events-none" />
       </div>
 
-      {/* Top Header */}
-      <header className="relative z-10 sticky top-0 flex h-16 items-center justify-between border-b border-white/10 bg-[#090D16]/85 px-6 backdrop-blur-md">
-        <div className="flex items-center gap-3">
-          <span className="brand-gradient flex size-10 items-center justify-center rounded-xl text-primary-foreground shadow-lg shadow-primary/25">
-            <Boxes className="size-5" />
+      {/* Top Header - Mobile Optimized */}
+      <header className="relative z-10 sticky top-0 flex h-16 items-center justify-between border-b border-white/10 bg-[#090D16]/90 px-3.5 sm:px-6 backdrop-blur-md">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <span className="brand-gradient flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-xl text-primary-foreground shadow-lg shadow-primary/25">
+            <Boxes className="size-4.5 sm:size-5" />
           </span>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-bold tracking-tight text-white">Sai ReadyMix Concrete Plant</span>
-              <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                Mulkhed Unit 01
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="text-xs sm:text-sm font-bold tracking-tight text-white truncate max-w-[145px] xs:max-w-none">
+                Sai ReadyMix Concrete
+              </span>
+              <Badge variant="outline" className="hidden xs:inline-flex text-[9px] sm:text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shrink-0">
+                Unit 01
               </Badge>
             </div>
-            <p className="text-xs text-slate-400">IS 456 & IS 10262 Certified Operations Console</p>
+            <p className="hidden md:block text-[11px] text-slate-400 truncate">IS 456 & IS 10262 Certified Operations Console</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <ThemeSwitcher />
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <ThemeSwitcher className="scale-90 sm:scale-100" />
           <div className="hidden lg:flex items-center gap-2 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-300">
             <ShieldCheck className="size-3.5 text-emerald-400" />
             <span>Plant Live Telemetry Active</span>
@@ -225,17 +238,19 @@ function LoginPage() {
       </header>
 
       {/* Main Container */}
-      <main className="relative z-10 flex-1 px-4 py-8 md:px-8 lg:px-12 max-w-7xl mx-auto w-full space-y-8">
+      <main className="relative z-10 flex-1 px-3.5 py-6 sm:px-8 lg:px-12 max-w-7xl mx-auto w-full space-y-6 sm:space-y-8">
         {/* Department Portals Bar */}
         <section className="space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
             <div>
-              <h2 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
+              <h2 className="text-sm sm:text-base font-bold tracking-tight text-white flex items-center gap-2">
                 <span>Select Department Portal</span>
-                <span className="text-xs font-normal text-slate-400">· Click card to switch role</span>
+                <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                  Tap card to enter directly
+                </span>
               </h2>
-              <p className="text-xs text-slate-400">
-                Each department accesses its operational console and role-authorized reports.
+              <p className="text-[11px] sm:text-xs text-slate-400">
+                Click any department to sign in and open its operational workspace immediately.
               </p>
             </div>
 
@@ -244,33 +259,35 @@ function LoginPage() {
               className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-white/10 transition-all self-start sm:self-auto"
             >
               <FileSpreadsheet className="size-3.5 text-emerald-400" />
-              <span>Plant Reports Directory</span>
+              <span>Plant Reports Directory (13 Reports)</span>
               <ArrowRight className="size-3" />
             </Link>
           </div>
 
-          {/* Cards Grid: Clean, Pastel Boxes, Single Selection */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
+          {/* Cards Grid: Clean, Pastel Boxes, Direct 1-Tap Entry */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 sm:gap-3">
             {DEPARTMENT_ROLES.map((card) => {
               const Icon = card.icon;
               const isSelected = selectedRole.id === card.id;
+              const isLoggingIn = busyCardId === card.id;
               return (
                 <button
                   key={card.id}
                   type="button"
-                  onClick={() => handleSelectRole(card)}
+                  onClick={() => void handleCardClick(card)}
+                  disabled={busy}
                   className={cn(
-                    "group relative flex flex-col items-center justify-between rounded-xl border p-3 text-center transition-all duration-200 cursor-pointer",
+                    "group relative flex flex-col items-center justify-between rounded-xl border p-3 sm:p-3.5 text-center transition-all duration-200 cursor-pointer active:scale-95 min-h-[142px] sm:min-h-[135px]",
                     card.bgClass,
                     isSelected
-                      ? "ring-2 ring-primary ring-offset-2 ring-offset-[#090D16] scale-[1.02] shadow-lg shadow-primary/20 bg-slate-800/80"
-                      : "hover:scale-[1.02] hover:bg-slate-800/50 opacity-85 hover:opacity-100 border-white/10"
+                      ? "ring-2 ring-primary ring-offset-2 ring-offset-[#090D16] scale-[1.02] shadow-lg shadow-primary/20 bg-slate-800/90"
+                      : "hover:scale-[1.02] hover:bg-slate-800/60 opacity-90 hover:opacity-100 border-white/10"
                   )}
                 >
                   <div className="flex flex-col items-center w-full">
-                    <div className="relative flex size-10 items-center justify-center rounded-xl bg-white/10 shadow-sm transition-transform group-hover:scale-110">
+                    <div className="relative flex size-11 sm:size-10 items-center justify-center rounded-xl bg-white/10 shadow-sm transition-transform group-hover:scale-110">
                       <Icon className={cn("size-5", card.iconColor)} />
-                      {isSelected && (
+                      {isSelected && !isLoggingIn && (
                         <span className="absolute -top-1 -right-1 flex size-3.5 items-center justify-center rounded-full bg-primary text-black">
                           <CheckCircle2 className="size-3 text-primary-foreground fill-primary" />
                         </span>
@@ -284,9 +301,18 @@ function LoginPage() {
                     </span>
                   </div>
 
-                  <span className="mt-2 text-[9px] font-medium px-1.5 py-0.5 rounded bg-black/40 text-slate-300 border border-white/5">
-                    {card.tag}
-                  </span>
+                  <div className="mt-2.5 w-full flex items-center justify-center">
+                    {isLoggingIn ? (
+                      <span className="flex items-center gap-1 text-[10px] font-semibold text-primary animate-pulse py-0.5">
+                        <Loader2 className="size-3 animate-spin" /> Entering...
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-300 group-hover:text-primary transition-colors py-0.5 px-2 rounded-full bg-black/40 border border-white/5">
+                        <span>Enter</span>
+                        <ArrowRight className="size-2.5 group-hover:translate-x-0.5 transition-transform" />
+                      </span>
+                    )}
+                  </div>
                 </button>
               );
             })}
