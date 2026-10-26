@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Outlet, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AppSidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
+import { RmcChatbot } from "@/components/chatbot/RmcChatbot";
 import { useAuth } from "@/auth/auth-context";
 import { cn } from "@/lib/utils";
 
@@ -52,6 +53,9 @@ function ShellLayout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Floating AI Plant Copilot */}
+      <RmcChatbot />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Bell, Building2, CheckCheck, LogOut, Menu, UserRound } from "lucide-react";
+import { Bell, Bot, Building2, CheckCheck, LogOut, Menu, Sparkles, UserRound } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +19,7 @@ import { db } from "@/lib/store";
 import { dt } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ThemeSwitcher } from "@/components/app/ThemeSwitcher";
+import { chatbotStore } from "@/lib/chatbot-store";
 
 export function Topbar({ onMenu }: { onMenu: () => void }) {
   const { user, logout } = useAuth();
@@ -109,6 +110,17 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
       </div>
 
       <ThemeSwitcher className="hidden sm:flex" />
+
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => chatbotStore.toggle(user.role)}
+        className="hidden md:flex items-center gap-1.5 h-8 px-2.5 rounded-lg border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary text-xs font-medium transition-all"
+        title="Open Sai RMC Plant Copilot"
+      >
+        <Sparkles className="size-3.5 text-primary animate-pulse" />
+        <span>Ask Copilot</span>
+      </Button>
 
       <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
         <PopoverTrigger asChild>

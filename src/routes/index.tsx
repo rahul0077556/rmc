@@ -31,6 +31,7 @@ import { DEMO_ACCOUNTS, DEMO_PASSWORD, homeForRole } from "@/api/auth";
 import { useAuth } from "@/auth/auth-context";
 import { isApiError } from "@/api/client";
 import { ThemeSwitcher } from "@/components/app/ThemeSwitcher";
+import { RmcChatbot } from "@/components/chatbot/RmcChatbot";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -312,6 +313,9 @@ function LoginPage() {
             Access Department Logins (Owner, Dispatch, QA, Store) →
           </button>
         </footer>
+
+        {/* AI Plant Copilot */}
+        <RmcChatbot />
       </div>
     );
   }
@@ -621,6 +625,9 @@ function LoginPage() {
           <span className="text-emerald-400">IS 456:2000 & IS 10262:2019 Certified</span>
         </div>
       </footer>
+
+      {/* AI Plant Copilot */}
+      <RmcChatbot />
     </div>
   );
 }
