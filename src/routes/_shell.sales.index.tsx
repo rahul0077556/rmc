@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { ordersApi, type OrderRow } from "@/api/orders";
 import { customersApi } from "@/api/customers";
 import { cum, inr } from "@/lib/format";
+import { CapacityCalendar } from "@/components/common/CapacityCalendar";
 
 export const Route = createFileRoute("/_shell/sales/")({
   head: () => ({
@@ -65,6 +66,9 @@ function SalesPage() {
         <KpiCard label="Pending approvals" value={String(all.filter((o) => o.status === "SUBMITTED").length)} icon={ClipboardCheck} comparison="with sales manager" />
         <KpiCard label="Today's deliveries" value={String(all.filter((o) => o.deliveryDate === today).length)} icon={Truck} comparison="scheduled today" />
       </div>
+
+      {/* 14-Day Plant Capacity & Live Slot Booking */}
+      <CapacityCalendar />
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold">Recent purchase orders</h2>

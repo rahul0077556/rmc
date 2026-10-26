@@ -274,6 +274,83 @@ export async function processChatbotQuery(
     };
   }
 
+  // 3I. Capacity Calendar & "Can we deliver this?" Slot Finder
+  if (
+    query.includes("capacity calendar") ||
+    query.includes("can we deliver this") ||
+    query.includes("slot") ||
+    query.includes("open slot") ||
+    query.includes("14-day") ||
+    query.includes("plant capacity") ||
+    query.includes("nearest slot")
+  ) {
+    return {
+      text: `### 📅 14-Day Capacity Calendar & "Can We Deliver This?" Slot Finder\n\nSales reps and Dispatchers can plan deliveries with zero guesswork using the **14-Day Capacity Calendar**:\n\n* **14-Day Rolling Window:**\n  * Tracks booked cubic metres against plant capacity (**850 cum/day** nominal across CRB-75 and SP-30 batching plants).\n  * Color coded per day:\n    * 🟢 **Green (<70% load):** Ample chute and mixer slots open.\n    * 🟡 **Amber (70%–90% load):** High load; pre-booking required.\n    * 🔴 **Red (>90% load / Overbooked):** Plant at or over capacity; dispatch delay risk.\n* **Interactive “Can we deliver this?” Validator:**\n  * Enter your desired **Date**, **Quantity (cum)**, and **Grade** (M20–M40).\n  * If open: *"✅ YES! We can deliver. 32 cum takes load to 52% (CRB-75 Chute slot available at 09:30 AM)."*\n  * If tight or overbooked: Instantly suggests the **nearest open slot** (e.g. *"Nearest open slot: Tomorrow 27 Oct with +370 cum open"*).\n  * One-tap **"Book This Slot ➔"** opens the PO creation form with date and volume pre-filled!\n\n*Available directly on **Sales Desk** (\`/sales\`), **New Purchase Order** (\`/sales/orders/new\`), and **Dispatcher** (\`/dispatcher\`).*`,
+      actions: [
+        { label: "📅 Open Capacity Calendar", to: "/sales" },
+        { label: "📝 Create PO with Slot Check", to: "/sales/orders/new" },
+        { label: "🚛 Dispatcher Board", to: "/dispatcher" },
+      ],
+      followUps: [
+        "What is our maximum daily batching capacity?",
+        "How do nearest open slot suggestions work?",
+        "What is the Concrete Clock?",
+      ],
+      source: "live-telemetry",
+    };
+  }
+
+  // 3J. Mix Optimization Map (QA, Owner)
+  if (
+    query.includes("mix optimization") ||
+    query.includes("cement savings") ||
+    query.includes("cube strength vs cement") ||
+    query.includes("overdesigned") ||
+    query.includes("overstrength") ||
+    query.includes("reduce cement") ||
+    query.includes("cement content")
+  ) {
+    return {
+      text: `### 🧪 Mix Optimization Map (Cement Content vs. Cube Strength)\n\nA specialized engineering scatter chart for **QA Leads** and the **Plant Owner** to spot cost optimization opportunities without compromising quality:\n\n* **IS 456 & IS 10262 Correlation:**\n  * **X-Axis:** Cementitious Content (kg/cum).\n  * **Y-Axis:** 28-Day Compressive Strength Achieved (MPa) via CTM testing.\n* **Flagging Potential Cement Savings:**\n  * Mixes that deliver far more strength than the grade requires (surplus $\\Delta > 4.5$ MPa above target mean strength $f_t = f_{ck} + 1.65s$) are flagged in purple.\n  * Shows potential cement reduction: **~15 to 25 kg/cum** (saving **₹110 to ₹180 / cum** in raw material costs).\n  * Across the plant's 2,400 cum monthly volume, this represents a potential **₹2.75+ Lakhs / month** margin expansion.\n* **Safety & Compliance Notice:**\n  * ⚠️ *Advisory QA Review Only:* These are statistical observations for review by the Technical Head. They require formal lab trial cubes and **never alter SCADA/PLC batching plant recipes automatically**.\n\n*Available under **QA / QC** (\`/qa\` -> "Mix Optimization Map" tab) and **Owner Overview** (\`/owner\`).*`,
+      actions: [
+        { label: "🧪 QA Mix Optimization Map", to: "/qa" },
+        { label: "👑 Owner Plant Overview", to: "/owner" },
+      ],
+      followUps: [
+        "What is the target mean strength for M25 concrete?",
+        "How much does 20 kg excess cement cost per cum?",
+        "Does this tool automatically change PLC recipes?",
+      ],
+      source: "live-telemetry",
+    };
+  }
+
+  // 3K. Margin Lens (Owner)
+  if (
+    query.includes("margin lens") ||
+    query.includes("customer margin") ||
+    query.includes("bubble chart") ||
+    query.includes("payment delay") ||
+    query.includes("who is big but slow to pay") ||
+    query.includes("slow to pay") ||
+    query.includes("customer profitability") ||
+    query.includes("seeded material rates")
+  ) {
+    return {
+      text: `### 🔍 Margin Lens (Owner Customer Profitability & Payment Delay Matrix)\n\nA strategic commercial bubble chart for the Plant Owner showing at a glance **who is big but slow to pay**:\n\n* **Three Critical Dimensions:**\n  * **Bubble Size (Z-Axis):** Total concrete volume delivered in cubic metres (cum).\n  * **Net Margin (Y-Axis):** ₹/cum profit calculated from seeded raw material costs (cement, aggregates, sand, admixtures, transit diesel) subtracted from invoiced rates.\n  * **Payment Delay (X-Axis & Color):** Days overdue beyond agreed credit terms:\n    * 🟢 **Prompt (<15 days delay):** *Star Clients* (Skyline Builders ₹1,410/cum, ABC Constructions ₹1,180/cum).\n    * 🟡 **Moderate (15–40 days delay):** *Watchlist* (BuildWell Projects, VTP Realty).\n    * 🔴 **Slow Risk (>40 days delay):** *Capital Traps* (Metro Infra 2,850 cum with +57d delay; Urban Infra 1,650 cum with +51d delay).\n* **Owner Takeaway:**\n  * Spot clients where high volume hides severe cash flow drag, enabling you to tighten credit limits, negotiate cash settlement discounts, or prioritize mixers for prompt payers.\n\n*Available directly on the **Plant Overview** dashboard (\`/owner\`).*`,
+      actions: [
+        { label: "👑 View Margin Lens on Owner Overview", to: "/owner" },
+        { label: "💰 View Billing & Invoices", to: "/billing" },
+      ],
+      followUps: [
+        "Who is currently the slowest paying customer?",
+        "How is the net margin per cum calculated?",
+        "What is the total overdue receivables balance?",
+      ],
+      source: "live-telemetry",
+    };
+  }
+
   // ==========================================
   // STAGE 4: LIVE PLANT STATUS & TELEMETRY
   // ==========================================

@@ -2,8 +2,9 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, ClipboardList, Clock, Flame, FlaskConical, PackageCheck, ShieldAlert, Sparkles, Truck, Zap, Tv } from "lucide-react";
+import { CheckCircle2, ClipboardList, Clock, Flame, FlaskConical, PackageCheck, ShieldAlert, Sparkles, Truck, Zap, Tv, CalendarDays } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
+import { CapacityCalendar } from "@/components/common/CapacityCalendar";
 import { KpiCard } from "@/components/app/kpi-card";
 import { ChartCard } from "@/components/app/chart-card";
 import { DataTable, type Column } from "@/components/app/data-table";
@@ -48,6 +49,7 @@ function DispatcherPage() {
   const [deliverTrip, setDeliverTrip] = useState<TripRow | null>(null);
   const [receiver, setReceiver] = useState("");
   const [deliveredQty, setDeliveredQty] = useState("");
+  const [showCapacity, setShowCapacity] = useState(false);
 
   const { params, updateParams, query: trips } = useListQuery(["trips-list"], () => tripsApi.list().then((r) => r.data));
   const fleet = useQuery({ queryKey: ["fleet"], queryFn: () => tripsApi.fleet().then((r) => r.data) });
@@ -211,17 +213,34 @@ function DispatcherPage() {
         title="Today's Operations"
         subtitle="Dispatch control — planning, release and delivery"
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void navigate({ to: "/tv" })}
-            className="gap-2 border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary font-medium"
-          >
-            <Tv className="size-4 text-primary animate-pulse" />
-            <span>Control Room TV Mode</span>
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant={showCapacity ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowCapacity((v) => !v)}
+              className="gap-1.5 font-medium"
+            >
+              <CalendarDays className="size-4" />
+              <span>{showCapacity ? "Hide Capacity" : "14-Day Capacity"}</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void navigate({ to: "/tv" })}
+              className="gap-2 border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary font-medium"
+            >
+              <Tv className="size-4 text-primary animate-pulse" />
+              <span>Control Room TV Mode</span>
+            </Button>
+          </div>
         }
       />
+
+      {showCapacity && (
+        <div className="animate-in fade-in-50 duration-200">
+          <CapacityCalendar />
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Orders to plan" value={String(filteredOrders.filter((o) => o.tripCount === 0).length)} icon={ClipboardList} comparison="approved, unplanned" />

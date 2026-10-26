@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
+import { CalendarDays, Sparkles, CheckCircle2, AlertTriangle, Clock } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { ChartCard } from "@/components/app/chart-card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,8 @@ import { ordersApi } from "@/api/orders";
 import { customersApi } from "@/api/customers";
 import { useAuth } from "@/auth/auth-context";
 import { GRADES, GRADE_RATE } from "@/lib/mock-data";
+import { checkDeliveryCapacity } from "@/lib/capacity-data";
+import { cn } from "@/lib/utils";
 import type { Grade } from "@/types";
 
 export const Route = createFileRoute("/_shell/sales/orders/new")({
@@ -94,6 +97,12 @@ function CreateOrderPage() {
 
   const selectedCustomer = customers.data?.find((c) => c.id === form.watch("customerId"));
   const err = form.formState.errors;
+
+  const watchDate = form.watch("deliveryDate");
+  const watchQty = form.watch("quantity");
+  const capacityCheck = useMemo(() => {
+    return checkDeliveryCapacity(watchDate, Number(watchQty) || 0);
+  }, [watchDate, watchQty]);
 
   function save(status: "DRAFT" | "SUBMITTED") {
     void form.handleSubmit((values) => create.mutate({ values, status }))();
@@ -180,6 +189,56 @@ function CreateOrderPage() {
             <div className="space-y-1.5">
               <Label>Delivery time</Label>
               <Input type="time" {...form.register("deliveryTime")} />
+            </div>
+
+            {/* Live "Can we deliver this?" validation banner */}
+            <div
+              className={cn(
+                "sm:col-span-2 rounded-xl border p-3.5 text-xs space-y-2 transition-all duration-300",
+                capacityCheck.status === "confirmed" && "border-emerald-500/30 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100",
+                capacityCheck.status === "tight" && "border-amber-500/30 bg-amber-500/10 text-amber-950 dark:text-amber-100",
+                capacityCheck.status === "overbooked" && "border-rose-500/30 bg-rose-500/10 text-rose-950 dark:text-rose-100"
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-bold flex items-center gap-1.5 text-foreground">
+                  <CalendarDays className="size-4 text-primary" />
+                  “Can we deliver this?”
+                </span>
+                <span
+                  className={cn(
+                    "text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider",
+                    capacityCheck.status === "confirmed" && "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
+                    capacityCheck.status === "tight" && "bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30",
+                    capacityCheck.status === "overbooked" && "bg-rose-500/20 text-rose-600 dark:text-rose-400 border-rose-500/30 animate-pulse font-extrabold"
+                  )}
+                >
+                  {capacityCheck.status === "confirmed" ? "Slot Available" : capacityCheck.status === "tight" ? "Tight Schedule" : "Overbooked"}
+                </span>
+              </div>
+
+              <p className="text-foreground leading-relaxed font-medium">
+                {capacityCheck.message}
+              </p>
+
+              {capacityCheck.status !== "confirmed" && capacityCheck.nearestOpenSlots.length > 0 && (
+                <div className="pt-2 border-t border-border/40 flex flex-wrap items-center gap-1.5">
+                  <span className="font-semibold text-foreground flex items-center gap-1">
+                    <Sparkles className="size-3.5 text-amber-500" />
+                    Nearest open slots:
+                  </span>
+                  {capacityCheck.nearestOpenSlots.map((s) => (
+                    <button
+                      key={s.date}
+                      type="button"
+                      onClick={() => form.setValue("deliveryDate", s.date)}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-medium border border-emerald-500/30 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 transition-colors"
+                    >
+                      <strong className="font-bold">{s.dayName}, {s.displayDate}</strong> (+{s.availableCum} cum open · {s.utilizationPercent}%)
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label>Purpose</Label>

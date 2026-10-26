@@ -30,6 +30,8 @@ import { PLANT_NAME } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { ConcreteClock } from "@/components/common/ConcreteClock";
 import { MaterialFlowDiagram } from "@/components/common/MaterialFlowDiagram";
+import { MarginLens } from "@/components/common/MarginLens";
+import { MixOptimizationMap } from "@/components/common/MixOptimizationMap";
 
 export const Route = createFileRoute("/_shell/owner")({
   head: () => ({
@@ -260,6 +262,12 @@ function OwnerDashboardPage() {
           </ChartCard>
         </div>
       </div>
+
+      {/* Margin Lens (Customer Profitability & Payment Delay Bubble Matrix) */}
+      <MarginLens />
+
+      {/* Mix Optimization Map (Cement Content vs Cube Strength Savings) */}
+      <MixOptimizationMap />
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold">Plant performance</h2>
