@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ShellRouteImport } from './routes/_shell'
+import { Route as TvRouteImport } from './routes/tv'
 import { Route as ShellAccountRouteImport } from './routes/_shell.account'
 import { Route as ShellBillingRouteImport } from './routes/_shell.billing'
 import { Route as ShellInsightsRouteImport } from './routes/_shell.insights'
@@ -40,6 +41,11 @@ const IndexRoute = IndexRouteImport.update({
 } as any)
 const ShellRoute = ShellRouteImport.update({
   id: '/_shell',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TvRoute = TvRouteImport.update({
+  id: '/tv',
+  path: '/tv',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ShellAccountRoute = ShellAccountRouteImport.update({
@@ -150,6 +156,7 @@ const ShellSalesOrdersNewRoute = ShellSalesOrdersNewRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/tv': typeof TvRoute
   '/account': typeof ShellAccountRoute
   '/billing': typeof ShellBillingRoute
   '/insights': typeof ShellInsightsRoute
@@ -174,6 +181,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/tv': typeof TvRoute
   '/account': typeof ShellAccountRoute
   '/billing': typeof ShellBillingRoute
   '/insights': typeof ShellInsightsRoute
@@ -199,6 +207,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_shell': typeof ShellRouteWithChildren
+  '/tv': typeof TvRoute
   '/_shell/account': typeof ShellAccountRoute
   '/_shell/billing': typeof ShellBillingRoute
   '/_shell/insights': typeof ShellInsightsRoute
@@ -225,6 +234,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/tv'
     | '/account'
     | '/billing'
     | '/insights'
@@ -249,6 +259,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/tv'
     | '/account'
     | '/billing'
     | '/insights'
@@ -273,6 +284,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_shell'
+    | '/tv'
     | '/_shell/account'
     | '/_shell/billing'
     | '/_shell/insights'
@@ -299,6 +311,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ShellRoute: typeof ShellRouteWithChildren
+  TvRoute: typeof TvRoute
   BatchSheetIdRoute: typeof BatchSheetIdRoute
   ChallanTripIdRoute: typeof ChallanTripIdRoute
 }
@@ -317,6 +330,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof ShellRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tv': {
+      id: '/tv'
+      path: '/tv'
+      fullPath: '/tv'
+      preLoaderRoute: typeof TvRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_shell/account': {
@@ -528,6 +548,7 @@ const ShellRouteWithChildren = ShellRoute._addFileChildren(ShellRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ShellRoute: ShellRouteWithChildren,
+  TvRoute: TvRoute,
   BatchSheetIdRoute: BatchSheetIdRoute,
   ChallanTripIdRoute: ChallanTripIdRoute,
 }

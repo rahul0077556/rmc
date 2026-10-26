@@ -199,6 +199,81 @@ export async function processChatbotQuery(
     };
   }
 
+  // 3F. Material Flow Diagram & Rupee Waste (Owner & Store)
+  if (
+    query.includes("material flow") ||
+    query.includes("waste") ||
+    query.includes("washout") ||
+    query.includes("rejection") ||
+    query.includes("variance") ||
+    query.includes("rupee value of waste") ||
+    query.includes("mass balance") ||
+    query.includes("slurry")
+  ) {
+    return {
+      text: `### 🌿 Material Flow & Rupee Waste Reconciliation (IS 4926 Standard)\n\nThe **Material Flow Diagram** provides plant owners and store managers with an audit-ready mass balance that follows all raw materials from gate inward to delivered concrete, calculating the exact **Rupee Value of Waste** on each branch:\n\n* **1. Inward Raw Materials (Weighbridge Gate):**\n  * Total Inward: **2,211.3 MT** (OPC 53 Cement, Fly Ash, 10mm/20mm Aggregates, Robo Sand, Water & Admixtures) worth **₹42,07,400**.\n\n* **2. Plant Batching (CRB-75 & SP-30):**\n  * Total Batched: **910.0 cum** (approx 2,184.0 MT wet density).\n\n* **3. Four Reconciliation Branches & Rupee Waste:**\n  * 🟢 **Delivered & Invoiced (95.8% Yield):** **872.0 cum** (2,092.8 MT) generating **₹44,28,000** in customer billing.\n  * 🔴 **Rejected Concrete (1.8% Loss):** **16.0 cum** (38.4 MT) ➔ **Rupee Waste: ₹84,800** (slump loss, customer site pump chokes, transit overhydration).\n  * 🟡 **Drum Washout & Slurry (1.5% Loss):** **14.0 cum** (33.6 MT) ➔ **Rupee Waste: ₹50,600** (gross loss ₹58,800 minus ₹8,200 recovered aggregate credit).\n  * ⚪ **Scale & Yield Variance (0.9%):** **8.0 cum equiv** (19.2 MT) ➔ **Rupee Impact: ±₹38,200** (within IS 4926 ±1.5% batching tolerance).\n\n*Total Net Rupee Waste Today:* **₹1,35,400** (monitored in real-time with shift, weekly, and MTD filters).*`,
+      actions: [
+        { label: "👑 Owner Material Flow", to: "/owner" },
+        { label: "📦 Store & Weighbridge Flow", to: "/store" },
+      ],
+      followUps: [
+        "What causes concrete rejection at site?",
+        "How is drum washout aggregate recovered?",
+        "What is the tolerance limit under IS 4926?",
+      ],
+      source: "live-telemetry",
+    };
+  }
+
+  // 3G. Plant Event Ticker
+  if (
+    query.includes("event ticker") ||
+    query.includes("plant ticker") ||
+    query.includes("live ticker") ||
+    query.includes("ticker") ||
+    query.includes("ribbon") ||
+    query.includes("live events")
+  ) {
+    return {
+      text: `### 📡 Plant Event Ticker (Live Multi-Role Ribbon)\n\nA continuous slim marquee ticker sits at the top of every screen in Sai ReadyMix, streaming real-time plant events:\n\n* **Live Activity Feed:** Instant alerts like *"TM 3511 loaded 10:42 · BS-0042 QC approved"* or *"Silo 1 Cement tanker inward 38.4 MT"*.\n* **Smart Role-Filtering:** Automatically filters events matching your logged-in role (e.g. Dispatcher sees trips & drivers, QA sees slumps & cube breaks, Store sees weighbridge tickets).\n* **Desk Toggle:** Click the **"My Role"** chip to switch between your desk's events and the plant-wide **"All Desk"** stream.\n* **Interactive Controls:** Hovering pauses the scroll; clicking any event jumps straight to that trip, test, or weighbridge slip.`,
+      actions: [
+        { label: "👑 Plant Overview", to: "/owner" },
+        { label: "🚛 Dispatcher Board", to: "/dispatcher" },
+      ],
+      followUps: [
+        "What is the Control Room TV mode?",
+        "What is the Concrete Clock?",
+        "How do I filter events by my role?",
+      ],
+      source: "live-telemetry",
+    };
+  }
+
+  // 3H. Control Room TV Mode (Owner & Dispatcher)
+  if (
+    query.includes("tv mode") ||
+    query.includes("control room tv") ||
+    query.includes("wall tv") ||
+    query.includes("wallboard") ||
+    query.includes("tv view") ||
+    query.includes("wall screen")
+  ) {
+    return {
+      text: `### 📺 Control Room TV Mode (High-Contrast Plant Wallboard)\n\nA purpose-built full-screen view designed for wall TVs and large screens in the plant dispatcher office and control cabin:\n\n* **Auto-Rotating Slide Deck (every 12 seconds):**\n  1. **Schedule & Concrete Clock:** Active PO batches, transit countdown rings, and urgency badges.\n  2. **Silo & Tank Telemetry:** Cement, Fly Ash, GGBS silo levels (MT), aggregate bin capacities, water and chemical retarder tank levels.\n  3. **Transit Mixer Fleet Matrix:** Real-time distribution across Yard, Batching, QC Bay, In-Transit, Site Pouring, and Washout.\n* **Wall-Optimized Features:**\n  * Pure OLED high-contrast dark theme legible from 20+ feet away.\n  * Live digital wall clock (\`HH:mm:ss\`) with current plant ambient temperature.\n  * Slide controls: Pause auto-rotation, manual slide selector, and 1-tap browser fullscreen mode (\`F11\`).\n\n*Access via the **"Wall TV"** button in the top navigation or navigate directly to \`/tv\`.*`,
+      actions: [
+        { label: "📺 Launch Control Room TV Mode", to: "/tv" },
+        { label: "🚛 Dispatcher Board", to: "/dispatcher" },
+        { label: "👑 Owner Overview", to: "/owner" },
+      ],
+      followUps: [
+        "How long do slides stay before rotating?",
+        "What is the Concrete Clock?",
+        "Can I pause TV rotation on Silo levels?",
+      ],
+      source: "live-telemetry",
+    };
+  }
+
   // ==========================================
   // STAGE 4: LIVE PLANT STATUS & TELEMETRY
   // ==========================================

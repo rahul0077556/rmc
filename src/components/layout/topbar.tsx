@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Bell, Bot, Building2, CheckCheck, LogOut, Menu, Sparkles, UserRound } from "lucide-react";
+import { Bell, Bot, Building2, CheckCheck, LogOut, Menu, Sparkles, UserRound, Tv } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -110,6 +110,19 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
       </div>
 
       <ThemeSwitcher className="hidden sm:flex" />
+
+      {(user.role === "owner" || user.role === "dispatcher") && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void navigate({ to: "/tv" })}
+          className="hidden md:flex items-center gap-1.5 h-8 px-2.5 rounded-lg border-amber-500/30 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 hover:text-amber-400 text-xs font-medium transition-all"
+          title="Open Control Room TV Mode (Full-screen wallboard)"
+        >
+          <Tv className="size-3.5 text-amber-500 animate-pulse" />
+          <span className="hidden lg:inline">Wall TV</span>
+        </Button>
+      )}
 
       <Button
         variant="outline"

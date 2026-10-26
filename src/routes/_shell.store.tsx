@@ -21,12 +21,14 @@ import {
   CheckCircle2,
   Calendar,
   Layers,
+  GitFork,
 } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { KpiCard } from "@/components/app/kpi-card";
 import { DataTable, type Column } from "@/components/app/data-table";
 import { StatusBadge } from "@/components/app/status-badge";
 import { LoadingState, ErrorState } from "@/components/app/states";
+import { MaterialFlowDiagram } from "@/components/common/MaterialFlowDiagram";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -71,7 +73,7 @@ export const Route = createFileRoute("/_shell/store")({
 function StorePage() {
   const { user } = useAuth();
   const readOnly = user?.role === "owner";
-  const [activeTab, setActiveTab] = useState<"terminal" | "payloads" | "inventory" | "dpr" | "expenses" | "attendance">("terminal");
+  const [activeTab, setActiveTab] = useState<"terminal" | "material-flow" | "payloads" | "inventory" | "dpr" | "expenses" | "attendance">("terminal");
 
   // Query Data
   const { params, updateParams, query: inventory } = useListQuery(["inventory"], () => storeApi.inventory().then((r) => r.data));
@@ -416,32 +418,43 @@ function StorePage() {
 
       {/* Main Tab Navigation matching the entire Mindmap Workflow */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-        <TabsList className="grid w-full grid-cols-6 max-w-4xl">
-          <TabsTrigger value="terminal" className="flex items-center gap-1.5 text-xs">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 max-w-5xl h-auto p-1 gap-1">
+          <TabsTrigger value="terminal" className="flex items-center gap-1.5 text-xs py-2">
             <Scale className="size-3.5" />
             Weighbridge
           </TabsTrigger>
-          <TabsTrigger value="payloads" className="flex items-center gap-1.5 text-xs">
+          <TabsTrigger value="material-flow" className="flex items-center gap-1.5 text-xs py-2 font-medium text-emerald-600 dark:text-emerald-400">
+            <GitFork className="size-3.5" />
+            Material Flow & Waste
+          </TabsTrigger>
+          <TabsTrigger value="payloads" className="flex items-center gap-1.5 text-xs py-2">
             <FileSpreadsheet className="size-3.5" />
             TM Pay Load
           </TabsTrigger>
-          <TabsTrigger value="inventory" className="flex items-center gap-1.5 text-xs">
+          <TabsTrigger value="inventory" className="flex items-center gap-1.5 text-xs py-2">
             <PackageSearch className="size-3.5" />
             Materials & Silos
           </TabsTrigger>
-          <TabsTrigger value="dpr" className="flex items-center gap-1.5 text-xs">
+          <TabsTrigger value="dpr" className="flex items-center gap-1.5 text-xs py-2">
             <Layers className="size-3.5" />
             DPR & MPR
           </TabsTrigger>
-          <TabsTrigger value="expenses" className="flex items-center gap-1.5 text-xs">
+          <TabsTrigger value="expenses" className="flex items-center gap-1.5 text-xs py-2">
             <Receipt className="size-3.5" />
             Bills & Expenses
           </TabsTrigger>
-          <TabsTrigger value="attendance" className="flex items-center gap-1.5 text-xs">
+          <TabsTrigger value="attendance" className="flex items-center gap-1.5 text-xs py-2">
             <Users className="size-3.5" />
             Driver & Staff HR
           </TabsTrigger>
         </TabsList>
+
+        {/* ============================================================== */}
+        {/* TAB: MATERIAL FLOW & WASTE RECONCILIATION */}
+        {/* ============================================================== */}
+        <TabsContent value="material-flow" className="mt-4">
+          <MaterialFlowDiagram />
+        </TabsContent>
 
         {/* ============================================================== */}
         {/* TAB 1: DYNAMIC WEIGHBRIDGE CONSOLE (VENDOR INDEPENDENT) */}

@@ -14,7 +14,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ArrowRight, Banknote, CalendarClock, ClipboardList, Clock, Lock, PackageCheck, ShieldAlert, Sparkles, Truck, Zap } from "lucide-react";
+import { ArrowRight, Banknote, CalendarClock, ClipboardList, Clock, Lock, PackageCheck, ShieldAlert, Sparkles, Truck, Zap, Tv } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { KpiCard } from "@/components/app/kpi-card";
 import { ChartCard } from "@/components/app/chart-card";
@@ -29,6 +29,7 @@ import { cum, inr, inrCompact, num } from "@/lib/format";
 import { PLANT_NAME } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { ConcreteClock } from "@/components/common/ConcreteClock";
+import { MaterialFlowDiagram } from "@/components/common/MaterialFlowDiagram";
 
 export const Route = createFileRoute("/_shell/owner")({
   head: () => ({
@@ -85,19 +86,29 @@ function OwnerDashboardPage() {
         title="Plant Overview"
         subtitle={`${PLANT_NAME} · read-only owner view`}
         actions={
-          <div className="flex rounded-lg border border-border bg-surface-raised p-0.5">
-            {RANGES.map((r) => (
-              <button
-                key={r.label}
-                onClick={() => setDays(r.days)}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                  days === r.days ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {r.label}
-              </button>
-            ))}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link
+              to="/tv"
+              className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 text-xs font-semibold transition-all shadow-xs"
+            >
+              <Tv className="size-3.5" />
+              <span>Control Room TV Mode</span>
+            </Link>
+
+            <div className="flex rounded-lg border border-border bg-surface-raised p-0.5">
+              {RANGES.map((r) => (
+                <button
+                  key={r.label}
+                  onClick={() => setDays(r.days)}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                    days === r.days ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
           </div>
         }
       />
@@ -164,6 +175,9 @@ function OwnerDashboardPage() {
           </ul>
         </ChartCard>
       </div>
+
+      {/* Material Flow & Waste Reconciliation (Mass Balance) */}
+      <MaterialFlowDiagram />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-3 lg:col-span-2">
