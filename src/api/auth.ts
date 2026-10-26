@@ -21,7 +21,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     email: "owner@rmc.test",
     password: DEMO_PASSWORD,
     name: "Vikramaditya Singhania",
-    home: "/owner",
+    home: "/queue",
   },
   {
     role: "sales",
@@ -29,7 +29,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     email: "sales@rmc.test",
     password: DEMO_PASSWORD,
     name: "Ananya Sharma",
-    home: "/sales",
+    home: "/queue",
   },
   {
     role: "sales_manager",
@@ -37,7 +37,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     email: "salesmanager@rmc.test",
     password: DEMO_PASSWORD,
     name: "Devendra Kulkarni",
-    home: "/sales/approvals",
+    home: "/queue",
   },
   {
     role: "dispatcher",
@@ -45,7 +45,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     email: "dispatcher@rmc.test",
     password: DEMO_PASSWORD,
     name: "Mahesh Deshpande",
-    home: "/dispatcher",
+    home: "/queue",
   },
   {
     role: "production",
@@ -53,7 +53,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     email: "production@rmc.test",
     password: DEMO_PASSWORD,
     name: "Siddharth Joshi",
-    home: "/production",
+    home: "/queue",
   },
   {
     role: "qa",
@@ -61,7 +61,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     email: "qa@rmc.test",
     password: DEMO_PASSWORD,
     name: "Dr. Pradeep Sawant",
-    home: "/qa",
+    home: "/queue",
   },
   {
     role: "store",
@@ -69,7 +69,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     email: "store@rmc.test",
     password: DEMO_PASSWORD,
     name: "Rajesh Gupta",
-    home: "/store",
+    home: "/queue",
   },
   {
     role: "account",
@@ -77,7 +77,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     email: "account@rmc.test",
     password: DEMO_PASSWORD,
     name: "Priya Nair",
-    home: "/account",
+    home: "/queue",
   },
   {
     role: "customer",
@@ -86,7 +86,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     password: DEMO_PASSWORD,
     name: "Rajiv Deshmukh",
     customerId: "CUS-01",
-    home: "/portal",
+    home: "/queue",
   },
   {
     role: "customer",
@@ -95,7 +95,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     password: DEMO_PASSWORD,
     name: "Sanjay Chordiya",
     customerId: "CUS-02",
-    home: "/portal",
+    home: "/queue",
   },
 ];
 
@@ -111,7 +111,7 @@ export function accountToUser(account: DemoAccount): User {
 }
 
 export function homeForRole(role: Role): string {
-  return DEMO_ACCOUNTS.find((a) => a.role === role)?.home ?? "/owner";
+  return "/queue";
 }
 
 export function customerName(customerId?: string): string {

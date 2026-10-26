@@ -66,7 +66,7 @@ export function DataTable<T>({
   return (
     <div className="panel overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] border-collapse text-sm">
+        <table className="w-full min-w-[820px] border-collapse text-sm">
           <thead className="sticky top-0 z-10 bg-surface-raised/95 backdrop-blur">
             <tr>
               {columns.map((col) => (
@@ -76,6 +76,7 @@ export function DataTable<T>({
                     "border-b border-border px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground",
                     alignClass(col.align),
                     col.sortValue && "cursor-pointer select-none hover:text-foreground",
+                    col.className,
                   )}
                   onClick={() => {
                     if (!col.sortValue) return;

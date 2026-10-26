@@ -137,19 +137,45 @@ export function getTripBatchTime(trip: {
   id?: string;
   sequence?: number;
 }): Date {
-  if (trip.batchTime) return new Date(trip.batchTime);
-  if (trip.dispatchTime) return new Date(trip.dispatchTime);
-
-  // If ongoing trip today, synthesize realistic live batching times based on trip ID
   const now = new Date();
+
+  const parseOrAnchor = (timeStr?: string): Date | null => {
+    if (!timeStr) return null;
+    const d = new Date(timeStr);
+    if (isNaN(d.getTime())) return null;
+
+    // Check if timestamp is from an earlier day
+    const isDifferentDay =
+      d.getFullYear() !== now.getFullYear() ||
+      d.getMonth() !== now.getMonth() ||
+      d.getDate() !== now.getDate();
+
+    if (isDifferentDay) {
+      // Anchor hour and minute to today so active dispatches simulate realistic live shift times
+      const anchored = new Date(now);
+      anchored.setHours(d.getHours(), d.getMinutes(), 0, 0);
+      if (anchored.getTime() > now.getTime()) {
+        return new Date(now.getTime() - 40 * 60 * 1000);
+      }
+      return anchored;
+    }
+    return d;
+  };
+
+  const parsedBatch = parseOrAnchor(trip.batchTime);
+  if (parsedBatch) return parsedBatch;
+
+  const parsedDispatch = parseOrAnchor(trip.dispatchTime);
+  if (parsedDispatch) return parsedDispatch;
+
+  // Synthesize realistic live batching times based on trip ID
   const hash = Math.abs(
     (trip.id || "TRIP-01").split("").reduce((acc, char) => acc + char.charCodeAt(0), 0) + (trip.sequence || 1) * 17
   );
 
-  // Vary elapsed times between 15 mins to 110 mins ago to showcase the Green, Amber, Red countdown states
-  const sampleElapsedMinutes = [18, 32, 55, 78, 96, 112, 126][hash % 7];
-  const derived = new Date(now.getTime() - sampleElapsedMinutes * 60 * 1000);
-  return derived;
+  // Vary elapsed times between 18 mins to 110 mins ago to showcase Green, Amber, Red states
+  const sampleElapsedMinutes = [18, 35, 55, 75, 95, 110, 125][hash % 7];
+  return new Date(now.getTime() - sampleElapsedMinutes * 60 * 1000);
 }
 
 /**
@@ -195,11 +221,17 @@ export function getConcreteClockState(
     urgencyScore = 1000 + remainingMinutes;
   }
 
-  // Format remaining string
+  // Format remaining string cleanly without ugly multi-day overdues
   let formattedRemaining = "";
   if (remainingMinutes < 0) {
     const overdue = Math.abs(remainingMinutes);
-    formattedRemaining = overdue >= 60 ? `EXPIRED -${Math.floor(overdue / 60)}h ${overdue % 60}m` : `EXPIRED -${overdue}m`;
+    if (overdue > 120) {
+      formattedRemaining = "EXPIRED (>2h)";
+    } else if (overdue >= 60) {
+      formattedRemaining = `-${Math.floor(overdue / 60)}h ${overdue % 60}m`;
+    } else {
+      formattedRemaining = `-${overdue}m (EXPIRED)`;
+    }
   } else if (remainingMinutes >= 60) {
     formattedRemaining = `${Math.floor(remainingMinutes / 60)}h ${remainingMinutes % 60}m`;
   } else {

@@ -159,14 +159,16 @@ function DispatcherPage() {
     {
       key: "concreteClock",
       header: "Concrete Clock (Discharge Before)",
+      className: "min-w-[185px]",
       cell: (r) => <ConcreteClock trip={r} />,
       sortValue: (r) => getConcreteClockState(r).remainingMinutes,
     },
-    { key: "status", header: "Status", align: "center", cell: (r) => <StatusBadge status={r.status} /> },
+    { key: "status", header: "Status", align: "center", className: "min-w-[100px]", cell: (r) => <StatusBadge status={r.status} /> },
     {
       key: "action",
       header: "Action",
       align: "right",
+      className: "min-w-[140px]",
       cell: (r) => (
         <div className="flex justify-end gap-1.5">
           {r.challanNumber && (

@@ -100,25 +100,25 @@ export function RmcChatbot() {
           <button
             onClick={() => toggle(user?.role)}
             aria-label="Open Sai RMC Plant Copilot"
-            className="group relative flex h-14 items-center gap-2.5 rounded-full bg-gradient-to-r from-primary to-blue-600 px-4 py-2.5 text-white shadow-xl shadow-primary/25 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-primary/40 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+            className="group relative flex h-11 sm:h-13 items-center gap-2 rounded-full bg-gradient-to-r from-primary to-blue-600 px-3 sm:px-4 py-2 text-white shadow-xl shadow-primary/25 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-primary/40 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
           >
             {/* Animated Pulse Dot */}
-            <span className="relative flex h-3 w-3">
+            <span className="relative flex h-2.5 w-2.5 sm:h-3 sm:w-3">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-400" />
+              <span className="relative inline-flex h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-emerald-400" />
             </span>
 
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
-                <Bot className="h-4 w-4 text-white" />
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
+                <Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
               </div>
               <div className="flex flex-col text-left">
                 <span className="text-xs font-semibold leading-none tracking-tight">RMC Copilot</span>
-                <span className="text-[10px] text-white/80 leading-tight">Ask AI & Help</span>
+                <span className="text-[10px] text-white/80 leading-tight">Ask AI</span>
               </div>
             </div>
 
-            <Sparkles className="h-3.5 w-3.5 text-amber-300 animate-pulse ml-0.5" />
+            <Sparkles className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-300 animate-pulse ml-0.5" />
           </button>
         </div>
       )}

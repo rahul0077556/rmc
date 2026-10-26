@@ -173,6 +173,32 @@ export async function processChatbotQuery(
     };
   }
 
+  // 3E. My Queue (Operational To-Do List by Role)
+  if (
+    query.includes("my queue") ||
+    query.includes("to-do") ||
+    query.includes("todo") ||
+    query.includes("waiting for me") ||
+    query.includes("my tasks") ||
+    query.includes("queue") ||
+    query.includes("what should i do")
+  ) {
+    return {
+      text: `### 📥 "My Queue" (Actionable Operational To-Do List)\n\nInstead of starting at a generic analytical dashboard, **every role in Sai ReadyMix opens directly into their personalized "My Queue"** — a to-do list of real items waiting for their direct action:\n\n* 💼 **Sales:** POs to submit, draft contracts, and customer credit limit reviews.\n* 📋 **Sales Manager:** Commercial approvals (price exceptions, margin discounts, payment terms).\n* 🚚 **Dispatcher:** Approved orders awaiting trip scheduling, gate release sign-offs, and priority transit hydration alerts.\n* 🏭 **Production:** Next batch in queue (CRB-75 / SP-30), aggregate moisture compensation, and batch sheet printing.\n* 🧪 **QA / QC:** Fresh concrete slump tests in QC bay, 7-day & 28-day CTM cube breaks due today.\n* ⚖️ **Store & Weighbridge:** Inbound tippers waiting on weighbridge for Tare/Gross, and MPR goods receipt.\n* 💰 **Account & HR:** Driver payroll step, trip incentive calculations (₹150/trip), and GST e-invoices.\n* 👑 **Owner:** Plant-wide operational bottlenecks with an instant one-tap role switcher.\n\n*Tap any task in your queue to jump straight to the exact screen and action in one tap!*`,
+      actions: [
+        { label: "📥 Open My Queue", to: "/queue" },
+        { label: "🚚 Dispatcher Board", to: "/dispatcher" },
+        { label: "✅ Sales Approvals", to: "/sales/approvals" },
+      ],
+      followUps: [
+        "What is waiting for the dispatcher?",
+        "What is the Concrete Clock?",
+        "How do I record a QC slump test?",
+      ],
+      source: "live-telemetry",
+    };
+  }
+
   // ==========================================
   // STAGE 4: LIVE PLANT STATUS & TELEMETRY
   // ==========================================

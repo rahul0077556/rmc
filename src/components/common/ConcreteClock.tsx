@@ -135,13 +135,13 @@ export function ConcreteClock({
 
       {/* Text Label Pill (for compact and card variants) */}
       {variant !== "mini" && (
-        <div className="flex flex-col text-left">
-          <div className="flex items-center gap-1.5">
+        <div className="flex flex-col text-left min-w-[130px] shrink-0">
+          <div className="flex items-center gap-1.5 whitespace-nowrap">
             <span
               className={cn(
-                "text-xs font-semibold tabular-nums tracking-tight",
+                "text-xs font-semibold tabular-nums tracking-tight whitespace-nowrap",
                 clock.status === "expired" && "text-rose-500 font-bold",
-                clock.status === "critical" && "text-rose-500",
+                clock.status === "critical" && "text-rose-500 font-bold",
                 clock.status === "warning" && "text-amber-500",
                 clock.status === "healthy" && "text-emerald-500"
               )}
@@ -150,18 +150,18 @@ export function ConcreteClock({
             </span>
 
             {clock.status === "critical" && (
-              <Badge variant="destructive" className="h-4 px-1 text-[9px] font-bold uppercase animate-pulse">
+              <Badge variant="destructive" className="h-4 px-1.5 text-[9px] font-bold uppercase tracking-wider animate-pulse whitespace-nowrap shrink-0 bg-rose-600/90 text-white">
                 Expiring
               </Badge>
             )}
             {clock.status === "expired" && (
-              <Badge variant="destructive" className="h-4 px-1 text-[9px] font-bold uppercase">
+              <Badge variant="destructive" className="h-4 px-1.5 text-[9px] font-bold uppercase tracking-wider whitespace-nowrap shrink-0 bg-rose-600 text-white shadow-sm border border-rose-400/40">
                 Flash Set Risk
               </Badge>
             )}
           </div>
 
-          <span className="text-[10px] text-muted-foreground/80 leading-tight">
+          <span className="text-[10px] text-muted-foreground/80 leading-tight whitespace-nowrap">
             Before {clock.formattedDischargeBefore}
           </span>
         </div>

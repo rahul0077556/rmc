@@ -4,6 +4,7 @@ import {
   FileText,
   FlaskConical,
   Gauge,
+  Inbox,
   LayoutDashboard,
   Package,
   Receipt,
@@ -25,6 +26,13 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
+  {
+    label: "My Queue",
+    to: "/queue",
+    icon: Inbox,
+    roles: ["owner", "sales", "sales_manager", "dispatcher", "production", "qa", "store", "account", "customer"],
+    group: "Operations",
+  },
   { label: "Plant Overview", to: "/owner", icon: LayoutDashboard, roles: ["owner"], group: "Operations" },
   { label: "Sales Desk", to: "/sales", icon: Gauge, roles: ["sales", "sales_manager"], group: "Operations" },
   { label: "Purchase Orders", to: "/sales/orders", icon: FileText, roles: ["sales", "sales_manager", "owner"], group: "Commercial" },

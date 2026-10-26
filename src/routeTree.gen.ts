@@ -18,6 +18,7 @@ import { Route as ShellOwnerRouteImport } from './routes/_shell.owner'
 import { Route as ShellPortalRouteImport } from './routes/_shell.portal'
 import { Route as ShellProductionRouteImport } from './routes/_shell.production'
 import { Route as ShellQaRouteImport } from './routes/_shell.qa'
+import { Route as ShellQueueRouteImport } from './routes/_shell.queue'
 import { Route as ShellReportsRouteImport } from './routes/_shell.reports'
 import { Route as ShellSalesRouteImport } from './routes/_shell.sales'
 import { Route as ShellStoreRouteImport } from './routes/_shell.store'
@@ -74,6 +75,11 @@ const ShellProductionRoute = ShellProductionRouteImport.update({
 const ShellQaRoute = ShellQaRouteImport.update({
   id: '/qa',
   path: '/qa',
+  getParentRoute: () => ShellRoute,
+} as any)
+const ShellQueueRoute = ShellQueueRouteImport.update({
+  id: '/queue',
+  path: '/queue',
   getParentRoute: () => ShellRoute,
 } as any)
 const ShellReportsRoute = ShellReportsRouteImport.update({
@@ -151,6 +157,7 @@ export interface FileRoutesByFullPath {
   '/portal': typeof ShellPortalRoute
   '/production': typeof ShellProductionRoute
   '/qa': typeof ShellQaRoute
+  '/queue': typeof ShellQueueRoute
   '/reports': typeof ShellReportsRoute
   '/sales': typeof ShellSalesRouteWithChildren
   '/store': typeof ShellStoreRoute
@@ -174,6 +181,7 @@ export interface FileRoutesByTo {
   '/portal': typeof ShellPortalRoute
   '/production': typeof ShellProductionRoute
   '/qa': typeof ShellQaRoute
+  '/queue': typeof ShellQueueRoute
   '/reports': typeof ShellReportsRoute
   '/store': typeof ShellStoreRoute
   '/batch-sheet/$id': typeof BatchSheetIdRoute
@@ -198,6 +206,7 @@ export interface FileRoutesById {
   '/_shell/portal': typeof ShellPortalRoute
   '/_shell/production': typeof ShellProductionRoute
   '/_shell/qa': typeof ShellQaRoute
+  '/_shell/queue': typeof ShellQueueRoute
   '/_shell/reports': typeof ShellReportsRoute
   '/_shell/sales': typeof ShellSalesRouteWithChildren
   '/_shell/store': typeof ShellStoreRoute
@@ -223,6 +232,7 @@ export interface FileRouteTypes {
     | '/portal'
     | '/production'
     | '/qa'
+    | '/queue'
     | '/reports'
     | '/sales'
     | '/store'
@@ -246,6 +256,7 @@ export interface FileRouteTypes {
     | '/portal'
     | '/production'
     | '/qa'
+    | '/queue'
     | '/reports'
     | '/store'
     | '/batch-sheet/$id'
@@ -269,6 +280,7 @@ export interface FileRouteTypes {
     | '/_shell/portal'
     | '/_shell/production'
     | '/_shell/qa'
+    | '/_shell/queue'
     | '/_shell/reports'
     | '/_shell/sales'
     | '/_shell/store'
@@ -354,6 +366,13 @@ declare module '@tanstack/react-router' {
       path: '/qa'
       fullPath: '/qa'
       preLoaderRoute: typeof ShellQaRouteImport
+      parentRoute: typeof ShellRoute
+    }
+    '/_shell/queue': {
+      id: '/_shell/queue'
+      path: '/queue'
+      fullPath: '/queue'
+      preLoaderRoute: typeof ShellQueueRouteImport
       parentRoute: typeof ShellRoute
     }
     '/_shell/reports': {
@@ -480,6 +499,7 @@ interface ShellRouteChildren {
   ShellPortalRoute: typeof ShellPortalRoute
   ShellProductionRoute: typeof ShellProductionRoute
   ShellQaRoute: typeof ShellQaRoute
+  ShellQueueRoute: typeof ShellQueueRoute
   ShellReportsRoute: typeof ShellReportsRoute
   ShellSalesRoute: typeof ShellSalesRouteWithChildren
   ShellStoreRoute: typeof ShellStoreRoute
@@ -495,6 +515,7 @@ const ShellRouteChildren: ShellRouteChildren = {
   ShellPortalRoute: ShellPortalRoute,
   ShellProductionRoute: ShellProductionRoute,
   ShellQaRoute: ShellQaRoute,
+  ShellQueueRoute: ShellQueueRoute,
   ShellReportsRoute: ShellReportsRoute,
   ShellSalesRoute: ShellSalesRouteWithChildren,
   ShellStoreRoute: ShellStoreRoute,
