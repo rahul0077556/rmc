@@ -1,6 +1,7 @@
 import { getDb, customerById } from "@/lib/store";
 import type { Role, PurchaseOrder, TransitMixer, Driver } from "@/types";
 import { apiClient } from "@/api/client";
+import { concreteClockStore } from "@/lib/concrete-clock";
 
 export interface ChatAction {
   label: string;
@@ -140,6 +141,33 @@ export async function processChatbotQuery(
         `Show orders for ${customerMatch.name}`,
         "What are the credit limits for all customers?",
         "How to create a new purchase order?",
+      ],
+      source: "live-telemetry",
+    };
+  }
+
+  // 3D. Concrete Clock & Discharge Before Limits (IS 4926 Standard)
+  if (
+    query.includes("concrete clock") ||
+    query.includes("discharge before") ||
+    query.includes("hydration timer") ||
+    query.includes("initial setting") ||
+    query.includes("how long concrete") ||
+    query.includes("expire") ||
+    query.includes("workability limit") ||
+    query.includes("flash set")
+  ) {
+    const config = concreteClockStore.getConfig();
+    return {
+      text: `### ⏱️ Concrete Clock (IS 4926 & ASTM C94 Standard)\n\nEvery loaded Transit Mixer has a live **Concrete Clock countdown ring** tracking concrete hydration from batching time to its **"discharge before"** deadline:\n\n* **Live Radial Countdown Ring:**\n  * 🟢 **Green (>45m remaining):** Optimal slump & workability.\n  * 🟡 **Amber (15m–45m remaining):** Approaching initial setting window, dispatch alerted.\n  * 🔴 **Red (<15m remaining) / Pulsing Overdue:** Flash-set risk! Trucks in amber/red automatically **jump to the top of the Dispatcher board** for urgent priority discharge.\n\n* **Dynamic Climate & Mix Adjustments:**\n  * **Base Limit:** \`${config.baseLimitMinutes} mins\` (commonly ~2 hours)\n  * **Ambient Temp:** \`${config.ambientTemperatureC}°C\` (${config.tempMode}) ➔ summer heat accelerates hydration\n  * **Admixture Offset:** \`${config.admixtureMode.replace("_", " ")}\` ➔ retarders extend transit window (+35m to +60m)\n  * **Grade Impact:** High-strength mixes (M35, M40) hydrate faster with higher early heat of hydration.\n\n*Visible in real-time across **Dispatcher**, **Customer Portal**, and **Owner** dashboards.*`,
+      actions: [
+        { label: "🚀 Open Dispatcher Concrete Clock Board", to: "/dispatcher" },
+        { label: "👑 Owner Fleet Hydration Monitor", to: "/owner" },
+      ],
+      followUps: [
+        "How do expiring trucks jump to the top of the board?",
+        "How to adjust ambient temperature and retarder limits?",
+        "Which trucks are currently available?",
       ],
       source: "live-telemetry",
     };

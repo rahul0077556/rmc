@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   Area,
@@ -14,7 +14,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Banknote, CalendarClock, ClipboardList, Lock, PackageCheck, Truck } from "lucide-react";
+import { ArrowRight, Banknote, CalendarClock, ClipboardList, Clock, Lock, PackageCheck, ShieldAlert, Sparkles, Truck, Zap } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { KpiCard } from "@/components/app/kpi-card";
 import { ChartCard } from "@/components/app/chart-card";
@@ -22,11 +22,13 @@ import { StatusBadge } from "@/components/app/status-badge";
 import { DataTable, type Column } from "@/components/app/data-table";
 import { LoadingState, ErrorState } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { dashboardApi, type OwnerDashboard } from "@/api/dashboard";
 import { cum, inr, inrCompact, num } from "@/lib/format";
 import { PLANT_NAME } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
+import { ConcreteClock } from "@/components/common/ConcreteClock";
 
 export const Route = createFileRoute("/_shell/owner")({
   head: () => ({
@@ -67,6 +69,11 @@ function OwnerDashboardPage() {
     { key: "grade", header: "Grade", cell: (r) => <span className="whitespace-nowrap font-semibold">{r.grade}</span> },
     { key: "qty", header: "Quantity", align: "right", cell: (r) => <span className="whitespace-nowrap">{cum(r.quantity)}</span>, sortValue: (r) => r.quantity },
     { key: "tm", header: "TM", cell: (r) => <span className="whitespace-nowrap">{r.tm}</span> },
+    {
+      key: "concreteClock",
+      header: "Concrete Clock (Discharge Before)",
+      cell: (r) => <ConcreteClock trip={{ id: r.po, grade: r.grade, tmCode: r.tm }} />,
+    },
     { key: "status", header: "Status", align: "center", cell: (r) => <StatusBadge status={r.status} /> },
   ];
 
@@ -160,7 +167,38 @@ function OwnerDashboardPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-3 lg:col-span-2">
-          <h2 className="text-sm font-semibold">Today's delivery schedule</h2>
+          {/* Executive Concrete Clock Fleet Monitor */}
+          <div className="rounded-xl border border-border bg-gradient-to-r from-card via-card to-cyan-500/10 p-3.5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-8 items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-400">
+                <Clock className="size-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xs font-bold text-foreground">Concrete Clock Fleet Monitor</h3>
+                  <Badge variant="outline" className="border-cyan-500/30 text-cyan-400 bg-cyan-500/10 text-[9px]">
+                    IS 4926 Workability
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Live hydration timers: trucks nearing initial setting deadline jump to priority dispatch
+                </p>
+              </div>
+            </div>
+
+            <Link
+              to="/dispatcher"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline hover:text-primary/80 transition-colors shrink-0"
+            >
+              <span>Manage Dispatch Board</span>
+              <ArrowRight className="size-3.5" />
+            </Link>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Today's delivery schedule</h2>
+            <span className="text-xs text-muted-foreground">Tracking {data.dailySchedule.length} trips</span>
+          </div>
           <DataTable
             columns={scheduleColumns}
             rows={data.dailySchedule}

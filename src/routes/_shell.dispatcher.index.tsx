@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, ClipboardList, FlaskConical, PackageCheck, Truck } from "lucide-react";
+import { CheckCircle2, ClipboardList, Clock, Flame, FlaskConical, PackageCheck, ShieldAlert, Sparkles, Truck, Zap } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { KpiCard } from "@/components/app/kpi-card";
 import { ChartCard } from "@/components/app/chart-card";
@@ -10,6 +10,7 @@ import { DataTable, type Column } from "@/components/app/data-table";
 import { StatusBadge } from "@/components/app/status-badge";
 import { LoadingState, ErrorState } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { FilterBar } from "@/components/app/filter-bar";
 import { useListQuery } from "@/hooks/use-list-query";
 import {
@@ -27,6 +28,8 @@ import { tripsApi, type TripRow } from "@/api/trips";
 import { useAuth } from "@/auth/auth-context";
 import { cum, timeOnly } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { ConcreteClock, ConcreteClockConfigModal } from "@/components/common/ConcreteClock";
+import { sortByConcreteClockUrgency, getConcreteClockState } from "@/lib/concrete-clock";
 
 export const Route = createFileRoute("/_shell/dispatcher/")({
   head: () => ({
@@ -84,15 +87,35 @@ function DispatcherPage() {
     return list;
   }, [orders.data, params]);
 
+  const [prioritySort, setPrioritySort] = useState(true);
+
   const releasable = useMemo(() => {
     if (!trips.data) return [];
-    let list = trips.data.filter((t) => ["QC_APPROVED", "DISPATCHED", "IN_TRANSIT"].includes(t.status));
+    let list = trips.data.filter((t) => ["LOADED", "QC_APPROVED", "DISPATCHED", "IN_TRANSIT"].includes(t.status));
     if (params.q) {
       const lower = params.q.toLowerCase();
       list = list.filter((i) => i.poNumber.toLowerCase().includes(lower) || i.customerName.toLowerCase().includes(lower) || i.tripNumber.toLowerCase().includes(lower));
     }
+    if (prioritySort) {
+      list = sortByConcreteClockUrgency(list);
+    }
     return list;
-  }, [trips.data, params]);
+  }, [trips.data, params, prioritySort]);
+
+  const clockCounts = useMemo(() => {
+    let healthy = 0;
+    let warning = 0;
+    let critical = 0;
+    let expired = 0;
+    for (const trip of releasable) {
+      const c = getConcreteClockState(trip);
+      if (c.status === "healthy") healthy++;
+      else if (c.status === "warning") warning++;
+      else if (c.status === "critical") critical++;
+      else if (c.status === "expired") expired++;
+    }
+    return { healthy, warning, critical, expired, total: releasable.length };
+  }, [releasable]);
 
   if (trips.isLoading || fleet.isLoading || orders.isLoading) return <LoadingState rows={6} />;
   if (trips.error || !trips.data || !fleet.data || !orders.data)
@@ -133,6 +156,12 @@ function DispatcherPage() {
     { key: "grade", header: "Grade", cell: (r) => r.grade },
     { key: "qty", header: "Qty", align: "right", cell: (r) => cum(r.quantity) },
     { key: "tm", header: "TM / Driver", cell: (r) => `${r.tmCode} · ${r.driverName}` },
+    {
+      key: "concreteClock",
+      header: "Concrete Clock (Discharge Before)",
+      cell: (r) => <ConcreteClock trip={r} />,
+      sortValue: (r) => getConcreteClockState(r).remainingMinutes,
+    },
     { key: "status", header: "Status", align: "center", cell: (r) => <StatusBadge status={r.status} /> },
     {
       key: "action",
@@ -250,9 +279,59 @@ function DispatcherPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <CheckCircle2 className="size-4 text-success" /> Release & delivery
-        </h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
+              <CheckCircle2 className="size-4 text-success" /> Release & delivery
+            </h2>
+            <Badge variant="outline" className="border-cyan-500/30 text-cyan-400 bg-cyan-500/10 text-[10px] gap-1 font-semibold">
+              <Clock className="size-3 text-cyan-400" /> Concrete Clock Active (IS 4926)
+            </Badge>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Priority sort toggle: trucks about to expire jump to top */}
+            <Button
+              variant={prioritySort ? "default" : "outline"}
+              size="sm"
+              onClick={() => setPrioritySort((s) => !s)}
+              className={cn(
+                "h-8 gap-1.5 text-xs font-medium transition-all",
+                prioritySort
+                  ? "bg-gradient-to-r from-amber-500 to-rose-600 text-white shadow-sm"
+                  : "border-border text-muted-foreground"
+              )}
+              title="When active, loaded trucks about to reach discharge limit jump to the top of the board"
+            >
+              <Zap className="size-3.5" />
+              <span>Priority: Expiring First</span>
+            </Button>
+
+            <ConcreteClockConfigModal />
+          </div>
+        </div>
+
+        {/* Live Clock Summary Strip */}
+        {clockCounts.total > 0 && (
+          <div className="flex items-center gap-3 text-xs bg-surface-raised border border-border p-2.5 rounded-lg overflow-x-auto">
+            <span className="text-muted-foreground font-medium text-[11px] shrink-0">Hydration Monitors:</span>
+            <span className="inline-flex items-center gap-1.5 text-emerald-400 font-semibold text-[11px]">
+              <span className="size-2 rounded-full bg-emerald-400" />
+              {clockCounts.healthy} Healthy (&gt;45m)
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-amber-400 font-semibold text-[11px]">
+              <span className="size-2 rounded-full bg-amber-400" />
+              {clockCounts.warning} Warning (&lt;45m)
+            </span>
+            {(clockCounts.critical > 0 || clockCounts.expired > 0) && (
+              <span className="inline-flex items-center gap-1.5 text-rose-400 font-bold text-[11px] animate-pulse">
+                <span className="size-2 rounded-full bg-rose-500" />
+                {clockCounts.critical + clockCounts.expired} Expiring / Overdue Risk!
+              </span>
+            )}
+          </div>
+        )}
+
         <DataTable
           columns={releaseColumns}
           rows={releasable}
