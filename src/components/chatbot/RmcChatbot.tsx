@@ -92,34 +92,63 @@ export function RmcChatbot() {
     }
   };
 
+  const [isCompact, setIsCompact] = useState(false);
+
   return (
     <>
-      {/* Floating Launcher Trigger */}
+      {/* Floating Launcher Trigger: z-40 so it stays underneath modal dialogs (z-50) */}
       {!isOpen && (
-        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2">
-          <button
-            onClick={() => toggle(user?.role)}
-            aria-label="Open Sai RMC Plant Copilot"
-            className="group relative flex h-11 sm:h-13 items-center gap-2 rounded-full bg-gradient-to-r from-primary to-blue-600 px-3 sm:px-4 py-2 text-white shadow-xl shadow-primary/25 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-primary/40 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-          >
-            {/* Animated Pulse Dot */}
-            <span className="relative flex h-2.5 w-2.5 sm:h-3 sm:w-3">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-emerald-400" />
-            </span>
+        <div className="fixed bottom-4 right-4 z-40 flex items-center gap-1.5 print:hidden">
+          {isCompact ? (
+            <button
+              onClick={() => toggle(user?.role)}
+              title="Open Sai RMC Copilot"
+              aria-label="Open Sai RMC Plant Copilot"
+              className="flex size-11 items-center justify-center rounded-full bg-gradient-to-tr from-primary to-blue-600 text-white shadow-lg shadow-primary/30 transition-all hover:scale-110 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <Bot className="size-5 text-white" />
+              <span className="absolute -top-1 -right-1 flex size-3">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex size-3 rounded-full bg-emerald-400 border-2 border-background" />
+              </span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => toggle(user?.role)}
+                aria-label="Open Sai RMC Plant Copilot"
+                className="group relative flex h-11 items-center gap-2 rounded-full bg-gradient-to-r from-primary via-blue-600 to-indigo-600 px-3.5 py-1.5 text-white shadow-lg shadow-primary/25 transition-all duration-300 hover:scale-[1.03] hover:shadow-xl hover:shadow-primary/35 focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {/* Animated Pulse Dot */}
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                </span>
 
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
-                <Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
-              </div>
-              <div className="flex flex-col text-left">
-                <span className="text-xs font-semibold leading-none tracking-tight">RMC Copilot</span>
-                <span className="text-[10px] text-white/80 leading-tight">Ask AI</span>
-              </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex size-7 items-center justify-center rounded-full bg-white/20 backdrop-blur-xs">
+                    <Bot className="size-3.5 text-white" />
+                  </div>
+                  <div className="flex flex-col text-left">
+                    <span className="text-xs font-semibold leading-none tracking-tight">RMC Copilot</span>
+                    <span className="text-[10px] text-white/80 leading-tight">Ask AI</span>
+                  </div>
+                </div>
+
+                <Sparkles className="size-3 text-amber-300 animate-pulse ml-0.5" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsCompact(true)}
+                title="Minimize Copilot button"
+                aria-label="Minimize Copilot launcher"
+                className="flex size-7 items-center justify-center rounded-full bg-card/80 border border-border/70 text-muted-foreground hover:text-foreground hover:bg-muted transition-all shadow-xs"
+              >
+                <Minimize2 className="size-3" />
+              </button>
             </div>
-
-            <Sparkles className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-300 animate-pulse ml-0.5" />
-          </button>
+          )}
         </div>
       )}
 

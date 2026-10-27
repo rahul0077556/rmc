@@ -137,6 +137,20 @@ def create_trip():
     db.session.commit()
     return success_response(data=trip.to_dict(), status_code=201)
 
+@trips_bp.route("/<id>", methods=["GET"])
+@jwt_required()
+@roles_required()
+def get_trip(id):
+    trip = Trip.query.filter((Trip.id == id) | (Trip.trip_number == id)).first()
+    if not trip:
+        # Also check if passed ID is a Challan ID or Challan Number
+        challan = Challan.query.filter((Challan.id == id) | (Challan.challan_number == id)).first()
+        if challan and challan.trip:
+            trip = challan.trip
+    if not trip:
+        return error_response(code="NOT_FOUND", message="Trip or challan not found.", status_code=404)
+    return success_response(data=trip.to_dict())
+
 @trips_bp.route("/<id>", methods=["PATCH"])
 @jwt_required()
 @roles_required("dispatcher")
@@ -261,7 +275,7 @@ def release_trip(id):
 
 @trips_bp.route("/<id>/in-transit", methods=["POST"])
 @jwt_required()
-@roles_required("dispatcher")
+@roles_required("dispatcher", "supervisor")
 def mark_in_transit(id):
     trip = Trip.query.get(id)
     if not trip:
@@ -274,9 +288,38 @@ def mark_in_transit(id):
     except StateMachineError as e:
         return error_response(code="INVALID_STATE", message=e.message, status_code=e.status_code)
 
+@trips_bp.route("/<id>/arrive", methods=["POST"])
+@jwt_required()
+@roles_required("supervisor", "dispatcher")
+def mark_arrived(id):
+    trip = Trip.query.get(id)
+    if not trip:
+        return error_response(code="NOT_FOUND", message="Trip not found.", status_code=404)
+
+    data = request.get_json() or {}
+    notes = data.get("notes", "TM arrived at site")
+    trip.notes = f"{trip.notes or ''} [Site Arrival: {datetime.now(timezone.utc).strftime('%H:%M')} - {notes}]".strip()
+    db.session.commit()
+    return success_response(data=trip.to_dict(), meta={"message": "TM arrival recorded at site."})
+
+@trips_bp.route("/<id>/report-issue", methods=["POST"])
+@jwt_required()
+@roles_required("supervisor", "dispatcher", "owner")
+def report_site_issue(id):
+    trip = Trip.query.get(id)
+    if not trip:
+        return error_response(code="NOT_FOUND", message="Trip not found.", status_code=404)
+
+    data = request.get_json() or {}
+    issue_type = data.get("issueType", "Problem")
+    details = data.get("details", "")
+    trip.notes = f"{trip.notes or ''} [SITE ISSUE - {issue_type}: {details}]".strip()
+    db.session.commit()
+    return success_response(data=trip.to_dict(), meta={"message": f"Site problem '{issue_type}' reported to Plant Dispatch."})
+
 @trips_bp.route("/<id>/deliver", methods=["POST"])
 @jwt_required()
-@roles_required("dispatcher")
+@roles_required("dispatcher", "supervisor")
 def mark_delivered(id):
     trip = Trip.query.get(id)
     if not trip:

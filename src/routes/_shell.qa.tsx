@@ -141,7 +141,11 @@ function QaPage() {
       align: "right",
       cell: (r) => (
         <div className="flex justify-end gap-1.5">
-          <Button size="sm" variant="ghost" onClick={() => void navigate({ to: "/batch-sheet/$id", params: { id: r.batchSheetId } })}>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => void navigate({ to: `/batch-sheet/${r.batchSheetId}?from=qa` as any })}
+          >
             Sheet
           </Button>
           <Button

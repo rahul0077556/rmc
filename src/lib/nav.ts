@@ -14,6 +14,7 @@ import {
   Landmark,
   Sparkles,
   Tv,
+  HardHat,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Role } from "@/types";
@@ -31,7 +32,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: "My Queue",
     to: "/queue",
     icon: Inbox,
-    roles: ["owner", "sales", "sales_manager", "dispatcher", "production", "qa", "store", "account", "customer"],
+    roles: ["owner", "sales", "sales_manager", "dispatcher", "production", "qa", "store", "account", "customer", "supervisor"],
     group: "Operations",
   },
   { label: "Plant Overview", to: "/owner", icon: LayoutDashboard, roles: ["owner"], group: "Operations" },
@@ -40,15 +41,16 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Customers", to: "/sales/customers", icon: Users, roles: ["sales", "sales_manager", "owner"], group: "Commercial" },
   { label: "Approvals", to: "/sales/approvals", icon: ClipboardCheck, roles: ["sales_manager"], group: "Operations" },
   { label: "Dispatch Control", to: "/dispatcher", icon: Truck, roles: ["dispatcher", "owner"], group: "Operations" },
+  { label: "Site Supervisor", to: "/supervisor", icon: HardHat, roles: ["supervisor", "dispatcher", "owner"], group: "Operations" },
   { label: "Control Room TV", to: "/tv", icon: Tv, roles: ["dispatcher", "owner"], group: "Operations" },
   { label: "Production Queue", to: "/production", icon: Package, roles: ["production", "owner"], group: "Operations" },
   { label: "QA / QC", to: "/qa", icon: FlaskConical, roles: ["qa", "owner"], group: "Operations" },
   { label: "Store & Weighbridge", to: "/store", icon: Warehouse, roles: ["store", "owner"], group: "Operations" },
   { label: "My Orders", to: "/portal", icon: LayoutDashboard, roles: ["customer"], group: "Operations" },
-  { label: "Billing", to: "/billing", icon: Receipt, roles: ["owner", "sales", "sales_manager", "dispatcher"], group: "Commercial" },
+  { label: "Billing", to: "/billing", icon: Receipt, roles: ["owner", "account", "sales", "sales_manager", "dispatcher"], group: "Commercial" },
   { label: "Account (HR/Payroll)", to: "/account", icon: Landmark, roles: ["account", "owner"], group: "Commercial" },
-  { label: "Reports", to: "/reports", icon: BarChart3, roles: ["owner", "sales_manager", "production", "qa", "dispatcher", "store", "account", "sales"], group: "Insights" },
-  { label: "AI Insights", to: "/insights", icon: Sparkles, roles: ["owner", "customer", "sales", "sales_manager", "dispatcher", "production", "qa", "store", "account"], group: "Insights" },
+  { label: "Reports", to: "/reports", icon: BarChart3, roles: ["owner", "sales_manager", "production", "qa", "dispatcher", "store", "account", "sales", "supervisor"], group: "Insights" },
+  { label: "AI Insights", to: "/insights", icon: Sparkles, roles: ["owner", "customer", "sales", "sales_manager", "dispatcher", "production", "qa", "store", "account", "supervisor"], group: "Insights" },
 ];
 
 export function navForRole(role: Role): NavItem[] {
@@ -64,5 +66,6 @@ export const ROLE_LABEL: Record<Role, string> = {
   production: "Production",
   qa: "QA / QC",
   store: "Store Manager",
-  account: "Accountant"
+  account: "Accountant",
+  supervisor: "Site Supervisor",
 };

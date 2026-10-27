@@ -452,7 +452,8 @@ class BatchSheet(TimestampMixin, db.Model):
                 {"material": "Water", "theoretical": theo_water, "actual": round(self.water_l, 1), "unit": "l"},
                 {"material": "Admixture (PCE)", "theoretical": theo_admix, "actual": round(self.admixture_l, 2), "unit": "l"}
             ],
-            "revisions": [r.to_dict() for r in self.revisions]
+            "revisions": [r.to_dict() for r in self.revisions],
+            "trip": self.trip.to_dict() if self.trip else None
         }
 
 class BatchSheetRevision(TimestampMixin, db.Model):

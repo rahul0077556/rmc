@@ -21,6 +21,7 @@ import {
   ShieldAlert,
   ChevronRight,
   TrendingUp,
+  HardHat,
 } from "lucide-react";
 import { useAuth } from "@/auth/auth-context";
 import { useRoleQueue, QUEUE_CATALOG, type QueueItem, type QueueUrgency } from "@/lib/queue-data";
@@ -39,6 +40,7 @@ const ROLE_ICONS: Record<Role, any> = {
   sales: FileText,
   sales_manager: ClipboardCheck,
   dispatcher: Truck,
+  supervisor: HardHat,
   production: Package,
   qa: FlaskConical,
   store: Warehouse,
@@ -65,6 +67,12 @@ const ROLE_COLORS: Record<Role, { bg: string; text: string; border: string; acti
     text: "text-cyan-400",
     border: "border-cyan-500/30",
     activeGradient: "from-cyan-600 to-blue-600",
+  },
+  supervisor: {
+    bg: "bg-lime-500/10",
+    text: "text-lime-400",
+    border: "border-lime-500/30",
+    activeGradient: "from-lime-600 to-emerald-600",
   },
   production: {
     bg: "bg-emerald-500/10",
@@ -108,12 +116,15 @@ function MyQueuePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  // Active selected role for view (defaults to authenticated role, but allows previewing others)
+  const isOwner = user?.role === "owner";
+  // For non-owner roles, lock strictly to the logged in user's role
   const [selectedRole, setSelectedRole] = useState<Role>(user?.role || "dispatcher");
+  const effectiveRole: Role = isOwner ? selectedRole : (user?.role || "dispatcher");
+
   const [activeTab, setActiveTab] = useState<"all" | "urgent" | "completed">("all");
   const [search, setSearch] = useState("");
 
-  const { items, pendingCount, urgentCount, completedCount, toggleComplete } = useRoleQueue(selectedRole);
+  const { items, pendingCount, urgentCount, completedCount, toggleComplete } = useRoleQueue(effectiveRole);
 
   const filteredItems = items.filter((item) => {
     if (activeTab === "urgent" && (item.urgency !== "urgent" || item.status === "completed")) return false;
@@ -135,8 +146,8 @@ function MyQueuePage() {
     void navigate({ to: item.actionTo });
   };
 
-  const roleStyles = ROLE_COLORS[selectedRole] || ROLE_COLORS.dispatcher;
-  const RoleIcon = ROLE_ICONS[selectedRole] || Truck;
+  const roleStyles = ROLE_COLORS[effectiveRole] || ROLE_COLORS.dispatcher;
+  const RoleIcon = ROLE_ICONS[effectiveRole] || Truck;
 
   return (
     <div className="space-y-6">
@@ -153,11 +164,11 @@ function MyQueuePage() {
               className={cn("gap-1.5 font-semibold text-xs py-0.5 px-2.5", roleStyles.bg, roleStyles.text, roleStyles.border)}
             >
               <RoleIcon className="size-3.5" />
-              {ROLE_LABEL[selectedRole]} Desk
+              {ROLE_LABEL[effectiveRole]} Desk
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground">
-            Zero-fluff actionable inbox. Every item is waiting for your step — tap any task to jump straight to the action screen.
+            Zero-fluff actionable inbox for your role. Every item is waiting for your step — tap any task to jump straight to the action screen.
           </p>
         </div>
 
@@ -183,51 +194,59 @@ function MyQueuePage() {
         </div>
       </div>
 
-      {/* Role Switcher Pills (Allows Owner or testing operators to quickly view queues across departments) */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Department Queues:
-          </span>
-          {user?.role === "owner" && (
-            <span className="text-[11px] text-primary font-medium">Executive Multi-Desk Access</span>
-          )}
-        </div>
+      {/* Role Switcher Pills: Only visible to Owner for executive cross-department oversight */}
+      {isOwner ? (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Department Queues:
+            </span>
+            <span className="text-[11px] text-primary font-medium">Executive Multi-Desk Overview</span>
+          </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-          {(Object.keys(QUEUE_CATALOG) as Role[]).map((r) => {
-            const isSelected = selectedRole === r;
-            const Icon = ROLE_ICONS[r] || Truck;
-            const colors = ROLE_COLORS[r];
-            const count = QUEUE_CATALOG[r]?.length || 0;
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            {(Object.keys(QUEUE_CATALOG) as Role[]).map((r) => {
+              const isSelected = selectedRole === r;
+              const Icon = ROLE_ICONS[r] || Truck;
+              const colors = ROLE_COLORS[r];
+              const count = QUEUE_CATALOG[r]?.length || 0;
 
-            return (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setSelectedRole(r)}
-                className={cn(
-                  "flex items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-medium transition-all shrink-0 border cursor-pointer",
-                  isSelected
-                    ? cn("bg-gradient-to-r text-white shadow-sm border-transparent", colors.activeGradient)
-                    : "border-border/70 bg-card/60 text-muted-foreground hover:bg-muted/70 hover:text-foreground"
-                )}
-              >
-                <Icon className="size-3.5" />
-                <span>{ROLE_LABEL[r]}</span>
-                <span
+              return (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setSelectedRole(r)}
                   className={cn(
-                    "flex size-5 items-center justify-center rounded-full text-[10px] font-bold tabular-nums",
-                    isSelected ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                    "flex items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-medium transition-all shrink-0 border cursor-pointer",
+                    isSelected
+                      ? cn("bg-gradient-to-r text-white shadow-sm border-transparent", colors.activeGradient)
+                      : "border-border/70 bg-card/60 text-muted-foreground hover:bg-muted/70 hover:text-foreground"
                   )}
                 >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
+                  <Icon className="size-3.5" />
+                  <span>{ROLE_LABEL[r]}</span>
+                  <span
+                    className={cn(
+                      "flex size-5 items-center justify-center rounded-full text-[10px] font-bold tabular-nums",
+                      isSelected ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                    )}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="flex items-center justify-between rounded-xl bg-card/50 border border-border/60 px-4 py-2.5 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <RoleIcon className="size-4 text-primary" />
+            <span>Active Desk: <strong>{ROLE_LABEL[effectiveRole]}</strong>. Showing items assigned specifically to your role.</span>
+          </div>
+          <span className="text-[11px] font-medium text-foreground">{user?.name}</span>
+        </div>
+      )}
 
       {/* Controls & Search Filter */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-3">

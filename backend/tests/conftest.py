@@ -56,8 +56,10 @@ def app():
         u_c1.set_password("Demo@123")
         u_c2 = User(name="Cust2 User", email="customer2@rmc.test", role="customer", customer_id=cust2.id, is_active=True)
         u_c2.set_password("Demo@123")
+        u_sup = User(name="Site Supervisor", email="supervisor@rmc.test", role="supervisor", is_active=True)
+        u_sup.set_password("Demo@123")
 
-        db.session.add_all([u_owner, u_sales, u_mgr, u_disp, u_prod, u_qa, u_c1, u_c2])
+        db.session.add_all([u_owner, u_sales, u_mgr, u_disp, u_prod, u_qa, u_c1, u_c2, u_sup])
         db.session.commit()
 
         yield app

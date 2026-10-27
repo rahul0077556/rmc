@@ -177,4 +177,22 @@ export const tripsApi = {
     });
     return { data: res.data ? decorateTrip(res.data) : null, message: "Trip marked as delivered in database" };
   },
+
+  async arriveSite(id: string, notes?: string): Promise<ApiResponse<TripRow | null>> {
+    const res = await request<any>({
+      url: `/trips/${id}/arrive`,
+      method: "POST",
+      data: { notes: notes || "TM reached site gate" },
+    });
+    return { data: res.data ? decorateTrip(res.data) : null, message: "TM arrival confirmed at site" };
+  },
+
+  async reportSiteIssue(id: string, issueType: string, details: string): Promise<ApiResponse<TripRow | null>> {
+    const res = await request<any>({
+      url: `/trips/${id}/report-issue`,
+      method: "POST",
+      data: { issueType, details },
+    });
+    return { data: res.data ? decorateTrip(res.data) : null, message: `Reported issue '${issueType}' to Dispatch` };
+  },
 };

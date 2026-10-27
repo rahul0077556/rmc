@@ -70,15 +70,30 @@ function decorate(po: any): OrderRow {
 }
 
 export const ordersApi = {
-  async list(filter?: { customerId?: string; status?: PoStatus }): Promise<ApiResponse<OrderRow[]>> {
+  async list(filter?: { customerId?: string; customer?: string; status?: string; q?: string; grade?: string }): Promise<ApiResponse<OrderRow[]>> {
     try {
+      const custId = filter?.customerId || filter?.customer;
       const params = new URLSearchParams();
-      if (filter?.customerId) params.append("customerId", filter.customerId);
-      if (filter?.status) params.append("status", filter.status);
+      if (custId && custId !== "all") params.append("customerId", custId);
+      if (filter?.status && filter.status !== "all") params.append("status", filter.status);
 
       const res = await request<any[]>({ url: `/purchase-orders?${params.toString()}`, method: "GET" });
-      const rows = res.data || [];
-      return { data: rows.map(decorate) };
+      let rows: OrderRow[] = (res.data || []).map(decorate);
+
+      if (filter?.q) {
+        const q = filter.q.toLowerCase();
+        rows = rows.filter(
+          (r) =>
+            r.poNumber.toLowerCase().includes(q) ||
+            r.customerName.toLowerCase().includes(q) ||
+            (r.siteName && r.siteName.toLowerCase().includes(q))
+        );
+      }
+      if (filter?.grade && filter.grade !== "all") {
+        rows = rows.filter((r) => r.grade === filter.grade);
+      }
+
+      return { data: rows };
     } catch {
       return { data: [] };
     }

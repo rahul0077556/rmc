@@ -224,6 +224,7 @@ def seed_cli():
         {"name": "Dr. Pradeep Sawant", "email": "qa@rmc.test", "role": "qa", "mgr": False, "cust": None},
         {"name": "Rajesh Gupta", "email": "store@rmc.test", "role": "store", "mgr": False, "cust": None},
         {"name": "Priya Nair", "email": "account@rmc.test", "role": "account", "mgr": False, "cust": None},
+        {"name": "Santosh Shinde", "email": "supervisor@rmc.test", "role": "supervisor", "mgr": False, "cust": None},
         {"name": "Rajiv Deshmukh (Customer)", "email": "customer1@rmc.test", "role": "customer", "mgr": False, "cust": customers[0]},
         {"name": "Sanjay Chordiya (Customer)", "email": "customer2@rmc.test", "role": "customer", "mgr": False, "cust": customers[1]},
     ]

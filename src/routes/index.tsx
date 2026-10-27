@@ -19,7 +19,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Crown,
-  CheckCircle2
+  CheckCircle2,
+  HardHat,
+  FileText
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -63,12 +65,23 @@ const DEPARTMENT_ROLES = [
   {
     id: "sales",
     title: "Sales Desk",
-    sub: "POs & Approvals",
-    tag: "Commercials",
-    role: "sales_manager",
-    icon: Gauge,
+    sub: "New POs & Quotes",
+    tag: "Executive",
+    role: "sales",
+    icon: FileText,
     bgClass: "bg-teal-500/10 text-teal-300 border-teal-500/30",
     iconColor: "text-teal-400",
+    email: "sales@rmc.test",
+  },
+  {
+    id: "sales_manager",
+    title: "Sales Manager",
+    sub: "Commercial Approvals",
+    tag: "Manager",
+    role: "sales_manager",
+    icon: Gauge,
+    bgClass: "bg-cyan-500/10 text-cyan-300 border-cyan-500/30",
+    iconColor: "text-cyan-400",
     email: "salesmanager@rmc.test",
   },
   {
@@ -81,6 +94,17 @@ const DEPARTMENT_ROLES = [
     bgClass: "bg-sky-500/10 text-sky-300 border-sky-500/30",
     iconColor: "text-sky-400",
     email: "dispatcher@rmc.test",
+  },
+  {
+    id: "supervisor",
+    title: "Site Supervisor",
+    sub: "Site Concreting & Pump",
+    tag: "TM Arrival & Pour",
+    role: "supervisor",
+    icon: HardHat,
+    bgClass: "bg-lime-500/10 text-lime-300 border-lime-500/30",
+    iconColor: "text-lime-400",
+    email: "supervisor@rmc.test",
   },
   {
     id: "production",

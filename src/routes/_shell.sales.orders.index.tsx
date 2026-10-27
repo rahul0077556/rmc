@@ -19,7 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ordersRepo, type OrderRow } from "@/data/repositories/orders";
+import { ordersApi, type OrderRow } from "@/api/orders";
 import { customersApi } from "@/api/customers";
 import { useAuth } from "@/auth/auth-context";
 import { useListQuery } from "@/hooks/use-list-query";
@@ -49,14 +49,14 @@ function OrdersPage() {
   const [deleteTarget, setDeleteTarget] = useState<OrderRow | null>(null);
 
   const { params, updateParams, query: orders } = useListQuery(
-    ["orders"],
-    (params) => ordersRepo.list(params).then((r) => r.data)
+    ["orders", "sales-orders"],
+    () => ordersApi.list(params).then((r) => r.data)
   );
 
   const customers = useQuery({ queryKey: ["customers"], queryFn: () => customersApi.list().then((r) => r.data) });
 
   const submit = useMutation({
-    mutationFn: (id: string) => ordersRepo.submit(id, user?.name ?? "Sales"),
+    mutationFn: (id: string) => ordersApi.submit(id, user?.name ?? "Sales"),
     onSuccess: () => {
       toast.success("PO submitted successfully");
       void qc.invalidateQueries({ queryKey: ["orders"] });
@@ -64,9 +64,9 @@ function OrdersPage() {
   });
 
   const remove = useMutation({
-    mutationFn: (id: string) => ordersRepo.remove(id),
+    mutationFn: (id: string) => ordersApi.remove(id),
     onSuccess: () => {
-      toast.success("Draft PO deleted");
+      toast.success("Draft PO cancelled");
       setDeleteTarget(null);
       void qc.invalidateQueries({ queryKey: ["orders"] });
     },

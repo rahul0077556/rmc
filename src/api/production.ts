@@ -102,7 +102,13 @@ export const productionApi = {
     const data = res.data;
     if (!data) return { data: null };
 
-    const trip = data.trip ? decorateTrip(data.trip) : ({ id: data.tripId } as TripRow);
+    const trip = data.trip
+      ? decorateTrip(data.trip)
+      : decorateTrip({
+          id: data.tripId,
+          quantity: data.quantity,
+          grade: data.grade,
+        });
     const materials: MaterialLine[] = (data.materials || []).map((m: any) => ({
       material: m.material,
       unit: m.unit,

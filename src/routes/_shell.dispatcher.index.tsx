@@ -79,17 +79,23 @@ function DispatcherPage() {
     },
   });
 
+  const [prioritySort, setPrioritySort] = useState(true);
+  const [orderFilterTab, setOrderFilterTab] = useState<"active" | "all" | "completed">("active");
+
   const filteredOrders = useMemo(() => {
     if (!orders.data) return [];
-    let list = orders.data.filter((o) => ["APPROVED", "IN_PROGRESS"].includes(o.status));
+    let list = orders.data;
+    if (orderFilterTab === "active") {
+      list = list.filter((o) => ["APPROVED", "IN_PROGRESS"].includes(o.status));
+    } else if (orderFilterTab === "completed") {
+      list = list.filter((o) => ["COMPLETED", "DELIVERED"].includes(o.status));
+    }
     if (params.q) {
       const lower = params.q.toLowerCase();
       list = list.filter((i) => i.poNumber.toLowerCase().includes(lower) || i.customerName.toLowerCase().includes(lower));
     }
     return list;
-  }, [orders.data, params]);
-
-  const [prioritySort, setPrioritySort] = useState(true);
+  }, [orders.data, params, orderFilterTab]);
 
   const releasable = useMemo(() => {
     if (!trips.data) return [];
@@ -303,13 +309,65 @@ function DispatcherPage() {
       />
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold">Dispatch queue</h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold">Customer Purchase Orders</h2>
+            <Badge variant="outline" className="text-[10px] font-semibold text-muted-foreground">
+              {filteredOrders.length} shown
+            </Badge>
+          </div>
+          <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-lg border border-border/60">
+            <button
+              type="button"
+              onClick={() => setOrderFilterTab("active")}
+              className={cn(
+                "px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer",
+                orderFilterTab === "active"
+                  ? "bg-primary text-primary-foreground shadow-xs font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Active to Plan ({orders.data?.filter((o) => ["APPROVED", "IN_PROGRESS"].includes(o.status)).length || 0})
+            </button>
+            <button
+              type="button"
+              onClick={() => setOrderFilterTab("completed")}
+              className={cn(
+                "px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer",
+                orderFilterTab === "completed"
+                  ? "bg-primary text-primary-foreground shadow-xs font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Delivered / Fulfilled ({orders.data?.filter((o) => ["COMPLETED", "DELIVERED"].includes(o.status)).length || 0})
+            </button>
+            <button
+              type="button"
+              onClick={() => setOrderFilterTab("all")}
+              className={cn(
+                "px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer",
+                orderFilterTab === "all"
+                  ? "bg-primary text-primary-foreground shadow-xs font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              All Orders ({orders.data?.length || 0})
+            </button>
+          </div>
+        </div>
+
         <DataTable
           columns={orderColumns}
           rows={filteredOrders}
           rowKey={(r) => r.id}
-          emptyTitle="No approved orders waiting"
-          emptyDescription="Orders appear here once the sales manager approves them."
+          emptyTitle={
+            orderFilterTab === "active"
+              ? "No active orders waiting to plan"
+              : orderFilterTab === "completed"
+              ? "No fulfilled orders found"
+              : "No orders match criteria"
+          }
+          emptyDescription="Orders appear here after creation and management."
         />
       </section>
 

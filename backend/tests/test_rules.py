@@ -196,3 +196,58 @@ def test_invoice_and_payment_math(client):
     assert pay_part.status_code == 200
     assert pay_part.get_json()["data"]["status"] == "PARTIALLY_PAID"
     assert pay_part.get_json()["data"]["outstandingAmount"] == 17760.0
+
+def test_site_supervisor_flow_and_trip_retrieval(client):
+    sup_token = login(client, "supervisor@rmc.test")
+    headers = {"Authorization": f"Bearer {sup_token}"}
+
+    cust = Customer.query.first()
+    site = Site.query.filter_by(customer_id=cust.id).first()
+    grade = Grade.query.first()
+
+    po = PurchaseOrder(
+        po_number="PO-SUP-01",
+        customer_id=cust.id,
+        site_id=site.id,
+        grade_id=grade.id,
+        quantity_cum=6.0,
+        rate_per_cum=4500.0,
+        delivery_datetime=datetime.now(timezone.utc),
+        purpose="Column",
+        status="IN_PROGRESS"
+    )
+    db.session.add(po)
+    db.session.flush()
+
+    trip = Trip(
+        trip_number="TRIP-SUP-01",
+        po_id=po.id,
+        sequence=1,
+        quantity_cum=6.0,
+        planned_datetime=datetime.now(timezone.utc),
+        status="IN_TRANSIT"
+    )
+    db.session.add(trip)
+    db.session.commit()
+
+    # GET /trips/<id> works cleanly
+    res_get = client.get(f"/api/v1/trips/{trip.id}", headers=headers)
+    assert res_get.status_code == 200
+    data = res_get.get_json()["data"]
+    assert data["tripNumber"] == "TRIP-SUP-01"
+
+    # TM Arrival
+    res_arr = client.post(f"/api/v1/trips/{trip.id}/arrive", json={"notes": "Reached site Gate 2"}, headers=headers)
+    assert res_arr.status_code == 200
+    assert "Reached site Gate 2" in res_arr.get_json()["data"]["notes"]
+
+    # Issue Reporting
+    res_issue = client.post(f"/api/v1/trips/{trip.id}/report-issue", json={"issueType": "PUMP_PROBLEM", "details": "Pipe choked near 3rd floor"}, headers=headers)
+    assert res_issue.status_code == 200
+    assert "Pipe choked near 3rd floor" in res_issue.get_json()["data"]["notes"]
+
+    # Unload and deliver
+    res_deliv = client.post(f"/api/v1/trips/{trip.id}/deliver", json={"deliveredQuantity": 6.0, "receiverName": "Site Eng. Sharma", "notes": "Cube casted"}, headers=headers)
+    assert res_deliv.status_code == 200
+    assert res_deliv.get_json()["data"]["status"] == "DELIVERED"
+

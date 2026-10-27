@@ -80,6 +80,14 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     home: "/queue",
   },
   {
+    role: "supervisor",
+    label: "Site Supervisor",
+    email: "supervisor@rmc.test",
+    password: DEMO_PASSWORD,
+    name: "Santosh Shinde",
+    home: "/queue",
+  },
+  {
     role: "customer",
     label: "Customer (Kirloskar Infra)",
     email: "customer1@rmc.test",

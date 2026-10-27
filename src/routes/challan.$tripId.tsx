@@ -32,11 +32,24 @@ function ChallanPage() {
   const t = trip.data;
   const isQcApproved = ["QC_APPROVED", "DISPATCHED", "DELIVERED"].includes(t.status);
 
+  const originParam = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("from") : null;
+  const handleBack = () => {
+    if (originParam === "portal") {
+      void navigate({ to: "/portal" });
+    } else if (originParam === "supervisor") {
+      void navigate({ to: "/supervisor" });
+    } else if (typeof window !== "undefined" && window.history.length > 1) {
+      window.history.back();
+    } else {
+      void navigate({ to: "/dispatcher" });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="mx-auto max-w-3xl space-y-4">
         <div className="no-print flex items-center justify-between">
-          <Button variant="ghost" onClick={() => void navigate({ to: "/dispatcher" })}>
+          <Button variant="ghost" onClick={handleBack}>
             <ArrowLeft className="size-4" /> Back
           </Button>
           <Button onClick={() => window.print()}>

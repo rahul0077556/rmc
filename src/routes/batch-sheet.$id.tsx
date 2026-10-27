@@ -30,11 +30,24 @@ function BatchSheetPage() {
 
   const s = sheet.data;
 
+  const originParam = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("from") : null;
+  const handleBack = () => {
+    if (originParam === "qa") {
+      void navigate({ to: "/qa" });
+    } else if (originParam === "production") {
+      void navigate({ to: "/production" });
+    } else if (typeof window !== "undefined" && window.history.length > 1) {
+      window.history.back();
+    } else {
+      void navigate({ to: "/production" });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="mx-auto max-w-3xl space-y-4">
         <div className="no-print flex items-center justify-between">
-          <Button variant="ghost" onClick={() => void navigate({ to: "/production" })}>
+          <Button variant="ghost" onClick={handleBack}>
             <ArrowLeft className="size-4" /> Back
           </Button>
           <Button onClick={() => window.print()}>
@@ -56,16 +69,16 @@ function BatchSheetPage() {
 
           <section className="grid gap-3 text-sm sm:grid-cols-2">
             {[
-              ["Trip", s.trip.tripNumber],
-              ["Purchase Order", s.trip.poNumber],
-              ["Customer", s.trip.customerName],
-              ["Site", s.trip.siteName],
-              ["Grade", s.trip.grade],
-              ["Quantity", cum(s.trip.quantity)],
-              ["Transit Mixer", s.trip.tmCode],
-              ["Driver", s.trip.driverName],
+              ["Trip", s.trip?.tripNumber || "—"],
+              ["Purchase Order", s.trip?.poNumber || "—"],
+              ["Customer", s.trip?.customerName || "—"],
+              ["Site", s.trip?.siteName || "—"],
+              ["Grade", s.trip?.grade || s.grade || "—"],
+              ["Quantity", cum(s.trip?.quantity ?? s.quantity ?? 0)],
+              ["Transit Mixer", s.trip?.tmCode || "—"],
+              ["Driver", s.trip?.driverName || "—"],
               ["Batch Time", dt(s.batchTime)],
-              ["Production Operator", s.operator],
+              ["Production Operator", s.operator || "—"],
             ].map(([label, value]) => (
               <div key={label} className="flex justify-between gap-4 border-b border-border/60 pb-1.5">
                 <span className="text-muted-foreground">{label}</span>

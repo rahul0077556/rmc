@@ -7,7 +7,8 @@ export type Role =
   | "production"
   | "qa"
   | "store"
-  | "account";
+  | "account"
+  | "supervisor";
 
 export interface User {
   id: string;
