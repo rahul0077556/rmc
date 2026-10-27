@@ -141,10 +141,11 @@ def create_trip():
 @jwt_required()
 @roles_required()
 def get_trip(id):
-    trip = Trip.query.filter((Trip.id == id) | (Trip.trip_number == id)).first()
+    clean_id = (id or "").split("?")[0].strip()
+    trip = Trip.query.filter((Trip.id == clean_id) | (Trip.trip_number == clean_id)).first()
     if not trip:
         # Also check if passed ID is a Challan ID or Challan Number
-        challan = Challan.query.filter((Challan.id == id) | (Challan.challan_number == id)).first()
+        challan = Challan.query.filter((Challan.id == clean_id) | (Challan.challan_number == clean_id)).first()
         if challan and challan.trip:
             trip = challan.trip
     if not trip:
@@ -299,6 +300,11 @@ def mark_arrived(id):
     data = request.get_json() or {}
     notes = data.get("notes", "TM arrived at site")
     trip.notes = f"{trip.notes or ''} [Site Arrival: {datetime.now(timezone.utc).strftime('%H:%M')} - {notes}]".strip()
+    if trip.status == "DISPATCHED":
+        try:
+            StateMachine.transition_trip(trip, "IN_TRANSIT", user_id=get_current_user_id())
+        except Exception:
+            pass
     db.session.commit()
     return success_response(data=trip.to_dict(), meta={"message": "TM arrival recorded at site."})
 

@@ -8,6 +8,9 @@ import { PLANT_NAME } from "@/lib/mock-data";
 import { cum, dt } from "@/lib/format";
 
 export const Route = createFileRoute("/challan/$tripId")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    from: typeof search.from === "string" ? search.from : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Delivery Challan · RMC Command Center" },
@@ -22,9 +25,15 @@ export const Route = createFileRoute("/challan/$tripId")({
 const COPIES = ["Customer Copy", "Plant Copy", "Driver Copy"];
 
 function ChallanPage() {
-  const { tripId } = Route.useParams();
+  const { tripId: rawTripId } = Route.useParams();
+  const search = Route.useSearch();
+  const tripId = (rawTripId || "").split("?")[0];
   const navigate = useNavigate();
-  const trip = useQuery({ queryKey: ["trip", tripId], queryFn: () => tripsApi.get(tripId).then((r) => r.data) });
+  const trip = useQuery({
+    queryKey: ["trip", tripId],
+    queryFn: () => tripsApi.get(tripId).then((r) => r.data),
+    enabled: Boolean(tripId),
+  });
 
   if (trip.isLoading) return <div className="p-6"><LoadingState rows={4} /></div>;
   if (trip.error || !trip.data) return <div className="p-6"><ErrorState message="This challan could not be found." /></div>;
@@ -32,12 +41,14 @@ function ChallanPage() {
   const t = trip.data;
   const isQcApproved = ["QC_APPROVED", "DISPATCHED", "DELIVERED"].includes(t.status);
 
-  const originParam = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("from") : null;
+  const originParam = search.from || (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("from") : null);
   const handleBack = () => {
     if (originParam === "portal") {
       void navigate({ to: "/portal" });
     } else if (originParam === "supervisor") {
       void navigate({ to: "/supervisor" });
+    } else if (originParam === "dispatcher") {
+      void navigate({ to: "/dispatcher" });
     } else if (typeof window !== "undefined" && window.history.length > 1) {
       window.history.back();
     } else {

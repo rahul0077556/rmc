@@ -175,7 +175,7 @@ function SiteSupervisorPage() {
             size="sm"
             variant="outline"
             className="text-xs h-8"
-            onClick={() => void navigate({ to: `/challan/${r.id}?from=supervisor` as any })}
+            onClick={() => void navigate({ to: "/challan/$tripId", params: { tripId: r.id }, search: { from: "supervisor" } })}
           >
             Challan
           </Button>
@@ -247,7 +247,7 @@ function SiteSupervisorPage() {
           size="sm"
           variant="ghost"
           className="text-xs h-7 gap-1"
-          onClick={() => void navigate({ to: `/challan/${r.id}?from=supervisor` as any })}
+          onClick={() => void navigate({ to: "/challan/$tripId", params: { tripId: r.id }, search: { from: "supervisor" } })}
         >
           <Printer className="size-3" /> View Challan
         </Button>

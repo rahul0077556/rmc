@@ -33,7 +33,7 @@ class StateMachine:
         "QC_REJECTED": ["CORRECTING", "REPLACED", "CANCELLED"],
         "CORRECTING": ["QC_PENDING", "CANCELLED"],
         "QC_APPROVED": ["DISPATCHED", "CANCELLED"],
-        "DISPATCHED": ["IN_TRANSIT", "CANCELLED"],
+        "DISPATCHED": ["IN_TRANSIT", "DELIVERED", "CANCELLED"],
         "IN_TRANSIT": ["DELIVERED", "CANCELLED"],
         "DELIVERED": [],
         "REPLACED": [],

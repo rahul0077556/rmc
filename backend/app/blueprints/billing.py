@@ -165,6 +165,7 @@ def record_payment(id):
     )
     db.session.add(payment)
     db.session.flush()
+    db.session.refresh(inv)
 
     # Update invoice state
     new_outstanding = inv.outstanding_amount
