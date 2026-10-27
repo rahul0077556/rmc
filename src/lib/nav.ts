@@ -41,7 +41,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Customers", to: "/sales/customers", icon: Users, roles: ["sales", "sales_manager", "owner"], group: "Commercial" },
   { label: "Approvals", to: "/sales/approvals", icon: ClipboardCheck, roles: ["sales_manager"], group: "Operations" },
   { label: "Dispatch Control", to: "/dispatcher", icon: Truck, roles: ["dispatcher", "owner"], group: "Operations" },
-  { label: "Site Supervisor", to: "/supervisor", icon: HardHat, roles: ["supervisor", "dispatcher", "owner"], group: "Operations" },
+  { label: "Site Supervisor", to: "/supervisor", icon: HardHat, roles: ["supervisor", "owner"], group: "Operations" },
   { label: "Control Room TV", to: "/tv", icon: Tv, roles: ["dispatcher", "owner"], group: "Operations" },
   { label: "Production Queue", to: "/production", icon: Package, roles: ["production", "owner"], group: "Operations" },
   { label: "QA / QC", to: "/qa", icon: FlaskConical, roles: ["qa", "owner"], group: "Operations" },

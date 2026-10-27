@@ -81,26 +81,32 @@ function SiteSupervisorPage() {
   const [receiverName, setReceiverName] = useState("Site Engineer");
 
   const { data: allTrips, isLoading, error, refetch } = useQuery({
-    queryKey: ["supervisor-trips"],
+    queryKey: ["trips-list"],
     queryFn: () => tripsApi.list().then((r) => r.data),
-    refetchInterval: 10000,
+    refetchInterval: 4000,
   });
 
   // Categorize trips for site supervision
+  // 1. Incoming trucks on the road approaching site gate
   const inTransitTrips = useMemo(() => {
     if (!allTrips) return [];
-    return allTrips.filter((t) => ["DISPATCHED", "IN_TRANSIT"].includes(t.status));
+    return allTrips.filter(
+      (t) => ["IN_TRANSIT", "DISPATCHED"].includes(t.status) && !t.notes?.includes("Site Arrival")
+    );
   }, [allTrips]);
 
+  // 2. Trucks that reached site gate / pump hopper waiting to unload or pouring
   const atSiteTrips = useMemo(() => {
     if (!allTrips) return [];
-    // Trips that arrived or in transit can be unloaded
-    return allTrips.filter((t) => t.status === "IN_TRANSIT" || (t.status === "DISPATCHED" && t.notes?.includes("Site Arrival")));
+    return allTrips.filter(
+      (t) => ["IN_TRANSIT", "DISPATCHED"].includes(t.status) && Boolean(t.notes?.includes("Site Arrival"))
+    );
   }, [allTrips]);
 
+  // 3. Today's completed & signed off deliveries
   const completedTrips = useMemo(() => {
     if (!allTrips) return [];
-    return allTrips.filter((t) => t.status === "DELIVERED").slice(0, 15);
+    return allTrips.filter((t) => t.status === "DELIVERED");
   }, [allTrips]);
 
   // Mutations
@@ -110,8 +116,8 @@ function SiteSupervisorPage() {
       toast.success("TM arrival recorded at site gate");
       setArrivalTrip(null);
       setArrivalNote("");
-      void qc.invalidateQueries({ queryKey: ["supervisor-trips"] });
       void qc.invalidateQueries({ queryKey: ["trips-list"] });
+      void qc.invalidateQueries({ queryKey: ["orders-disp"] });
     },
     onError: () => toast.error("Could not record arrival"),
   });
@@ -123,7 +129,7 @@ function SiteSupervisorPage() {
       toast.warning(res.message || "Site problem reported to Dispatch desk");
       setIssueTrip(null);
       setIssueDetails("");
-      void qc.invalidateQueries({ queryKey: ["supervisor-trips"] });
+      void qc.invalidateQueries({ queryKey: ["trips-list"] });
     },
     onError: () => toast.error("Could not report issue"),
   });
@@ -139,8 +145,8 @@ function SiteSupervisorPage() {
       toast.success("Unloading complete! Delivery sign-off recorded");
       setDeliverTrip(null);
       setDeliveredQty("");
-      void qc.invalidateQueries({ queryKey: ["supervisor-trips"] });
       void qc.invalidateQueries({ queryKey: ["trips-list"] });
+      void qc.invalidateQueries({ queryKey: ["orders-disp"] });
     },
     onError: () => toast.error("Could not complete delivery"),
   });

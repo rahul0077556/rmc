@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, ClipboardList, Clock, Flame, FlaskConical, PackageCheck, ShieldAlert, Sparkles, Truck, Zap, Tv, CalendarDays } from "lucide-react";
+import { CheckCircle2, ClipboardList, Clock, Flame, FlaskConical, PackageCheck, ShieldAlert, Sparkles, Truck, Zap, Tv, CalendarDays, Printer } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { CapacityCalendar } from "@/components/common/CapacityCalendar";
 import { KpiCard } from "@/components/app/kpi-card";
@@ -51,16 +51,25 @@ function DispatcherPage() {
   const [deliveredQty, setDeliveredQty] = useState("");
   const [showCapacity, setShowCapacity] = useState(false);
 
-  const { params, updateParams, query: trips } = useListQuery(["trips-list"], () => tripsApi.list().then((r) => r.data));
+  const { params, updateParams, query: trips } = useListQuery(
+    ["trips-list"],
+    () => tripsApi.list().then((r) => r.data),
+    { refetchInterval: 4000 }
+  );
   const fleet = useQuery({ queryKey: ["fleet"], queryFn: () => tripsApi.fleet().then((r) => r.data) });
-  const orders = useQuery({ queryKey: ["orders-disp"], queryFn: () => ordersApi.list().then((r) => r.data) });
+  const orders = useQuery({
+    queryKey: ["orders-disp"],
+    queryFn: () => ordersApi.list().then((r) => r.data),
+    refetchInterval: 5000,
+  });
 
   const advance = useMutation({
     mutationFn: ({ id, status }: { id: string; status: TripRow["status"] }) =>
       tripsApi.setStatus(id, status, user?.name ?? "Dispatcher"),
     onSuccess: (res) => {
-      toast.success(res.data?.status === "DISPATCHED" ? "Trip released" : "Trip updated");
+      toast.success(res.data?.status === "DISPATCHED" ? "Trip released" : "Trip status updated to " + (res.data?.status || "updated"));
       void qc.invalidateQueries({ queryKey: ["trips-list"] });
+      void qc.invalidateQueries({ queryKey: ["orders-disp"] });
     },
   });
 
@@ -81,6 +90,7 @@ function DispatcherPage() {
 
   const [prioritySort, setPrioritySort] = useState(true);
   const [orderFilterTab, setOrderFilterTab] = useState<"active" | "all" | "completed">("active");
+  const [tripFilterTab, setTripFilterTab] = useState<"active" | "delivered" | "all">("active");
 
   const filteredOrders = useMemo(() => {
     if (!orders.data) return [];
@@ -99,31 +109,61 @@ function DispatcherPage() {
 
   const releasable = useMemo(() => {
     if (!trips.data) return [];
-    let list = trips.data.filter((t) => ["LOADED", "QC_APPROVED", "DISPATCHED", "IN_TRANSIT"].includes(t.status));
+    let list = trips.data;
+    if (tripFilterTab === "active") {
+      list = list.filter((t) => ["LOADED", "QC_APPROVED", "DISPATCHED", "IN_TRANSIT"].includes(t.status));
+    } else if (tripFilterTab === "delivered") {
+      list = list.filter((t) => t.status === "DELIVERED");
+    } else {
+      list = list.filter((t) => ["LOADED", "QC_APPROVED", "DISPATCHED", "IN_TRANSIT", "DELIVERED"].includes(t.status));
+    }
     if (params.q) {
       const lower = params.q.toLowerCase();
-      list = list.filter((i) => i.poNumber.toLowerCase().includes(lower) || i.customerName.toLowerCase().includes(lower) || i.tripNumber.toLowerCase().includes(lower));
+      list = list.filter(
+        (i) =>
+          i.poNumber.toLowerCase().includes(lower) ||
+          i.customerName.toLowerCase().includes(lower) ||
+          i.tripNumber.toLowerCase().includes(lower) ||
+          (i.challanNumber && i.challanNumber.toLowerCase().includes(lower))
+      );
     }
-    if (prioritySort) {
+    if (prioritySort && tripFilterTab === "active") {
       list = sortByConcreteClockUrgency(list);
     }
     return list;
-  }, [trips.data, params, prioritySort]);
+  }, [trips.data, params, prioritySort, tripFilterTab]);
+
+  const deliveredTrips = useMemo(() => {
+    if (!trips.data) return [];
+    let list = trips.data.filter((t) => t.status === "DELIVERED");
+    if (params.q) {
+      const lower = params.q.toLowerCase();
+      list = list.filter(
+        (i) =>
+          i.poNumber.toLowerCase().includes(lower) ||
+          i.customerName.toLowerCase().includes(lower) ||
+          i.tripNumber.toLowerCase().includes(lower) ||
+          (i.challanNumber && i.challanNumber.toLowerCase().includes(lower))
+      );
+    }
+    return list;
+  }, [trips.data, params]);
 
   const clockCounts = useMemo(() => {
     let healthy = 0;
     let warning = 0;
     let critical = 0;
     let expired = 0;
-    for (const trip of releasable) {
+    const activeTrips = (trips.data || []).filter((t) => ["LOADED", "QC_APPROVED", "DISPATCHED", "IN_TRANSIT"].includes(t.status));
+    for (const trip of activeTrips) {
       const c = getConcreteClockState(trip);
       if (c.status === "healthy") healthy++;
       else if (c.status === "warning") warning++;
       else if (c.status === "critical") critical++;
       else if (c.status === "expired") expired++;
     }
-    return { healthy, warning, critical, expired, total: releasable.length };
-  }, [releasable]);
+    return { healthy, warning, critical, expired, total: activeTrips.length };
+  }, [trips.data]);
 
   if (trips.isLoading || fleet.isLoading || orders.isLoading) return <LoadingState rows={6} />;
   if (trips.error || !trips.data || !fleet.data || !orders.data)
@@ -158,46 +198,82 @@ function DispatcherPage() {
   ];
 
   const releaseColumns: Column<TripRow>[] = [
-    { key: "trip", header: "Trip", cell: (r) => <span className="font-medium">{r.tripNumber}</span> },
-    { key: "po", header: "PO", cell: (r) => r.poNumber },
-    { key: "customer", header: "Customer", cell: (r) => r.customerName },
-    { key: "grade", header: "Grade", cell: (r) => r.grade },
-    { key: "qty", header: "Qty", align: "right", cell: (r) => cum(r.quantity) },
+    { key: "trip", header: "Trip", cell: (r) => <span className="font-semibold">{r.tripNumber}</span> },
+    { key: "po", header: "PO", cell: (r) => <span className="text-muted-foreground font-medium">{r.poNumber}</span> },
+    {
+      key: "customer",
+      header: "Customer & Site",
+      cell: (r) => (
+        <div>
+          <p className="font-medium">{r.customerName}</p>
+          <p className="text-xs text-muted-foreground">{r.siteName}</p>
+        </div>
+      ),
+    },
+    { key: "grade", header: "Grade", cell: (r) => <Badge variant="outline">{r.grade}</Badge> },
+    {
+      key: "qty",
+      header: "Qty",
+      align: "right",
+      cell: (r) => (
+        <span className="font-medium">
+          {r.status === "DELIVERED" ? `${cum(r.deliveredQuantity ?? r.quantity)} delivered` : cum(r.quantity)}
+        </span>
+      ),
+    },
     { key: "tm", header: "TM / Driver", cell: (r) => `${r.tmCode} · ${r.driverName}` },
     {
       key: "concreteClock",
-      header: "Concrete Clock (Discharge Before)",
-      className: "min-w-[185px]",
-      cell: (r) => <ConcreteClock trip={r} />,
-      sortValue: (r) => getConcreteClockState(r).remainingMinutes,
+      header: "Concrete Clock / Site Delivery",
+      className: "min-w-[195px]",
+      cell: (r) =>
+        r.status === "DELIVERED" ? (
+          <div className="flex flex-col text-xs">
+            <span className="font-semibold text-emerald-400 flex items-center gap-1">
+              <CheckCircle2 className="size-3.5" /> Delivered at site
+            </span>
+            <span className="text-[11px] text-muted-foreground">
+              {r.receiverName ? `Signed: ${r.receiverName}` : (r.deliveredAt ? `Time: ${timeOnly(r.deliveredAt)}` : "Sign-off recorded")}
+            </span>
+          </div>
+        ) : (
+          <ConcreteClock trip={r} />
+        ),
+      sortValue: (r) => (r.status === "DELIVERED" ? 9999 : getConcreteClockState(r).remainingMinutes),
     },
     { key: "status", header: "Status", align: "center", className: "min-w-[100px]", cell: (r) => <StatusBadge status={r.status} /> },
     {
       key: "action",
       header: "Action",
       align: "right",
-      className: "min-w-[140px]",
+      className: "min-w-[160px]",
       cell: (r) => (
         <div className="flex justify-end gap-1.5">
           {r.challanNumber && (
-            <Button size="sm" variant="ghost" onClick={() => void navigate({ to: "/challan/$tripId", params: { tripId: r.id } })}>
-              Challan
+            <Button
+              size="sm"
+              variant={r.status === "DELIVERED" ? "outline" : "ghost"}
+              className="gap-1 text-xs h-8"
+              onClick={() => void navigate({ to: "/challan/$tripId", params: { tripId: r.id }, search: { from: "dispatcher" } })}
+            >
+              <Printer className="size-3" /> View Challan
             </Button>
           )}
           {r.status === "QC_APPROVED" && (
-            <Button size="sm" disabled={user?.role === "owner"} onClick={() => advance.mutate({ id: r.id, status: "DISPATCHED" })}>
+            <Button size="sm" className="h-8" disabled={user?.role === "owner"} onClick={() => advance.mutate({ id: r.id, status: "DISPATCHED" })}>
               Release
             </Button>
           )}
           {r.status === "DISPATCHED" && (
-            <Button size="sm" variant="outline" disabled={user?.role === "owner"} onClick={() => advance.mutate({ id: r.id, status: "IN_TRANSIT" })}>
-              In transit
+            <Button size="sm" variant="outline" className="gap-1 border-sky-500/40 text-sky-400 hover:bg-sky-500/10 h-8 text-xs font-semibold" disabled={user?.role === "owner"} onClick={() => advance.mutate({ id: r.id, status: "IN_TRANSIT" })}>
+              <Truck className="size-3.5" /> In transit
             </Button>
           )}
           {r.status === "IN_TRANSIT" && (
             <Button
               size="sm"
               variant="outline"
+              className="gap-1 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 h-8 text-xs font-semibold"
               disabled={user?.role === "owner"}
               onClick={() => {
                 setDeliverTrip(r);
@@ -205,10 +281,83 @@ function DispatcherPage() {
                 setReceiver("");
               }}
             >
-              Mark delivered
+              <CheckCircle2 className="size-3.5" /> Mark delivered
             </Button>
           )}
         </div>
+      ),
+    },
+  ];
+
+  const deliveredColumns: Column<TripRow>[] = [
+    { key: "trip", header: "Trip #", cell: (r) => <span className="font-semibold">{r.tripNumber}</span>, sortValue: (r) => r.tripNumber },
+    {
+      key: "challan",
+      header: "Challan #",
+      cell: (r) => (
+        <span className="font-mono text-xs text-primary font-medium">
+          {r.challanNumber || "—"}
+        </span>
+      ),
+      sortValue: (r) => r.challanNumber || "",
+    },
+    {
+      key: "customer",
+      header: "Customer / Site",
+      cell: (r) => (
+        <div>
+          <p className="font-medium text-xs">{r.customerName}</p>
+          <p className="text-[11px] text-muted-foreground">{r.siteName}</p>
+        </div>
+      ),
+      sortValue: (r) => r.customerName,
+    },
+    { key: "grade", header: "Grade", cell: (r) => <Badge variant="outline">{r.grade}</Badge> },
+    {
+      key: "qty",
+      header: "Delivered",
+      align: "right",
+      cell: (r) => (
+        <span className="font-semibold text-emerald-400">
+          {cum(r.deliveredQuantity ?? r.quantity)}
+        </span>
+      ),
+      sortValue: (r) => r.deliveredQuantity ?? r.quantity,
+    },
+    { key: "tm", header: "TM / Driver", cell: (r) => `${r.tmCode} · ${r.driverName}` },
+    {
+      key: "signed",
+      header: "Signed By",
+      cell: (r) => (
+        <div className="flex flex-col text-xs">
+          <span className="font-medium text-foreground">{r.receiverName || "Site Engineer"}</span>
+          <span className="text-[11px] text-muted-foreground">{r.deliveredAt ? timeOnly(r.deliveredAt) : "Completed"}</span>
+        </div>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      align: "center",
+      cell: () => (
+        <Badge variant="outline" className="border-emerald-500/40 text-emerald-400 bg-emerald-500/10 text-xs">
+          Delivered
+        </Badge>
+      ),
+    },
+    {
+      key: "action",
+      header: "Action",
+      align: "right",
+      cell: (r) => (
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5 text-xs h-8 border-border hover:bg-surface-raised cursor-pointer"
+          onClick={() => void navigate({ to: "/challan/$tripId", params: { tripId: r.id }, search: { from: "dispatcher" } })}
+        >
+          <Printer className="size-3" /> View Challan
+        </Button>
       ),
     },
   ];
@@ -248,11 +397,12 @@ function DispatcherPage() {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <KpiCard label="Orders to plan" value={String(filteredOrders.filter((o) => o.tripCount === 0).length)} icon={ClipboardList} comparison="approved, unplanned" />
         <KpiCard label="Trips in production" value={String(count(["SENT_TO_PRODUCTION", "BATCHING", "LOADED"]))} icon={PackageCheck} comparison="batching now" />
-        <KpiCard label="QC pending" value={String(count(["QC_PENDING"]))} icon={FlaskConical} comparison="awaiting quality sign-off" />
-        <KpiCard label="Ready for dispatch" value={String(count(["QC_APPROVED"]))} icon={Truck} comparison="QC approved trips" />
+        <KpiCard label="Ready for dispatch" value={String(count(["QC_APPROVED"]))} icon={Clock} comparison="QC approved trips" />
+        <KpiCard label="On road / in transit" value={String(count(["DISPATCHED", "IN_TRANSIT"]))} icon={Truck} comparison="en route to site" />
+        <KpiCard label="Delivered today" value={String(count(["DELIVERED"]))} icon={CheckCircle2} comparison="signed off at site" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -383,29 +533,71 @@ function DispatcherPage() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Filter Tabs for Release & Delivery */}
+            <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-lg border border-border/60">
+              <button
+                type="button"
+                onClick={() => setTripFilterTab("active")}
+                className={cn(
+                  "px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer",
+                  tripFilterTab === "active"
+                    ? "bg-primary text-primary-foreground shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Active on Road ({trips.data?.filter((t) => ["LOADED", "QC_APPROVED", "DISPATCHED", "IN_TRANSIT"].includes(t.status)).length || 0})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTripFilterTab("delivered")}
+                className={cn(
+                  "px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer",
+                  tripFilterTab === "delivered"
+                    ? "bg-primary text-primary-foreground shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Delivered at Site ({trips.data?.filter((t) => t.status === "DELIVERED").length || 0})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTripFilterTab("all")}
+                className={cn(
+                  "px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer",
+                  tripFilterTab === "all"
+                    ? "bg-primary text-primary-foreground shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                All Trips ({trips.data?.length || 0})
+              </button>
+            </div>
+
             {/* Priority sort toggle: trucks about to expire jump to top */}
-            <Button
-              variant={prioritySort ? "default" : "outline"}
-              size="sm"
-              onClick={() => setPrioritySort((s) => !s)}
-              className={cn(
-                "h-8 gap-1.5 text-xs font-medium transition-all",
-                prioritySort
-                  ? "bg-gradient-to-r from-amber-500 to-rose-600 text-white shadow-sm"
-                  : "border-border text-muted-foreground"
-              )}
-              title="When active, loaded trucks about to reach discharge limit jump to the top of the board"
-            >
-              <Zap className="size-3.5" />
-              <span>Priority: Expiring First</span>
-            </Button>
+            {tripFilterTab === "active" && (
+              <Button
+                variant={prioritySort ? "default" : "outline"}
+                size="sm"
+                onClick={() => setPrioritySort((s) => !s)}
+                className={cn(
+                  "h-8 gap-1.5 text-xs font-medium transition-all",
+                  prioritySort
+                    ? "bg-gradient-to-r from-amber-500 to-rose-600 text-white shadow-sm"
+                    : "border-border text-muted-foreground"
+                )}
+                title="When active, loaded trucks about to reach discharge limit jump to the top of the board"
+              >
+                <Zap className="size-3.5" />
+                <span>Priority: Expiring First</span>
+              </Button>
+            )}
 
             <ConcreteClockConfigModal />
           </div>
         </div>
 
         {/* Live Clock Summary Strip */}
-        {clockCounts.total > 0 && (
+        {tripFilterTab === "active" && clockCounts.total > 0 && (
           <div className="flex items-center gap-3 text-xs bg-surface-raised border border-border p-2.5 rounded-lg overflow-x-auto">
             <span className="text-muted-foreground font-medium text-[11px] shrink-0">Hydration Monitors:</span>
             <span className="inline-flex items-center gap-1.5 text-emerald-400 font-semibold text-[11px]">
@@ -429,8 +621,39 @@ function DispatcherPage() {
           columns={releaseColumns}
           rows={releasable}
           rowKey={(r) => r.id}
-          emptyTitle="Nothing ready to release"
-          emptyDescription="Trips appear here after quality control approves the batch."
+          emptyTitle={
+            tripFilterTab === "delivered"
+              ? "No completed deliveries found"
+              : tripFilterTab === "active"
+              ? "No active trucks waiting to release or on road"
+              : "No trips found matching criteria"
+          }
+          emptyDescription="Trips appear here as they move from plant QC to dispatch and site delivery."
+        />
+      </section>
+
+      {/* Today's Completed Concrete Deliveries */}
+      <section className="space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
+              <CheckCircle2 className="size-4 text-emerald-400" /> Today's Completed Concrete Deliveries
+            </h2>
+            <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 bg-emerald-500/10 text-[10px] gap-1 font-semibold">
+              {deliveredTrips.length} signed off
+            </Badge>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            Real-time delivery sign-offs synced with Site Supervisor desk
+          </span>
+        </div>
+
+        <DataTable
+          columns={deliveredColumns}
+          rows={deliveredTrips}
+          rowKey={(r) => r.id}
+          emptyTitle="No completed deliveries yet today"
+          emptyDescription="When site supervisors record delivery sign-offs at site pump, completed trips appear here with signed challans."
         />
       </section>
 
