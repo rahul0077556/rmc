@@ -29,19 +29,47 @@ export const productionApi = {
         method: "POST",
       });
       const data = res.data;
-      if (data && data.requiredMaterials) {
+      if (!data) return { data: [] };
+
+      // Case 1: Backend returns array of structured material check objects
+      if (Array.isArray(data.requiredMaterials)) {
         const rows: MaterialCheckRow[] = data.requiredMaterials.map((rm: any) => {
           const sf = (data.shortfalls || []).find((s: any) => s.material === rm.material);
-          const shortfall = sf ? sf.shortfall : 0;
+          const shortfall = rm.shortfall ?? (sf ? sf.shortfall : 0);
           return {
             material: rm.material,
-            required: rm.required,
-            available: rm.available,
-            unit: rm.unit,
-            sufficient: shortfall === 0,
-            shortfall,
+            required: Number(rm.required),
+            available: Number(rm.available ?? 0),
+            unit: rm.unit || "kg",
+            sufficient: rm.sufficient ?? (shortfall === 0),
+            shortfall: Number(shortfall),
           };
         });
+        return { data: rows };
+      }
+
+      // Case 2: Backend returns dictionary { [materialName]: requiredQty }
+      if (data.requiredMaterials && typeof data.requiredMaterials === "object") {
+        const shortfallsList = data.shortfalls || [];
+        const rows: MaterialCheckRow[] = Object.entries(data.requiredMaterials).map(
+          ([material, reqQty]: [string, any]) => {
+            const sf = shortfallsList.find((s: any) => s.material === material);
+            const shortfall = sf ? sf.shortfall : 0;
+            const available = sf ? sf.available : Number(reqQty);
+            return {
+              material,
+              required: Number(reqQty),
+              available: Number(available),
+              unit:
+                sf?.unit ||
+                (material.toLowerCase().includes("water") || material.toLowerCase().includes("admix")
+                  ? "l"
+                  : "kg"),
+              sufficient: shortfall === 0,
+              shortfall: Number(shortfall),
+            };
+          }
+        );
         return { data: rows };
       }
     } catch {

@@ -3,7 +3,7 @@ from flask import Blueprint, request, make_response
 from flask_jwt_extended import jwt_required
 from backend.app.extensions import db
 from backend.app.models.models import (
-    Trip, BatchSheet, BatchSheetRevision, Grade
+    Trip, BatchSheet, BatchSheetRevision, Grade, Material
 )
 from backend.app.services.sequence_service import get_next_sequence
 from backend.app.services.batching_service import BatchingPlantService
@@ -41,11 +41,28 @@ def check_materials(id):
     shortfalls = BatchingPlantService.check_material_shortfalls(grade.mix_design, trip.quantity_cum)
     required = BatchingPlantService.calculate_required_materials(grade.mix_design, trip.quantity_cum)
 
+    materials = {m.name: m for m in Material.query.all()}
+    required_rows = []
+    for mat_name, req_qty in required.items():
+        mat = materials.get(mat_name)
+        curr_stock = mat.current_stock if mat else 0.0
+        unit = mat.unit if mat else ("l" if "water" in mat_name.lower() or "admix" in mat_name.lower() else "kg")
+        sf_item = next((s for s in shortfalls if s["material"] == mat_name), None)
+        shortfall_val = sf_item["shortfall"] if sf_item else 0.0
+        required_rows.append({
+            "material": mat_name,
+            "required": req_qty,
+            "available": curr_stock,
+            "unit": unit,
+            "sufficient": shortfall_val == 0.0,
+            "shortfall": shortfall_val
+        })
+
     return success_response(data={
         "tripId": trip.id,
         "quantity": trip.quantity_cum,
         "grade": grade.code,
-        "requiredMaterials": required,
+        "requiredMaterials": required_rows,
         "shortfalls": shortfalls,
         "canBatch": len(shortfalls) == 0
     })

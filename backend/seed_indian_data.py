@@ -59,20 +59,23 @@ def seed_indian_data():
 
         # 2. Seed Raw Material Stocks
         mat_stocks = {
-            "OPC 53 Cement": 85000.0,
-            "Fly Ash": 45000.0,
-            "20mm Aggregate": 140000.0,
-            "10mm Aggregate": 110000.0,
-            "Crushed Sand (VSI)": 190000.0,
-            "Chemical Admixture": 3200.0,
-            "Water": 120000.0,
-            "Diesel": 8500.0,
+            "Cement (OPC 53)": 185000.0,
+            "River Sand (Zone II)": 320000.0,
+            "Aggregate 10mm": 260000.0,
+            "Aggregate 20mm": 380000.0,
+            "Fly Ash (Class F)": 95000.0,
+            "GGBS (Slag)": 110000.0,
+            "Water": 500000.0,
+            "Admixture (PCE)": 4200.0,
         }
         for mat in Material.query.all():
-            for key, val in mat_stocks.items():
-                if key.lower() in mat.name.lower():
-                    mat.current_stock = val
-                    break
+            if mat.name in mat_stocks:
+                mat.current_stock = mat_stocks[mat.name]
+            else:
+                for key, val in mat_stocks.items():
+                    if any(w in mat.name.lower() for w in key.lower().split()):
+                        mat.current_stock = val
+                        break
         db.session.commit()
 
         # 3. Seed Customers
