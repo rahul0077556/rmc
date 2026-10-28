@@ -66,6 +66,7 @@ def create_app(config_class=None):
     from backend.app.blueprints.store import store_bp
     from backend.app.blueprints.account import account_bp
     from backend.app.blueprints.chatbot import chatbot_bp
+    from backend.app.blueprints.queue import queue_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(master_bp)
@@ -81,6 +82,7 @@ def create_app(config_class=None):
     app.register_blueprint(store_bp)
     app.register_blueprint(account_bp)
     app.register_blueprint(chatbot_bp)
+    app.register_blueprint(queue_bp)
 
     # Healthcheck endpoints (Fly.io and monitoring)
     @app.route("/", methods=["GET"])
