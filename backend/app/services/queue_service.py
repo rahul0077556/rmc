@@ -75,10 +75,10 @@ class QueueService:
                         "title": f"Plan Trips: {po.po_number} ({po.balance_quantity} cum balance)",
                         "subtitle": f"{po.customer.name if po.customer else 'Customer'} · Delivery: {po.delivery_datetime.strftime('%d-%b %H:%M')}",
                         "category": "Trip Planning",
-                        "urgency": "urgent" if po.trip_count == 0 else "attention",
+                        "urgency": "urgent" if len(po.trips) == 0 else "attention",
                         "urgencyLabel": "Schedule TM",
                         "badgeText": f"{po.balance_quantity} cum to plan",
-                        "badgeVariant": "destructive" if po.trip_count == 0 else "warning",
+                        "badgeVariant": "destructive" if len(po.trips) == 0 else "warning",
                         "metrics": [
                             {"label": "Grade", "value": po.grade.code if po.grade else "M25"},
                             {"label": "Remaining", "value": f"{po.balance_quantity} cum"},
