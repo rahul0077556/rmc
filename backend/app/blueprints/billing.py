@@ -40,8 +40,6 @@ def list_invoices():
 def create_invoice():
     data = request.get_json() or {}
     po_id = data.get("poId")
-    trip_ids = data.get("tripIds", [])
-    gst_percent = float(data.get("gstPercent", 18.0))
 
     if not po_id:
         return error_response(code="VALIDATION_ERROR", message="PO ID is required.")
@@ -51,10 +49,7 @@ def create_invoice():
         return error_response(code="NOT_FOUND", message="PO not found.", status_code=404)
 
     # Collect delivered trips for this PO
-    trips_query = Trip.query.filter_by(po_id=po.id, status="DELIVERED")
-    if trip_ids:
-        trips_query = trips_query.filter(Trip.id.in_(trip_ids))
-    delivered_trips = trips_query.all()
+    delivered_trips = Trip.query.filter_by(po_id=po.id, status="DELIVERED").all()
 
     # BUSINESS RULE 7: Invoices can only be created for delivered quantity
     if not delivered_trips:
@@ -64,51 +59,18 @@ def create_invoice():
             status_code=400
         )
 
-    # Calculate subtotal using PO rate
-    subtotal = 0.0
-    for trip in delivered_trips:
-        qty = trip.delivered_quantity or trip.quantity_cum
-        subtotal += round(qty * po.rate_per_cum, 2)
-
-    total_tax = round(subtotal * (gst_percent / 100.0), 2)
-    grand_total = round(subtotal + total_tax, 2)
-
-    issue_date = datetime.now(timezone.utc).date()
-    credit_days = po.payment_terms_days or (po.customer.credit_days if po.customer else 30)
-    due_date = issue_date + timedelta(days=credit_days)
-
-    inv_num = get_next_sequence("INVOICE", "INV")
-    user_id = get_current_user_id()
-
-    invoice = Invoice(
-        invoice_number=inv_num,
-        po_id=po.id,
-        customer_id=po.customer_id,
-        issue_date=issue_date,
-        due_date=due_date,
-        subtotal=subtotal,
-        gst_percent=gst_percent,
-        total=grand_total,
-        status="ISSUED",
-        created_by=user_id
-    )
-    db.session.add(invoice)
-    db.session.flush()
-
-    for trip in delivered_trips:
-        qty = trip.delivered_quantity or trip.quantity_cum
-        line = InvoiceLine(
-            invoice_id=invoice.id,
-            trip_id=trip.id,
-            quantity=qty,
-            rate=po.rate_per_cum,
-            amount=round(qty * po.rate_per_cum, 2),
-            created_by=user_id
-        )
-        db.session.add(line)
-
+    from backend.app.services.billing_service import BillingService
+    invoice = BillingService.sync_invoice_for_po(po.id, user_id=get_current_user_id())
     db.session.commit()
     return success_response(data=invoice.to_dict(), status_code=201)
+
+@billing_bp.route("/sync-all", methods=["POST"])
+@jwt_required()
+@roles_required("dispatcher", "account", "sales_manager", "owner")
+def sync_all_invoices():
+    from backend.app.services.billing_service import BillingService
+    invoices = BillingService.sync_all_pending_invoices(user_id=get_current_user_id())
+    return success_response(data=[inv.to_dict() for inv in invoices], meta={"syncedCount": len(invoices)})
 
 @billing_bp.route("/<id>", methods=["GET"])
 @jwt_required()

@@ -1,11 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, BadgeCheck, Printer } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Printer, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LoadingState, ErrorState } from "@/components/app/states";
 import { tripsApi } from "@/api/trips";
 import { PLANT_NAME } from "@/lib/mock-data";
-import { cum, dt } from "@/lib/format";
+import { cum, dt, inr } from "@/lib/format";
 
 export const Route = createFileRoute("/challan/$tripId")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -63,9 +63,14 @@ function ChallanPage() {
           <Button variant="ghost" onClick={handleBack}>
             <ArrowLeft className="size-4" /> Back
           </Button>
-          <Button onClick={() => window.print()}>
-            <Printer className="size-4" /> Print challan
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" className="gap-1.5" onClick={() => window.open(`/api/v1/trips/${t.id}/challan/pdf`, '_blank')}>
+              <FileText className="size-4" /> PDF Challan
+            </Button>
+            <Button className="gap-1.5" onClick={() => window.print()}>
+              <Printer className="size-4" /> Print Challan
+            </Button>
+          </div>
         </div>
 
         {COPIES.map((copy) => (
@@ -90,7 +95,8 @@ function ChallanPage() {
                 ["Transit Mixer", t.tmCode],
                 ["Driver", t.driverName],
                 ["Grade", t.grade],
-                ["Quantity", cum(t.quantity)],
+                ["Loaded Quantity", cum(t.quantity)],
+                ["Delivered Quantity", t.deliveredQuantity ? cum(t.deliveredQuantity) : "Pending discharge"],
                 ["Dispatch Time", t.dispatchTime ? dt(t.dispatchTime) : "—"],
                 ["Delivered To", t.receiverName ?? "—"],
               ].map(([label, value]) => (
@@ -101,9 +107,42 @@ function ChallanPage() {
               ))}
             </section>
 
+            {/* Commercial & Trip Billing Details */}
+            <section className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-2.5">
+              <div className="flex items-center justify-between border-b border-primary/15 pb-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-primary">
+                  Trip Commercial & Billing Valuation (IS 4926 / GST)
+                </span>
+                <span className="text-[11px] font-mono text-muted-foreground">
+                  GST Rate: {t.gstPercent ?? 18}%
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <span className="text-muted-foreground block text-[11px]">Agreed Rate</span>
+                  <span className="font-semibold text-foreground text-sm">{inr(t.ratePerCum || 0)} / cum</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block text-[11px]">Taxable Base</span>
+                  <span className="font-semibold text-foreground text-sm">{inr(t.baseAmount || 0)}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block text-[11px]">GST @ 18%</span>
+                  <span className="font-semibold text-foreground text-sm">{inr(t.gstAmount || 0)}</span>
+                </div>
+                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-1.5 px-2.5">
+                  <span className="text-emerald-400 block text-[11px] font-medium">Total Trip Amount</span>
+                  <span className="font-bold text-emerald-400 text-sm">{inr(t.totalAmount || 0)}</span>
+                </div>
+              </div>
+            </section>
+
             <footer className="flex items-end justify-between pt-3 text-xs text-muted-foreground">
               <div>
-                <p className="mt-8 border-t border-border pt-1">Dispatcher signature</p>
+                <p className="mt-8 border-t border-border pt-1">Dispatcher / Plant In-Charge</p>
+              </div>
+              <div>
+                <p className="mt-8 border-t border-border pt-1">Customer / Site Receiver</p>
               </div>
               {isQcApproved && (
                 <div className="rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-success">

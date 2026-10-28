@@ -367,6 +367,13 @@ class Trip(TimestampMixin, db.Model):
     qc_check = db.relationship("QcCheck", backref="trip", uselist=False, lazy=True)
 
     def to_dict(self):
+        rate = self.po.rate_per_cum if self.po else 0.0
+        qty = self.delivered_quantity if (self.status == "DELIVERED" and self.delivered_quantity is not None) else self.quantity_cum
+        base_amount = round(qty * rate, 2)
+        gst_percent = 18.0
+        gst_amount = round(base_amount * (gst_percent / 100.0), 2)
+        total_amount = round(base_amount + gst_amount, 2)
+
         return {
             "id": self.id,
             "tripNumber": self.trip_number,
@@ -379,6 +386,11 @@ class Trip(TimestampMixin, db.Model):
             "gradeId": self.po.grade_id if self.po else None,
             "sequence": self.sequence,
             "quantity": self.quantity_cum,
+            "ratePerCum": rate,
+            "baseAmount": base_amount,
+            "gstPercent": gst_percent,
+            "gstAmount": gst_amount,
+            "totalAmount": total_amount,
             "tmId": self.truck_id,
             "tmNumber": self.truck.tm_number if self.truck else None,
             "tmCapacity": self.truck.capacity_cum if self.truck else None,
@@ -650,6 +662,9 @@ class Invoice(TimestampMixin, db.Model):
         if status in ["ISSUED", "PARTIALLY_PAID"] and self.is_overdue:
             status = "OVERDUE"
 
+        total_qty = round(sum(l.quantity for l in self.lines), 2)
+        trip_count = len(self.lines)
+
         return {
             "id": self.id,
             "invoiceNumber": self.invoice_number,
@@ -661,11 +676,14 @@ class Invoice(TimestampMixin, db.Model):
             "dueDate": self.due_date.isoformat(),
             "subtotal": self.subtotal,
             "gstPercent": self.gst_percent,
+            "gstAmount": round(self.total - self.subtotal, 2),
             "total": self.total,
             "paidAmount": round(self.paid_amount, 2),
             "outstandingAmount": round(self.outstanding_amount, 2),
             "status": status,
             "isOverdue": self.is_overdue,
+            "tripCount": trip_count,
+            "totalQuantity": total_qty,
             "lines": [l.to_dict() for l in self.lines],
             "payments": [p.to_dict() for p in self.payments]
         }
@@ -687,6 +705,7 @@ class InvoiceLine(TimestampMixin, db.Model):
             "invoiceId": self.invoice_id,
             "tripId": self.trip_id,
             "tripNumber": self.trip.trip_number if self.trip else None,
+            "challanNumber": self.trip.challan.challan_number if (self.trip and self.trip.challan) else None,
             "quantity": self.quantity,
             "rate": self.rate,
             "amount": self.amount

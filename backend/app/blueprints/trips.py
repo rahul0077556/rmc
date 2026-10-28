@@ -342,6 +342,11 @@ def mark_delivered(id):
             user_id=get_current_user_id(),
             extra_data={"delivered_quantity": delivered_qty, "receiver_name": receiver_name}
         )
+        
+        # Automatically generate or update customer Tax Invoice for this PO and all its delivered trips
+        from backend.app.services.billing_service import BillingService
+        BillingService.sync_invoice_for_po(trip.po_id, user_id=get_current_user_id())
+
         db.session.commit()
         return success_response(data=trip.to_dict())
     except StateMachineError as e:

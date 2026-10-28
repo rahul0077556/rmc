@@ -35,7 +35,7 @@ import {
 import { useListQuery } from "@/hooks/use-list-query";
 import { accountApi, type Employee, type PayrollRun } from "@/api/account";
 import { invoicesApi, type InvoiceRow } from "@/api/invoices";
-import { inr, dt } from "@/lib/format";
+import { inr, dt, cum } from "@/lib/format";
 import { useAuth } from "@/auth/auth-context";
 import { cn } from "@/lib/utils";
 import type { Payment } from "@/types";
@@ -145,7 +145,18 @@ function AccountPage() {
 
   const invoiceColumns: Column<InvoiceRow>[] = [
     { key: "inv", header: "Invoice #", cell: (r) => <span className="font-semibold text-primary">{r.invoiceNumber}</span> },
+    { key: "po", header: "PO Number", cell: (r) => <span className="font-mono text-xs font-medium">{r.poNumber || r.poId}</span> },
     { key: "customer", header: "Customer", cell: (r) => <span className="font-medium">{r.customerName}</span> },
+    {
+      key: "trips",
+      header: "Trips / Volume",
+      cell: (r) => (
+        <div className="flex flex-col text-xs">
+          <span className="font-medium text-foreground">{r.tripCount || r.lines?.length || 1} trips</span>
+          <span className="text-[11px] text-muted-foreground">{r.totalQuantity ? cum(r.totalQuantity) : "Delivered"}</span>
+        </div>
+      ),
+    },
     { key: "issue", header: "Issue Date", cell: (r) => r.issueDate },
     { key: "due", header: "Due Date", cell: (r) => r.dueDate },
     { key: "total", header: "Total Amount", align: "right", cell: (r) => <span className="tabular-nums font-semibold">{inr(r.amount)}</span> },
@@ -166,7 +177,16 @@ function AccountPage() {
       header: "Action",
       align: "right",
       cell: (r) => (
-        <div className="flex justify-end gap-1.5">
+        <div className="flex justify-end items-center gap-1.5">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
+            onClick={() => window.open(`/api/v1/invoices/${r.id}/pdf`, "_blank")}
+            title="Download Tax Invoice PDF"
+          >
+            <FileText className="size-3" /> PDF
+          </Button>
           {!readOnly && r.outstanding > 0 && (
             <Button
               size="sm"

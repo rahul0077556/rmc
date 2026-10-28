@@ -10,9 +10,21 @@ export interface TripRow extends Trip {
   tmCapacity?: number;
   driverName: string;
   notes?: string;
+  ratePerCum?: number;
+  baseAmount?: number;
+  gstPercent?: number;
+  gstAmount?: number;
+  totalAmount?: number;
 }
 
 export function decorateTrip(trip: any): TripRow {
+  const rate = trip.ratePerCum ?? trip.rate_per_cum ?? 0;
+  const qty = (trip.status === "DELIVERED" && trip.deliveredQuantity != null) ? trip.deliveredQuantity : (trip.quantity ?? trip.quantity_cum ?? 0);
+  const base = trip.baseAmount ?? trip.base_amount ?? round2(qty * rate);
+  const gstPct = trip.gstPercent ?? trip.gst_percent ?? 18;
+  const gst = trip.gstAmount ?? trip.gst_amount ?? round2(base * (gstPct / 100));
+  const tot = trip.totalAmount ?? trip.total_amount ?? round2(base + gst);
+
   return {
     id: trip.id,
     tripNumber: trip.tripNumber || trip.id,
@@ -23,6 +35,11 @@ export function decorateTrip(trip: any): TripRow {
     grade: trip.grade || "—",
     sequence: trip.sequence || 1,
     quantity: trip.quantity ?? trip.quantity_cum ?? 0,
+    ratePerCum: rate,
+    baseAmount: base,
+    gstPercent: gstPct,
+    gstAmount: gst,
+    totalAmount: tot,
     tmId: trip.tmId || trip.truck_id,
     tmCode: trip.tmNumber || trip.tmCode || "Unassigned",
     tmCapacity: trip.tmCapacity,
@@ -40,6 +57,10 @@ export function decorateTrip(trip: any): TripRow {
     notes: trip.notes || "",
     lastUpdate: trip.lastUpdate || trip.updated_at || new Date().toISOString(),
   };
+}
+
+function round2(v: number) {
+  return Math.round((v + Number.EPSILON) * 100) / 100;
 }
 
 export interface FleetSummary {

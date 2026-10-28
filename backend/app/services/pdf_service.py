@@ -79,6 +79,12 @@ class PdfService:
         qc = trip.qc_check
         batch = trip.batch_sheet
 
+        rate = po.rate_per_cum if po else 0.0
+        qty = trip.delivered_quantity or trip.quantity_cum
+        base_amt = round(qty * rate, 2)
+        gst_amt = round(base_amt * 0.18, 2)
+        total_amt = round(base_amt + gst_amt, 2)
+
         copies = [
             ("CUSTOMER COPY", "#1D4ED8"),
             ("DRIVER COPY", "#047857"),
@@ -102,7 +108,11 @@ class PdfService:
                 [Paragraph("<b>Loaded Qty:</b>", styles["Normal"]), Paragraph(f"<b>{trip.quantity_cum} cum</b>", styles["Normal"]),
                  Paragraph("<b>Slump:</b>", styles["Normal"]), Paragraph(f"{qc.slump_mm} mm" if qc else "N/A", styles["Normal"])],
                 [Paragraph("<b>Batch Sheet No:</b>", styles["Normal"]), Paragraph(batch.batch_number if batch else "N/A", styles["Normal"]),
-                 Paragraph("<b>QC Status:</b>", styles["Normal"]), Paragraph(f"<font color='green'><b>APPROVED ({batch.qc_signed_by if batch else 'QC Verified'})</b></font>", styles["Normal"])]
+                 Paragraph("<b>QC Status:</b>", styles["Normal"]), Paragraph(f"<font color='green'><b>APPROVED ({batch.qc_signed_by if batch else 'QC Verified'})</b></font>", styles["Normal"])],
+                [Paragraph("<b>Agreed Rate:</b>", styles["Normal"]), Paragraph(f"₹{rate:,.2f} / cum", styles["Normal"]),
+                 Paragraph("<b>Taxable Value:</b>", styles["Normal"]), Paragraph(f"₹{base_amt:,.2f}", styles["Normal"])],
+                [Paragraph("<b>GST (18%):</b>", styles["Normal"]), Paragraph(f"₹{gst_amt:,.2f}", styles["Normal"]),
+                 Paragraph("<b>Total Trip Amount:</b>", styles["Normal"]), Paragraph(f"<b><font color='#047857'>₹{total_amt:,.2f}</font></b>", styles["Normal"])]
             ]
 
             t = Table(data, colWidths=[90, 180, 90, 180])
