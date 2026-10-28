@@ -56,6 +56,9 @@ function ProductionPage() {
       setActive(res.data);
       void qc.invalidateQueries({ queryKey: ["production-queue"] });
     },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.error?.message || err?.message || "Failed to start batching");
+    },
   });
 
   const confirm = useMutation({
@@ -67,6 +70,9 @@ function ProductionPage() {
       void qc.invalidateQueries({ queryKey: ["qa-queue"] });
       if (res.data) void navigate({ to: "/batch-sheet/$id", params: { id: res.data.id } });
     },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.error?.message || err?.message || "Failed to generate batch sheet");
+    },
   });
 
   const send = useMutation({
@@ -74,6 +80,9 @@ function ProductionPage() {
     onSuccess: () => {
       toast.success("Trip moved into the production queue");
       void qc.invalidateQueries({ queryKey: ["production-queue"] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.error?.message || err?.message || "Failed to move trip to production");
     },
   });
 
@@ -216,13 +225,13 @@ function ProductionPage() {
               Close
             </Button>
             {active?.status !== "BATCHING" && (
-              <Button disabled={shortfalls.length > 0 || !active} onClick={() => active && start.mutate(active.id)}>
-                Start batching
+              <Button disabled={shortfalls.length > 0 || !active || start.isPending} onClick={() => active && start.mutate(active.id)}>
+                {start.isPending ? "Starting batch..." : "Start batching"}
               </Button>
             )}
             {active?.status === "BATCHING" && (
               <Button onClick={() => active && confirm.mutate(active.id)} disabled={confirm.isPending}>
-                Confirm loaded quantity
+                {confirm.isPending ? "Generating Sheet..." : "Confirm loaded quantity"}
               </Button>
             )}
           </DialogFooter>

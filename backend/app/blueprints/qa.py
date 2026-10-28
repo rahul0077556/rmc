@@ -26,7 +26,7 @@ def get_qa_queue():
 
 @qa_bp.route("/checks", methods=["POST"])
 @jwt_required()
-@roles_required("qa")
+@roles_required("qa", "dispatcher", "owner")
 def submit_qc_check():
     data = request.get_json() or {}
     trip_id = data.get("tripId")

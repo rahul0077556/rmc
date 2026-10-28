@@ -69,7 +69,7 @@ def check_materials(id):
 
 @production_bp.route("/production/trips/<id>/start-batching", methods=["POST"])
 @jwt_required()
-@roles_required("production")
+@roles_required("production", "dispatcher", "owner")
 def start_batching(id):
     trip = Trip.query.get(id)
     if not trip:
@@ -108,7 +108,7 @@ def start_batching(id):
 
 @production_bp.route("/production/trips/<id>/confirm-loaded", methods=["POST"])
 @jwt_required()
-@roles_required("production")
+@roles_required("production", "dispatcher", "owner")
 def confirm_loaded(id):
     trip = Trip.query.get(id)
     if not trip:
