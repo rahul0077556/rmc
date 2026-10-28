@@ -22,6 +22,10 @@ with app.app_context():
         runner = CliRunner()
         result = runner.invoke(seed_cli)
         print('Seed completed with exit code:', result.exit_code)
+        
+        # Purge dummy historical transactions so deployed plant starts clean
+        from backend.purge_dummy_data import execute_purge
+        execute_purge()
 " || true
 
 PORT="${PORT:-8080}"

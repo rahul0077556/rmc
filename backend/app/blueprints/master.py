@@ -207,3 +207,11 @@ def list_trucks():
 def list_drivers():
     drivers = Driver.query.all()
     return success_response(data=[d.to_dict() for d in drivers])
+
+# --- SYSTEM PURGE / CLEAN SEED ---
+@master_bp.route("/system/purge-dummy-data", methods=["POST", "GET"])
+def purge_system_dummy_data():
+    from backend.purge_dummy_data import execute_purge
+    execute_purge()
+    return success_response(data={"message": "All dummy data successfully purged."})
+
