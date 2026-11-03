@@ -294,3 +294,4 @@ export function DailyConsumptionDialog({ open, onOpenChange, initialDate }: Dail
     </Dialog>
   );
 }
+

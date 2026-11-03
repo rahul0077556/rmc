@@ -11,5 +11,6 @@ psycopg2-binary>=2.9.9
 pytest>=8.1.0
 flasgger>=0.9.7.1
 python-dotenv>=1.0.1
+pypdf>=5.0.0
 gunicorn>=22.0.0
 werkzeug>=3.0.1

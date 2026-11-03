@@ -284,14 +284,33 @@ def parse_uploaded_batch_sheet():
             return success_response(data=data)
     elif "file" in request.files:
         uploaded_file = request.files["file"]
-        filename = uploaded_file.filename or ""
+        filename = (uploaded_file.filename or "").lower()
         file_bytes = uploaded_file.read()
         
-        # Try text decoding if it's text/csv/txt
-        try:
-            raw_text = file_bytes.decode("utf-8", errors="ignore")
-        except Exception:
-            raw_text = ""
+        # 1. Try PDF text extraction using pypdf
+        if filename.endswith(".pdf") or file_bytes.startswith(b"%PDF"):
+            try:
+                import io
+                import pypdf
+                reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+                raw_text = "\n".join(page.extract_text() or "" for page in reader.pages)
+            except Exception:
+                raw_text = ""
+
+        # 2. If no text found or file is an image, try Apple Vision OCR
+        if not raw_text.strip() and (filename.endswith((".jpg", ".jpeg", ".png", ".webp")) or file_bytes.startswith(b"\xff\xd8") or file_bytes.startswith(b"\x89PNG")):
+            try:
+                ext = filename.split(".")[-1] if "." in filename else "jpg"
+                raw_text = BatchReportParserService.ocr_image_bytes(file_bytes, ext=ext)
+            except Exception:
+                raw_text = ""
+
+        # 3. Fallback text decoding if plain text/csv
+        if not raw_text.strip():
+            try:
+                raw_text = file_bytes.decode("utf-8", errors="ignore")
+            except Exception:
+                raw_text = ""
 
     parsed = BatchReportParserService.parse_text_or_ocr(raw_text)
     return success_response(data=parsed)

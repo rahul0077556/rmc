@@ -98,12 +98,19 @@ export function UploadBatchSheetDialog({ open, onOpenChange, onSuccess }: Upload
           ...res.data,
           date: res.data.date || prev.date,
         }));
-        toast.success("Batch sheet parsed successfully from document!");
+        toast.success(
+          `Batch docket #${res.data.docketNumber || "scanned"} parsed successfully!`
+        );
       }
     },
-    onError: () => {
+    onError: (err: any) => {
       setIsParsing(false);
-      toast.error("Could not parse file. You can verify and edit the fields below.");
+      const status = err?.response?.status;
+      if (status === 502) {
+        toast.error("Backend server is offline (502). Please start backend with: python backend/wsgi.py");
+      } else {
+        toast.warning("Could not auto-parse document text. You can verify and edit the fields below manually.");
+      }
     },
   });
 
@@ -130,9 +137,14 @@ export function UploadBatchSheetDialog({ open, onOpenChange, onSuccess }: Upload
       if (onSuccess) onSuccess();
     },
     onError: (err: any) => {
-      toast.error(
-        err?.response?.data?.error?.message || err?.message || "Failed to post batch sheet."
-      );
+      const status = err?.response?.status;
+      if (status === 502) {
+        toast.error("Backend server is offline (502). Please start backend with: python backend/wsgi.py");
+      } else {
+        toast.error(
+          err?.response?.data?.error?.message || err?.message || "Failed to post batch sheet."
+        );
+      }
     },
   });
 
@@ -473,3 +485,4 @@ export function UploadBatchSheetDialog({ open, onOpenChange, onSuccess }: Upload
     </Dialog>
   );
 }
+

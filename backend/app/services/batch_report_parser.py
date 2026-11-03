@@ -59,6 +59,53 @@ class BatchReportParserService:
     }
 
     @classmethod
+    def ocr_image_bytes(cls, image_bytes: bytes, ext: str = "jpg") -> str:
+        """
+        Runs native Apple Vision OCR on image bytes using macOS Vision framework.
+        """
+        import os
+        import subprocess
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=False) as f:
+            f.write(image_bytes)
+            tmp_path = f.name
+
+        swift_script = f"""
+import Foundation
+import Vision
+import AppKit
+
+let imagePath = "{tmp_path}"
+guard let image = NSImage(contentsOfFile: imagePath),
+      let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {{
+    exit(0)
+}}
+
+let request = VNRecognizeTextRequest {{ (req, err) in
+    guard let observations = req.results as? [VNRecognizedTextObservation] else {{ return }}
+    for observation in observations {{
+        if let topCandidate = observation.topCandidates(1).first {{
+            print(topCandidate.string)
+        }}
+    }}
+}}
+request.recognitionLevel = .accurate
+let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+try? handler.perform([request])
+"""
+        try:
+            proc = subprocess.run(["swift", "-"], input=swift_script, capture_output=True, text=True, timeout=15)
+            return proc.stdout or ""
+        except Exception:
+            return ""
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+    @classmethod
     def parse_text_or_ocr(cls, text: str) -> Dict[str, Any]:
         """
         Extracts structured fields from raw OCR/text string of a batch report.
@@ -67,45 +114,116 @@ class BatchReportParserService:
         if not text:
             return data
 
+        def clean_val(val: str, stops=None) -> str:
+            if not val:
+                return ""
+            val = val.split("\n")[0].split("\r")[0].strip()
+            if stops:
+                for s in stops:
+                    idx = val.lower().find(s.lower())
+                    if idx != -1:
+                        val = val[:idx].strip()
+            return val.strip(" :-|")
+
         # Customer
-        m = re.search(r"Customer\s*Name\s*[:\-]\s*([A-Za-z0-9\s]+)", text, re.IGNORECASE)
-        if m: data["customerName"] = m.group(1).strip()
+        m = re.search(r"Customer\s*Name\s*[:\-]\s*([^\r\n]+)", text, re.IGNORECASE)
+        if m:
+            c = clean_val(m.group(1), ["Site Name", "Truck", "Order", "Recipe"])
+            if c: data["customerName"] = c
 
         # Site
-        m = re.search(r"Site\s*Name\s*[:\-]\s*([A-Za-z0-9\s]+)", text, re.IGNORECASE)
-        if m: data["siteName"] = m.group(1).strip()
+        m = re.search(r"Site\s*Name\s*[:\-]\s*([^\r\n]+)", text, re.IGNORECASE)
+        if m:
+            s = clean_val(m.group(1), ["Truck", "Driver", "Start", "Recipe"])
+            if s: data["siteName"] = s
 
         # Truck No
-        m = re.search(r"Truck\s*No\.?\s*[:\-]\s*([A-Za-z0-9]+)", text, re.IGNORECASE)
-        if m: data["truckNumber"] = m.group(1).strip().upper()
+        m = re.search(r"Truck\s*No\.?\s*[:\-]\s*([^\r\n]+)", text, re.IGNORECASE)
+        if m:
+            t = clean_val(m.group(1), ["Driver", "Start", "End"]).upper().replace(" ", "")
+            if t: data["truckNumber"] = t
 
         # Driver
-        m = re.search(r"Driver\s*Name\s*[:\-]\s*([A-Za-z\s]+)", text, re.IGNORECASE)
-        if m: data["driverName"] = m.group(1).strip()
+        m = re.search(r"Driver\s*Name\s*[:\-]\s*([^\r\n]+)", text, re.IGNORECASE)
+        if m:
+            d = clean_val(m.group(1), ["Start", "End", "Time", "Batch"])
+            if d: data["driverName"] = d
 
         # Docket No
         m = re.search(r"Docket\s*/?\s*Ticket\s*No\.?\s*[:\-]\s*([0-9]+)", text, re.IGNORECASE)
-        if m: data["docketNumber"] = m.group(1).strip()
+        if m:
+            data["docketNumber"] = m.group(1).strip()
 
         # Recipe / Grade
-        m = re.search(r"Recipe\s*Name\s*[:\-]\s*([A-Za-z0-9\s]+)", text, re.IGNORECASE)
-        if m: data["recipeName"] = m.group(1).strip()
+        m = re.search(r"Recipe\s*Name\s*[:\-]\s*([^\r\n]+)", text, re.IGNORECASE)
+        if m:
+            r = clean_val(m.group(1), ["Total M", "Date", "Batch", "Order"])
+            if r: data["recipeName"] = r
+
+        # Concrete Grade
+        m = re.search(r"Grade(?:\s+of\s+Concrete)?\s*[:\-]\s*([^\r\n]+)", text, re.IGNORECASE)
+        if m:
+            g_str = clean_val(m.group(1))
+            gm = re.search(r"(M\s*\d+)", g_str, re.IGNORECASE)
+            if gm:
+                data["grade"] = gm.group(1).replace(" ", "").upper()
 
         # Ticket Qty
         m = re.search(r"Ticket\s*Qty\.?\s*[:\-]\s*([0-9.]+)", text, re.IGNORECASE)
         if m: data["ticketQtyCum"] = float(m.group(1))
 
+        # Total M3
+        m = re.search(r"Total\s*M[³3]?\s*[:\-]\s*([0-9.]+)", text, re.IGNORECASE)
+        if m and "ticketQtyCum" not in data:
+            data["ticketQtyCum"] = float(m.group(1))
+
+        # W/C Ratio
+        m = re.search(r"W/?C\s*Ratio\s*[:\-]\s*([0-9.]+)", text, re.IGNORECASE)
+        if m: data["wcRatio"] = float(m.group(1))
+
         # Date
         m = re.search(r"Date\s*[:\-]\s*([0-9/.\-]+)", text, re.IGNORECASE)
         if m:
             raw_d = m.group(1).strip()
-            # Normalize DD/MM/YYYY to YYYY-MM-DD
             parts = re.split(r"[/.\-]", raw_d)
             if len(parts) == 3:
                 if len(parts[0]) == 4:
                     data["date"] = f"{parts[0]}-{parts[1].zfill(2)}-{parts[2].zfill(2)}"
                 elif len(parts[2]) == 4:
                     data["date"] = f"{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
+
+        # Total Actual Scale Weights (R-Sand, M-Sand, 10mm, 20mm, Cement, Flyash, Water, Admix, Total)
+        m = re.search(r"Total\s*Actual\s+([^\r\n]+)", text, re.IGNORECASE)
+        if m:
+            nums = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", m.group(1))]
+            if len(nums) >= 8:
+                data["rSandKg"] = nums[0]
+                data["mSandKg"] = nums[1]
+                data["agg10mmKg"] = nums[2]
+                data["agg20mmKg"] = nums[3]
+                data["cementKg"] = nums[4]
+                data["flyashKg"] = nums[5]
+                data["waterL"] = nums[6]
+                data["admixtureKg"] = nums[7]
+                if len(nums) >= 9:
+                    data["totalWeightKg"] = nums[-1]
+
+        # Total Set (Target Weights)
+        m = re.search(r"Total\s*Set\s+([^\r\n]+)", text, re.IGNORECASE)
+        if m:
+            nums = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", m.group(1))]
+            if len(nums) >= 8:
+                data["targetWeights"] = {
+                    "rSandKg": nums[0],
+                    "mSandKg": nums[1],
+                    "agg10mmKg": nums[2],
+                    "agg20mmKg": nums[3],
+                    "cementKg": nums[4],
+                    "flyashKg": nums[5],
+                    "waterL": nums[6],
+                    "admixtureKg": nums[7],
+                    "totalWeightKg": nums[-1] if len(nums) >= 9 else sum(nums[:8])
+                }
 
         return data
 
