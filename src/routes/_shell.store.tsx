@@ -58,7 +58,9 @@ import {
   type ExpenseRecord,
   type AttendanceRecord,
   type StockTransactionItem,
+  type TmTripLogItem,
 } from "@/api/store";
+import { productionApi } from "@/api/production";
 import { useAuth } from "@/auth/auth-context";
 import { inr, dt, num } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -78,7 +80,7 @@ function StorePage() {
   const readOnly = user?.role === "owner";
   const qc = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<"inventory" | "inward-register" | "consumption" | "material-flow" | "payloads" | "dpr" | "expenses" | "attendance">("inventory");
+  const [activeTab, setActiveTab] = useState<"inventory" | "inward-register" | "consumption" | "material-flow" | "payloads" | "dpr" | "tm-average" | "expenses" | "attendance">("inventory");
 
   // Queries
   const { params, updateParams, query: inventory } = useListQuery(["inventory"], () => storeApi.inventory().then((r) => r.data));
@@ -88,6 +90,19 @@ function StorePage() {
   const dpr = useQuery({ queryKey: ["dpr-reports"], queryFn: () => storeApi.dprReports().then((r) => r.data) });
   const expenses = useQuery({ queryKey: ["store-expenses"], queryFn: () => storeApi.expenses().then((r) => r.data) });
   const attendance = useQuery({ queryKey: ["store-attendance"], queryFn: () => storeApi.attendance().then((r) => r.data) });
+
+  // Connected DPR Query (PO + Batches + Material Consumption)
+  const [dprDate, setDprDate] = useState(new Date().toISOString().slice(0, 10));
+  const dprSheetQuery = useQuery({
+    queryKey: ["dpr-sheet", dprDate],
+    queryFn: () => productionApi.getDpr(dprDate).then((r) => r.data),
+  });
+
+  // TM Logs Query (Driver Record Book)
+  const tmLogsQuery = useQuery({
+    queryKey: ["tm-logs"],
+    queryFn: () => storeApi.listTmLogs().then((r) => r.data),
+  });
 
   // Inward Entry Modal State
   const [inwardOpen, setInwardOpen] = useState(false);
@@ -103,6 +118,62 @@ function StorePage() {
   const [driverName, setDriverName] = useState("");
   const [watchmanName, setWatchmanName] = useState("Ganesh Shinde (Gate Security)");
   const [remarks, setRemarks] = useState("");
+
+  // TM Fuel Log Modal state
+  const [tmLogOpen, setTmLogOpen] = useState(false);
+  const [tmDate, setTmDate] = useState(new Date().toISOString().slice(0, 10));
+  const [tmDriverName, setTmDriverName] = useState("");
+  const [tmTruckNo, setTmTruckNo] = useState("");
+  const [tmCapacity, setTmCapacity] = useState<number>(8);
+  const [tmStartKm, setTmStartKm] = useState<number>(0);
+  const [tmEndKm, setTmEndKm] = useState<number>(0);
+  const [tmHandiStartHr, setTmHandiStartHr] = useState<number>(0);
+  const [tmHandiCloseHr, setTmHandiCloseHr] = useState<number>(0);
+  const [tmExtraHandiHr, setTmExtraHandiHr] = useState<number>(0);
+  const [tmOpeningDiesel, setTmOpeningDiesel] = useState<number>(100);
+  const [tmIssuedDiesel, setTmIssuedDiesel] = useState<number>(50);
+  const [tmClosingDiesel, setTmClosingDiesel] = useState<number>(110);
+  const [tmTripsCount, setTmTripsCount] = useState<number>(1);
+  const [tmConcreteVol, setTmConcreteVol] = useState<number>(6);
+  const [tmRemarks, setTmRemarks] = useState("");
+
+  const calculatedRunningKm = Math.max(0, Number(tmEndKm) - Number(tmStartKm));
+  const calculatedActualDiesel = Math.max(0, (Number(tmOpeningDiesel) + Number(tmIssuedDiesel)) - Number(tmClosingDiesel));
+  const calculatedAverageKmL = calculatedRunningKm > 0 && calculatedActualDiesel > 0
+    ? (calculatedRunningKm / calculatedActualDiesel).toFixed(2)
+    : "1.80";
+
+  const saveTmLogMutation = useMutation({
+    mutationFn: () => {
+      return storeApi.saveTmLog({
+        date: tmDate,
+        driverName: tmDriverName.trim(),
+        truckNumber: tmTruckNo.trim().toUpperCase(),
+        truckCapacity: tmCapacity,
+        startKm: tmStartKm,
+        endKm: tmEndKm,
+        runningKm: calculatedRunningKm,
+        handiStartHr: tmHandiStartHr,
+        handiClosingHr: tmHandiCloseHr,
+        extraHandiHr: tmExtraHandiHr,
+        openingDiesel: tmOpeningDiesel,
+        issuedDiesel: tmIssuedDiesel,
+        closingDiesel: tmClosingDiesel,
+        tripsCount: tmTripsCount,
+        concreteVolume: tmConcreteVol,
+        remarks: tmRemarks.trim() || undefined,
+      });
+    },
+    onSuccess: (res) => {
+      toast.success(`TM trip & diesel log for ${res.data.truckNumber} saved! Silo diesel stock updated.`);
+      setTmLogOpen(false);
+      void qc.invalidateQueries({ queryKey: ["tm-logs"] });
+      void qc.invalidateQueries({ queryKey: ["inventory"] });
+      void qc.invalidateQueries({ queryKey: ["dpr-sheet"] });
+      void qc.invalidateQueries({ queryKey: ["daily-consumption"] });
+    },
+    onError: () => toast.error("Failed to save TM trip log. Please verify vehicle and driver."),
+  });
 
   // Printable Gate Pass Slip State
   const [printedSlip, setPrintedSlip] = useState<WeighbridgeTicket | null>(null);
@@ -206,6 +277,17 @@ function StorePage() {
     if (!inventory.data) return 0;
     return inventory.data.reduce((acc: number, item: InventoryItem) => acc + (item.totalConsumed || 0), 0);
   }, [inventory.data]);
+
+  // TM Fleet Mileage & Fuel Metrics
+  const tmMetrics = useMemo(() => {
+    const logs = tmLogsQuery.data || [];
+    const totalKm = logs.reduce((acc, l) => acc + (l.runningKm || 0), 0);
+    const totalDiesel = logs.reduce((acc, l) => acc + (l.actualDieselConsumed || 0), 0);
+    const totalTrips = logs.reduce((acc, l) => acc + (l.tripsCount || 0), 0);
+    const totalCum = logs.reduce((acc, l) => acc + (l.concreteVolume || 0), 0);
+    const avgKmL = totalDiesel > 0 ? (totalKm / totalDiesel).toFixed(2) : "0.00";
+    return { totalKm, totalDiesel, totalTrips, totalCum, avgKmL };
+  }, [tmLogsQuery.data]);
 
   if (inventory.isLoading) return <LoadingState rows={5} />;
   if (inventory.error || !inventory.data)
@@ -454,6 +536,89 @@ function StorePage() {
     { key: "status", header: "Status", align: "center", cell: (r) => <StatusBadge status={r.status === "PAID" ? "APPROVED" : "IN_PROGRESS"} /> },
   ];
 
+  // TM Driver Fuel & Mileage Log Columns
+  const tmLogColumns: Column<TmTripLogItem>[] = [
+    {
+      key: "date",
+      header: "Date",
+      cell: (r) => <span className="font-semibold text-xs">{r.date}</span>,
+      sortValue: (r) => r.date,
+    },
+    {
+      key: "truck",
+      header: "Vehicle & Driver",
+      cell: (r) => (
+        <div>
+          <span className="font-mono font-bold text-foreground">{r.truckNumber}</span>
+          <div className="text-[11px] text-muted-foreground">{r.driverName} ({r.truckCapacity} m³)</div>
+        </div>
+      ),
+    },
+    {
+      key: "km",
+      header: "Running KM",
+      align: "right",
+      cell: (r) => (
+        <div>
+          <span className="font-mono font-bold text-foreground">{num(r.runningKm)} KM</span>
+          <div className="text-[10px] text-muted-foreground font-mono">{r.startKm} → {r.endKm}</div>
+        </div>
+      ),
+      sortValue: (r) => r.runningKm,
+    },
+    {
+      key: "handi",
+      header: "Handi Drum (Hrs)",
+      align: "right",
+      cell: (r) => (
+        <span className="font-mono text-xs">
+          {r.handiRunningHr} hrs {r.extraHandiHr > 0 && <span className="text-amber-400 font-bold">(+{r.extraHandiHr}h)</span>}
+        </span>
+      ),
+    },
+    {
+      key: "diesel",
+      header: "Diesel Consumed",
+      align: "right",
+      cell: (r) => (
+        <div>
+          <span className="font-mono font-bold text-amber-400">{num(r.actualDieselConsumed)} L</span>
+          <div className="text-[10px] text-muted-foreground font-mono">Issued: +{num(r.issuedDiesel)}L</div>
+        </div>
+      ),
+      sortValue: (r) => r.actualDieselConsumed,
+    },
+    {
+      key: "mileage",
+      header: "Mileage (KM/L)",
+      align: "center",
+      cell: (r) => (
+        <span className={cn(
+          "font-mono font-bold px-2 py-0.5 rounded text-xs inline-block",
+          r.kmPerLiter >= 1.8 ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" : "bg-amber-500/15 text-amber-400 border border-amber-500/30"
+        )}>
+          {r.kmPerLiter} km/L
+        </span>
+      ),
+      sortValue: (r) => r.kmPerLiter,
+    },
+    {
+      key: "trips",
+      header: "Trips & Concrete",
+      align: "right",
+      cell: (r) => (
+        <span className="text-xs font-semibold">
+          {r.tripsCount} trips ({r.concreteVolume} m³)
+        </span>
+      ),
+    },
+    {
+      key: "remarks",
+      header: "Remarks / Route",
+      cell: (r) => <span className="text-xs text-muted-foreground">{r.remarks || "—"}</span>,
+    },
+  ];
+
   // Attendance Columns
   const attColumns: Column<AttendanceRecord>[] = [
     { key: "name", header: "Staff / Driver Name", cell: (r) => <span className="font-semibold">{r.name}</span> },
@@ -522,14 +687,14 @@ function StorePage() {
 
       {/* Main Tab Navigation */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 max-w-6xl h-auto p-1 gap-1">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 max-w-6xl h-auto p-1 gap-1">
           <TabsTrigger value="inventory" className="flex items-center gap-1.5 text-xs py-2 cursor-pointer font-medium">
             <PackageSearch className="size-3.5 text-primary" />
             Materials & Silos
           </TabsTrigger>
           <TabsTrigger value="inward-register" className="flex items-center gap-1.5 text-xs py-2 cursor-pointer font-medium">
             <ArrowDownLeft className="size-3.5 text-emerald-500" />
-            Gate Inward Receipts ({inwardTickets.length})
+            Gate Inward ({inwardTickets.length})
           </TabsTrigger>
           <TabsTrigger value="consumption" className="flex items-center gap-1.5 text-xs py-2 cursor-pointer font-medium">
             <ArrowUpRight className="size-3.5 text-rose-500" />
@@ -541,7 +706,11 @@ function StorePage() {
           </TabsTrigger>
           <TabsTrigger value="dpr" className="flex items-center gap-1.5 text-xs py-2 cursor-pointer font-medium">
             <Layers className="size-3.5 text-indigo-400" />
-            DPR Reports
+            Connected DPR
+          </TabsTrigger>
+          <TabsTrigger value="tm-average" className="flex items-center gap-1.5 text-xs py-2 cursor-pointer font-medium">
+            <Fuel className="size-3.5 text-orange-400" />
+            TM Fuel & Mileage
           </TabsTrigger>
           <TabsTrigger value="expenses" className="flex items-center gap-1.5 text-xs py-2 cursor-pointer font-medium">
             <Receipt className="size-3.5 text-amber-400" />
@@ -549,7 +718,7 @@ function StorePage() {
           </TabsTrigger>
           <TabsTrigger value="attendance" className="flex items-center gap-1.5 text-xs py-2 cursor-pointer font-medium">
             <Users className="size-3.5 text-blue-400" />
-            Staff Attendance
+            Attendance
           </TabsTrigger>
         </TabsList>
 
@@ -634,20 +803,318 @@ function StorePage() {
           <MaterialFlowDiagram />
         </TabsContent>
 
-        {/* TAB 5: DPR REPORTS */}
+        {/* TAB 5: DPR REPORTS (CONNECTED WITH PO, TRIPS & CONSUMPTION) */}
         <TabsContent value="dpr" className="mt-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-foreground">Daily Production Reports (DPR / MPR)</h3>
-              <p className="text-xs text-muted-foreground">Daily volume produced, power, diesel and cement consumption.</p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card border border-border p-4 rounded-xl">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Layers className="size-4 text-indigo-400" />
+                <h3 className="text-sm font-bold text-foreground">Daily Production Report (DPR)</h3>
+                <span className="text-[10px] bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 font-semibold px-2 py-0.5 rounded-full">
+                  Live PO & SCADA Sync
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Target deliveries planned for the selected date from Purchase Orders vs. actual dispatched batch sheets and consumption.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 bg-muted/60 px-2 py-1 rounded-lg border border-border">
+                <Calendar className="size-3.5 text-muted-foreground" />
+                <Input
+                  type="date"
+                  value={dprDate}
+                  onChange={(e) => setDprDate(e.target.value)}
+                  className="h-7 w-36 text-xs bg-transparent border-0 p-0 focus-visible:ring-0"
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDprDate(new Date().toISOString().slice(0, 10))}
+                className="h-7 text-xs px-2.5 cursor-pointer"
+              >
+                Today
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => window.print()}
+                className="h-7 text-xs px-2.5 font-semibold cursor-pointer border-indigo-500/40 text-indigo-400 hover:bg-indigo-500/10"
+              >
+                <Printer className="size-3.5 mr-1" />
+                Print DPR
+              </Button>
             </div>
           </div>
+
+          {/* DPR Day Summary KPIs */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="bg-card/70 border border-border p-3 rounded-lg space-y-1">
+              <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">PO Target Planned</span>
+              <div className="text-xl font-bold font-mono text-foreground">
+                {num(dprSheetQuery.data?.totalPlannedCum ?? 0)} m³
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {dprSheetQuery.data?.plannedOrders?.length || 0} scheduled client orders
+              </p>
+            </div>
+
+            <div className="bg-card/70 border border-border p-3 rounded-lg space-y-1">
+              <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Batched & Dispatched</span>
+              <div className="text-xl font-bold font-mono text-emerald-400">
+                {num(dprSheetQuery.data?.totalBatchedCum ?? 0)} m³
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {dprSheetQuery.data?.totalPlannedCum
+                  ? `${Math.round(((dprSheetQuery.data.totalBatchedCum || 0) / dprSheetQuery.data.totalPlannedCum) * 100)}% of scheduled volume`
+                  : "All orders delivered"}
+              </p>
+            </div>
+
+            <div className="bg-card/70 border border-border p-3 rounded-lg space-y-1">
+              <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Transit Mixer Trips</span>
+              <div className="text-xl font-bold font-mono text-indigo-400">
+                {dprSheetQuery.data?.totalTripsCount ?? 0} Loads
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Dispatched from plant on {dprDate}
+              </p>
+            </div>
+
+            <div className="bg-card/70 border border-border p-3 rounded-lg space-y-1">
+              <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Diesel Fuel Consumed</span>
+              <div className="text-xl font-bold font-mono text-amber-400">
+                {num(dprSheetQuery.data?.dieselConsumedL ?? 0)} L
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Tracked from TM driver logbook
+              </p>
+            </div>
+          </div>
+
+          {/* Section 1: Planned Purchase Orders for this Date */}
+          <div className="border border-border rounded-xl bg-card overflow-hidden">
+            <div className="p-3 border-b border-border bg-muted/30 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Box className="size-4 text-primary" />
+                <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                  1. Purchase Orders Planned For Delivery on {dprDate}
+                </h4>
+              </div>
+              <span className="text-xs text-muted-foreground font-mono">
+                {dprSheetQuery.data?.plannedOrders?.length || 0} Orders
+              </span>
+            </div>
+
+            {dprSheetQuery.data?.plannedOrders && dprSheetQuery.data.plannedOrders.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-muted/50 border-b border-border text-muted-foreground">
+                    <tr>
+                      <th className="p-2.5 font-semibold">PO Number</th>
+                      <th className="p-2.5 font-semibold">Customer Name</th>
+                      <th className="p-2.5 font-semibold">Delivery Site</th>
+                      <th className="p-2.5 font-semibold">Grade</th>
+                      <th className="p-2.5 font-semibold text-right">Target (m³)</th>
+                      <th className="p-2.5 font-semibold text-right">Delivered (m³)</th>
+                      <th className="p-2.5 font-semibold text-right">Pending (m³)</th>
+                      <th className="p-2.5 font-semibold text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {dprSheetQuery.data.plannedOrders.map((po) => (
+                      <tr key={po.poNumber} className="hover:bg-muted/20">
+                        <td className="p-2.5 font-mono font-bold text-foreground">{po.poNumber}</td>
+                        <td className="p-2.5 font-semibold text-foreground">{po.customerName}</td>
+                        <td className="p-2.5 text-muted-foreground">{po.siteName}</td>
+                        <td className="p-2.5">
+                          <span className="bg-primary/10 text-primary font-bold px-2 py-0.5 rounded text-[11px]">
+                            {po.gradeCode}
+                          </span>
+                        </td>
+                        <td className="p-2.5 font-mono font-bold text-right">{num(po.orderedCum)} m³</td>
+                        <td className="p-2.5 font-mono font-bold text-emerald-400 text-right">{num(po.deliveredCum)} m³</td>
+                        <td className="p-2.5 font-mono text-muted-foreground text-right">{num(po.pendingCum)} m³</td>
+                        <td className="p-2.5 text-center">
+                          <StatusBadge status={po.status as any} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="p-6 text-center text-xs text-muted-foreground">
+                No purchase orders were scheduled for delivery on {dprDate}.
+              </div>
+            )}
+          </div>
+
+          {/* Section 2: Actual Batched & Dispatched Trips */}
+          <div className="border border-border rounded-xl bg-card overflow-hidden">
+            <div className="p-3 border-b border-border bg-muted/30 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Truck className="size-4 text-emerald-400" />
+                <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                  2. Dispatched Transit Mixer Trips & SCADA Batch Dockets
+                </h4>
+              </div>
+              <span className="text-xs text-muted-foreground font-mono">
+                {dprSheetQuery.data?.batchedTrips?.length || 0} Batches
+              </span>
+            </div>
+
+            {dprSheetQuery.data?.batchedTrips && dprSheetQuery.data.batchedTrips.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-muted/50 border-b border-border text-muted-foreground">
+                    <tr>
+                      <th className="p-2.5 font-semibold">Trip / Batch No.</th>
+                      <th className="p-2.5 font-semibold">Docket #</th>
+                      <th className="p-2.5 font-semibold">Customer & Site</th>
+                      <th className="p-2.5 font-semibold">Truck & Driver</th>
+                      <th className="p-2.5 font-semibold">Grade / Recipe</th>
+                      <th className="p-2.5 font-semibold text-right">Volume (m³)</th>
+                      <th className="p-2.5 font-semibold">Dispatched At</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {dprSheetQuery.data.batchedTrips.map((bt) => (
+                      <tr key={bt.tripNumber} className="hover:bg-muted/20">
+                        <td className="p-2.5 font-mono font-bold text-foreground">{bt.tripNumber}</td>
+                        <td className="p-2.5 font-mono text-muted-foreground">#{bt.docketNumber || "—"}</td>
+                        <td className="p-2.5">
+                          <span className="font-semibold text-foreground">{bt.customerName}</span>
+                          <div className="text-[11px] text-muted-foreground">{bt.siteName}</div>
+                        </td>
+                        <td className="p-2.5">
+                          <span className="font-mono font-bold text-foreground">{bt.truckNumber}</span>
+                          <div className="text-[11px] text-muted-foreground">{bt.driverName}</div>
+                        </td>
+                        <td className="p-2.5">
+                          <span className="font-semibold text-foreground">{bt.gradeCode}</span>
+                          <div className="text-[10px] text-muted-foreground">{bt.recipeName}</div>
+                        </td>
+                        <td className="p-2.5 font-mono font-bold text-emerald-400 text-right">{num(bt.quantityCum)} m³</td>
+                        <td className="p-2.5 text-muted-foreground font-mono">{dt(bt.batchedAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="p-6 text-center text-xs text-muted-foreground">
+                No trips or batch sheets were recorded for {dprDate}.
+              </div>
+            )}
+          </div>
+
+          {/* Section 3: Aggregated Material & Fuel Consumption */}
+          <div className="border border-border rounded-xl bg-card p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Scale className="size-4 text-cyan-400" />
+                <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                  3. Raw Material & Diesel Consumption Summary ({dprDate})
+                </h4>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                Calculated directly from confirmed SCADA batch weighments & TM fuel log
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+              {(dprSheetQuery.data?.materialConsumption || []).map((m) => (
+                <div key={m.materialName} className="rounded-lg border border-border bg-muted/30 p-2.5 space-y-1">
+                  <div className="text-[11px] font-semibold text-muted-foreground truncate" title={m.materialName}>
+                    {m.materialName}
+                  </div>
+                  <div className="text-sm font-bold font-mono text-foreground">
+                    {num(m.quantityConsumed)} <span className="text-[10px] font-normal text-muted-foreground">{m.unit}</span>
+                  </div>
+                </div>
+              ))}
+
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 space-y-1">
+                <div className="text-[11px] font-semibold text-amber-400 flex items-center gap-1">
+                  <Fuel className="size-3" />
+                  Diesel Fuel
+                </div>
+                <div className="text-sm font-bold font-mono text-amber-400">
+                  {num(dprSheetQuery.data?.dieselConsumedL ?? 0)} <span className="text-[10px] font-normal text-amber-300">Litres</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* TAB: TM AVERAGE, MILEAGE & DRIVER RECORD BOOK */}
+        <TabsContent value="tm-average" className="mt-4 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Fuel className="size-4 text-orange-400" />
+                <h3 className="text-sm font-bold text-foreground">Transit Mixer (TM) Fuel, Mileage & Driver Record Book</h3>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Driver record book tracking start/end odometer KM, handi rotation hours, and diesel consumption. Automatically updates DPR and plant consumption.
+              </p>
+            </div>
+            {!readOnly && (
+              <Button
+                size="sm"
+                onClick={() => setTmLogOpen(true)}
+                className="bg-orange-600 hover:bg-orange-700 text-white font-semibold cursor-pointer shrink-0 shadow-md"
+              >
+                <Plus className="mr-1.5 size-4" />
+                Record Driver Trip & Diesel Log
+              </Button>
+            )}
+          </div>
+
+          {/* TM Fleet Mileage & Fuel KPIs */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="bg-card/70 border border-border p-3 rounded-lg space-y-1">
+              <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Total Odometer Distance</span>
+              <div className="text-xl font-bold font-mono text-foreground">
+                {num(tmMetrics.totalKm)} KM
+              </div>
+              <p className="text-[11px] text-muted-foreground">Across all registered transit mixer runs</p>
+            </div>
+
+            <div className="bg-card/70 border border-border p-3 rounded-lg space-y-1">
+              <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Total Diesel Consumed</span>
+              <div className="text-xl font-bold font-mono text-amber-400">
+                {num(tmMetrics.totalDiesel)} L
+              </div>
+              <p className="text-[11px] text-muted-foreground">Fed directly to daily consumption audit</p>
+            </div>
+
+            <div className="bg-card/70 border border-border p-3 rounded-lg space-y-1">
+              <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Fleet Average Mileage</span>
+              <div className="text-xl font-bold font-mono text-emerald-400">
+                {tmMetrics.avgKmL} KM/L
+              </div>
+              <p className="text-[11px] text-muted-foreground">Standard benchmark: 1.80 – 2.20 KM/L</p>
+            </div>
+
+            <div className="bg-card/70 border border-border p-3 rounded-lg space-y-1">
+              <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Total Concrete Delivered</span>
+              <div className="text-xl font-bold font-mono text-indigo-400">
+                {num(tmMetrics.totalCum)} m³
+              </div>
+              <p className="text-[11px] text-muted-foreground">{tmMetrics.totalTrips} completed driver trips</p>
+            </div>
+          </div>
+
           <DataTable
-            columns={dprColumns}
-            rows={dpr.data || []}
+            columns={tmLogColumns}
+            rows={tmLogsQuery.data || []}
             rowKey={(r) => r.id}
-            emptyTitle="No DPR records"
-            emptyDescription="Production summaries will appear here daily."
+            emptyTitle="No TM trip & fuel records found"
+            emptyDescription="Log vehicle trips and diesel issued to drivers to track vehicle mileage and feed consumption reports."
           />
         </TabsContent>
 
@@ -878,6 +1345,263 @@ function StorePage() {
             >
               <CheckCircle2 className="mr-1.5 size-4" />
               Save Inward & Update Silo Stock
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ============================================================== */}
+      {/* MODAL: RECORD DRIVER TRIP & DIESEL LOG (TM RECORD BOOK) */}
+      {/* ============================================================== */}
+      <Dialog open={tmLogOpen} onOpenChange={setTmLogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <span className="flex size-8 items-center justify-center rounded-lg bg-orange-500/10 text-orange-400">
+                <Fuel className="size-4.5" />
+              </span>
+              <div>
+                <DialogTitle className="text-base font-bold">Record Driver Trip & Diesel Logbook</DialogTitle>
+                <DialogDescription className="text-xs">
+                  Log daily odometer KM, handi drum hours, and diesel issued. Mileage and diesel consumed update plant reports and silo stock.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Date *</Label>
+                <Input
+                  type="date"
+                  value={tmDate}
+                  onChange={(e) => setTmDate(e.target.value)}
+                  className="h-8 text-xs"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Truck Number *</Label>
+                <Input
+                  value={tmTruckNo}
+                  onChange={(e) => setTmTruckNo(e.target.value.toUpperCase())}
+                  placeholder="e.g. MH40DC3964"
+                  className="h-8 text-xs font-mono uppercase"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Driver Name *</Label>
+                <Input
+                  value={tmDriverName}
+                  onChange={(e) => setTmDriverName(e.target.value)}
+                  placeholder="e.g. Vikash / Ramesh"
+                  className="h-8 text-xs"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* ODOMETER & RUNNING KM */}
+            <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-2">
+              <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <Truck className="size-3.5 text-primary" />
+                Odometer & Running Distance
+              </span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="space-y-1">
+                  <Label className="text-xs">Start Odometer (KM)</Label>
+                  <Input
+                    type="number"
+                    value={tmStartKm || ""}
+                    onChange={(e) => setTmStartKm(Number(e.target.value))}
+                    placeholder="e.g. 45200"
+                    className="h-8 text-xs font-mono text-right"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Closing Odometer (KM)</Label>
+                  <Input
+                    type="number"
+                    value={tmEndKm || ""}
+                    onChange={(e) => setTmEndKm(Number(e.target.value))}
+                    placeholder="e.g. 45285"
+                    className="h-8 text-xs font-mono text-right"
+                  />
+                </div>
+                <div className="space-y-1 bg-background/80 p-2 rounded border border-border text-right">
+                  <Label className="text-[11px] text-muted-foreground block">Total Running KM</Label>
+                  <span className="font-mono font-bold text-base text-foreground">
+                    {calculatedRunningKm} KM
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* HANDI DRUM ROTATION HOURS */}
+            <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-2">
+              <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <RotateCcw className="size-3.5 text-indigo-400" />
+                Handi Drum Operating Hours
+              </span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="space-y-1">
+                  <Label className="text-xs">Handi Start Hour</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={tmHandiStartHr || ""}
+                    onChange={(e) => setTmHandiStartHr(Number(e.target.value))}
+                    placeholder="e.g. 120.5"
+                    className="h-8 text-xs font-mono text-right"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Handi Closing Hour</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={tmHandiCloseHr || ""}
+                    onChange={(e) => setTmHandiCloseHr(Number(e.target.value))}
+                    placeholder="e.g. 124.0"
+                    className="h-8 text-xs font-mono text-right"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Extra Site Agitation (Hrs)</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={tmExtraHandiHr || ""}
+                    onChange={(e) => setTmExtraHandiHr(Number(e.target.value))}
+                    placeholder="e.g. 0.5"
+                    className="h-8 text-xs font-mono text-right"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* DIESEL FUEL & MILEAGE */}
+            <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-2">
+              <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <Fuel className="size-3.5 text-orange-400" />
+                Diesel Stock & Mileage Calculation
+              </span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="space-y-1">
+                  <Label className="text-xs">Opening Tank Diesel (L)</Label>
+                  <Input
+                    type="number"
+                    value={tmOpeningDiesel || ""}
+                    onChange={(e) => setTmOpeningDiesel(Number(e.target.value))}
+                    placeholder="e.g. 100"
+                    className="h-8 text-xs font-mono text-right"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Diesel Issued Today (L)</Label>
+                  <Input
+                    type="number"
+                    value={tmIssuedDiesel || ""}
+                    onChange={(e) => setTmIssuedDiesel(Number(e.target.value))}
+                    placeholder="e.g. 45"
+                    className="h-8 text-xs font-mono text-right"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Closing Tank Diesel (L)</Label>
+                  <Input
+                    type="number"
+                    value={tmClosingDiesel || ""}
+                    onChange={(e) => setTmClosingDiesel(Number(e.target.value))}
+                    placeholder="e.g. 100"
+                    className="h-8 text-xs font-mono text-right"
+                  />
+                </div>
+              </div>
+
+              {/* Live Mileage & Consumption Calculation Banner */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-orange-500/10 border border-orange-500/30 text-xs">
+                <div>
+                  <span className="text-[11px] text-muted-foreground block">Actual Diesel Consumed:</span>
+                  <span className="font-mono font-bold text-sm text-orange-400">
+                    {calculatedActualDiesel} Litres
+                  </span>
+                </div>
+                <div className="sm:text-right">
+                  <span className="text-[11px] text-muted-foreground block">Vehicle Fuel Economy (Mileage):</span>
+                  <span className={cn(
+                    "font-mono font-bold text-sm",
+                    Number(calculatedAverageKmL) >= 1.8 ? "text-emerald-400" : "text-amber-400"
+                  )}>
+                    {calculatedAverageKmL} KM / L
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* TRIPS & CONCRETE VOLUME */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Truck Capacity (m³)</Label>
+                <Input
+                  type="number"
+                  value={tmCapacity}
+                  onChange={(e) => setTmCapacity(Number(e.target.value))}
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Trips Completed Today</Label>
+                <Input
+                  type="number"
+                  value={tmTripsCount}
+                  onChange={(e) => setTmTripsCount(Number(e.target.value))}
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Total Concrete Hauled (m³)</Label>
+                <Input
+                  type="number"
+                  value={tmConcreteVol}
+                  onChange={(e) => setTmConcreteVol(Number(e.target.value))}
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1 text-xs">
+              <Label className="text-xs font-semibold">Remarks / Destination Site</Label>
+              <Input
+                value={tmRemarks}
+                onChange={(e) => setTmRemarks(e.target.value)}
+                placeholder="e.g. IT Park light house site, 2 loads delivered without delay"
+                className="h-8 text-xs"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button variant="outline" size="sm" onClick={() => setTmLogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={saveTmLogMutation.isPending || !tmTruckNo.trim() || !tmDriverName.trim()}
+              onClick={() => saveTmLogMutation.mutate()}
+              className="bg-orange-600 hover:bg-orange-700 text-white font-semibold cursor-pointer"
+            >
+              <CheckCircle2 className="mr-1.5 size-4" />
+              Save Driver Trip & Update Reports
             </Button>
           </DialogFooter>
         </DialogContent>

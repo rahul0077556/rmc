@@ -427,6 +427,16 @@ class BatchSheet(TimestampMixin, db.Model):
     agg_20_kg = db.Column(db.Float, nullable=False)
     water_l = db.Column(db.Float, nullable=False)
     admixture_l = db.Column(db.Float, nullable=False)
+
+    # SCADA Batch Report Fields (matches Roxxcon/Stetter plant docket)
+    docket_number = db.Column(db.String(50), nullable=True, index=True)
+    recipe_name = db.Column(db.String(100), nullable=True)
+    flyash_kg = db.Column(db.Float, default=0.0, nullable=True)
+    ggbs_kg = db.Column(db.Float, default=0.0, nullable=True)
+    m_sand_kg = db.Column(db.Float, default=0.0, nullable=True)
+    wc_ratio = db.Column(db.Float, default=0.0, nullable=True)
+    total_weight_kg = db.Column(db.Float, default=0.0, nullable=True)
+    plant_name = db.Column(db.String(100), default="ROXXCON RMC NAGPUR", nullable=True)
     
     batched_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     qc_status = db.Column(db.String(30), default="PENDING", nullable=False)  # PENDING, APPROVED, REJECTED
@@ -445,9 +455,26 @@ class BatchSheet(TimestampMixin, db.Model):
         theo_water = round(mix.water_l * self.quantity_cum, 1) if mix else 0
         theo_admix = round(mix.admixture_l * self.quantity_cum, 2) if mix else 0
 
+        mat_list = [
+            {"material": "Cement (OPC 53)", "theoretical": theo_cement, "actual": round(self.cement_kg, 1), "unit": "kg"},
+            {"material": "River Sand (Zone II)", "theoretical": theo_sand, "actual": round(self.sand_kg, 1), "unit": "kg"},
+            {"material": "Aggregate 10mm", "theoretical": theo_agg10, "actual": round(self.agg_10_kg, 1), "unit": "kg"},
+            {"material": "Aggregate 20mm", "theoretical": theo_agg20, "actual": round(self.agg_20_kg, 1), "unit": "kg"},
+            {"material": "Water", "theoretical": theo_water, "actual": round(self.water_l, 1), "unit": "l"},
+            {"material": "Admixture (PCE)", "theoretical": theo_admix, "actual": round(self.admixture_l, 2), "unit": "l"}
+        ]
+        if self.flyash_kg:
+            mat_list.append({"material": "Fly Ash (Class F)", "theoretical": round(self.quantity_cum * 90.0, 1), "actual": round(self.flyash_kg, 1), "unit": "kg"})
+        if self.m_sand_kg:
+            mat_list.append({"material": "Manufactured Sand (M-Sand)", "theoretical": round(self.quantity_cum * 318.0, 1), "actual": round(self.m_sand_kg, 1), "unit": "kg"})
+        if self.ggbs_kg:
+            mat_list.append({"material": "GGBS (Slag)", "theoretical": round(self.quantity_cum * 50.0, 1), "actual": round(self.ggbs_kg, 1), "unit": "kg"})
+
         return {
             "id": self.id,
             "batchNumber": self.batch_number,
+            "docketNumber": self.docket_number or self.batch_number,
+            "recipeName": self.recipe_name or (self.grade.code if self.grade else None),
             "tripId": self.trip_id,
             "grade": self.grade.code if self.grade else None,
             "quantity": self.quantity_cum,
@@ -456,14 +483,10 @@ class BatchSheet(TimestampMixin, db.Model):
             "qcStatus": self.qc_status,
             "qcSignedBy": self.qc_signed_by,
             "qcSignedAt": self.qc_signed_at.isoformat() if self.qc_signed_at else None,
-            "materials": [
-                {"material": "Cement (OPC 53)", "theoretical": theo_cement, "actual": round(self.cement_kg, 1), "unit": "kg"},
-                {"material": "River Sand (Zone II)", "theoretical": theo_sand, "actual": round(self.sand_kg, 1), "unit": "kg"},
-                {"material": "Aggregate 10mm", "theoretical": theo_agg10, "actual": round(self.agg_10_kg, 1), "unit": "kg"},
-                {"material": "Aggregate 20mm", "theoretical": theo_agg20, "actual": round(self.agg_20_kg, 1), "unit": "kg"},
-                {"material": "Water", "theoretical": theo_water, "actual": round(self.water_l, 1), "unit": "l"},
-                {"material": "Admixture (PCE)", "theoretical": theo_admix, "actual": round(self.admixture_l, 2), "unit": "l"}
-            ],
+            "plantName": self.plant_name or "ROXXCON RMC NAGPUR",
+            "wcRatio": self.wc_ratio or 0.39,
+            "totalWeightKg": round(self.total_weight_kg or 0.0, 2),
+            "materials": mat_list,
             "revisions": [r.to_dict() for r in self.revisions],
             "trip": self.trip.to_dict() if self.trip else None
         }
@@ -870,6 +893,58 @@ class TransitMixerPayload(TimestampMixin, db.Model):
             "actualWeightForLoadingKg": self.actual_weight_for_loading_kg,
             "payLoadCapacityRcGvwCum": self.payload_capacity_rc_gvw_cum,
             "supplyPayLoadCapacityOverloadPassCum": self.supply_payload_capacity_overload_pass_cum
+        }
+
+class TmTripLog(TimestampMixin, db.Model):
+    __tablename__ = "tm_trip_logs"
+
+    date = db.Column(db.String(20), nullable=False, index=True)  # YYYY-MM-DD
+    driver_name = db.Column(db.String(100), nullable=False)
+    truck_number = db.Column(db.String(30), nullable=False, index=True)
+    truck_capacity_cum = db.Column(db.Float, default=8.0, nullable=False)
+    
+    start_km = db.Column(db.Float, default=0.0, nullable=False)
+    end_km = db.Column(db.Float, default=0.0, nullable=False)
+    running_km = db.Column(db.Float, default=0.0, nullable=False)
+    
+    handi_start_hr = db.Column(db.Float, default=0.0, nullable=False)
+    handi_closing_hr = db.Column(db.Float, default=0.0, nullable=False)
+    handi_running_hr = db.Column(db.Float, default=0.0, nullable=False)
+    extra_handi_hr = db.Column(db.Float, default=0.0, nullable=False)
+    
+    opening_diesel_l = db.Column(db.Float, default=0.0, nullable=False)
+    issued_diesel_l = db.Column(db.Float, default=0.0, nullable=False)
+    closing_diesel_l = db.Column(db.Float, default=0.0, nullable=False)
+    actual_diesel_consumed_l = db.Column(db.Float, default=0.0, nullable=False)
+    km_per_liter = db.Column(db.Float, default=0.0, nullable=False)
+    
+    trips_count = db.Column(db.Integer, default=1, nullable=False)
+    concrete_volume_cum = db.Column(db.Float, default=0.0, nullable=False)
+    remarks = db.Column(db.String(255), default="Normal Route Operation", nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "date": self.date,
+            "driverName": self.driver_name,
+            "truckNumber": self.truck_number,
+            "truckCapacity": self.truck_capacity_cum,
+            "startKm": self.start_km,
+            "endKm": self.end_km,
+            "runningKm": self.running_km,
+            "handiStartHr": self.handi_start_hr,
+            "handiClosingHr": self.handi_closing_hr,
+            "handiRunningHr": self.handi_running_hr,
+            "extraHandiHr": self.extra_handi_hr,
+            "openingDiesel": self.opening_diesel_l,
+            "issuedDiesel": self.issued_diesel_l,
+            "closingDiesel": self.closing_diesel_l,
+            "actualDieselConsumed": self.actual_diesel_consumed_l,
+            "kmPerLiter": self.km_per_liter,
+            "tripsCount": self.trips_count,
+            "concreteVolume": self.concrete_volume_cum,
+            "remarks": self.remarks or "",
+            "createdAt": self.created_at.isoformat()
         }
 
 class DprRecord(TimestampMixin, db.Model):

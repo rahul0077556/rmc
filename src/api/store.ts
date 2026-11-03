@@ -118,6 +118,30 @@ export interface AttendanceRecord {
   punchTime: string;
 }
 
+export interface TmTripLogItem {
+  id: string;
+  date: string;
+  driverName: string;
+  truckNumber: string;
+  truckCapacity: number;
+  startKm: number;
+  endKm: number;
+  runningKm: number;
+  handiStartHr: number;
+  handiClosingHr: number;
+  handiRunningHr: number;
+  extraHandiHr: number;
+  openingDiesel: number;
+  issuedDiesel: number;
+  closingDiesel: number;
+  actualDieselConsumed: number;
+  kmPerLiter: number;
+  tripsCount: number;
+  concreteVolume: number;
+  remarks: string;
+  createdAt: string;
+}
+
 import { request } from "./client";
 
 export const storeApi = {
@@ -444,6 +468,28 @@ export const storeApi = {
     db.weighbridge = tickets;
     saveDb(db);
     return { data: t };
+  },
+
+  listTmLogs: async (filter?: { date?: string; month?: string }): Promise<ApiResponse<TmTripLogItem[]>> => {
+    try {
+      let url = "/store/tm-logs";
+      if (filter?.date) url += `?date=${filter.date}`;
+      else if (filter?.month) url += `?month=${filter.month}`;
+      const res = await request<TmTripLogItem[]>({ url, method: "GET" });
+      if (res.data) return res;
+    } catch {
+      // Fallback
+    }
+    return { data: [] };
+  },
+
+  saveTmLog: async (logData: Partial<TmTripLogItem>): Promise<ApiResponse<TmTripLogItem>> => {
+    const res = await request<TmTripLogItem>({
+      url: "/store/tm-logs",
+      method: "POST",
+      data: logData,
+    });
+    return res;
   },
 };
 

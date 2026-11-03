@@ -5,7 +5,7 @@ from backend.app.extensions import db
 from backend.app.models.models import (
     Material, StockTransaction, WeighbridgeTicket,
     TransitMixerPayload, DprRecord, ExpenseRecord,
-    AttendanceRecord, WeighbridgeSettings
+    AttendanceRecord, WeighbridgeSettings, TmTripLog
 )
 from backend.app.utils.responses import success_response, error_response
 from backend.app.utils.decorators import roles_required
@@ -444,3 +444,99 @@ def update_settings():
 
     db.session.commit()
     return success_response(data=settings.to_dict())
+
+# --- DRIVER RECORD BOOK & TM AVERAGE ---
+@store_bp.route("/tm-logs", methods=["GET"])
+@jwt_required()
+@roles_required()
+def list_tm_logs():
+    date_filter = request.args.get("date")
+    month_filter = request.args.get("month")
+
+    query = TmTripLog.query
+    if date_filter:
+        query = query.filter_by(date=date_filter)
+    elif month_filter:
+        query = query.filter(TmTripLog.date.startswith(month_filter))
+
+    logs = query.order_by(TmTripLog.created_at.desc()).all()
+    return success_response(data=[l.to_dict() for l in logs])
+
+@store_bp.route("/tm-logs", methods=["POST"])
+@jwt_required()
+@roles_required("store", "dispatcher", "owner", "production")
+def create_tm_log():
+    data = request.get_json() or {}
+    date_str = str(data.get("date") or datetime.now().strftime("%Y-%m-%d")).strip()
+    driver_name = str(data.get("driverName", "")).strip()
+    truck_no = str(data.get("truckNumber", "")).strip().upper()
+
+    if not driver_name or not truck_no:
+        return error_response(code="VALIDATION_ERROR", message="Driver name and TM vehicle number are required.")
+
+    start_km = float(data.get("startKm", 0.0))
+    end_km = float(data.get("endKm", 0.0))
+    running_km = max(0.0, end_km - start_km) if end_km >= start_km else float(data.get("runningKm", 0.0))
+
+    start_hr = float(data.get("handiStartHr", 0.0))
+    close_hr = float(data.get("handiClosingHr", 0.0))
+    running_hr = max(0.0, close_hr - start_hr) if close_hr >= start_hr else float(data.get("handiRunningHr", 0.0))
+    extra_hr = float(data.get("extraHandiHr", 0.0))
+
+    opening_diesel = float(data.get("openingDiesel", 0.0))
+    issued_diesel = float(data.get("issuedDiesel", 0.0))
+    closing_diesel = float(data.get("closingDiesel", 0.0))
+
+    actual_diesel = (opening_diesel + issued_diesel) - closing_diesel
+    if actual_diesel <= 0:
+        actual_diesel = issued_diesel if issued_diesel > 0 else (round(running_km / 1.8, 1) if running_km > 0 else 25.0)
+
+    km_per_l = round(running_km / max(actual_diesel, 0.1), 2) if actual_diesel > 0 else 1.80
+
+    log = TmTripLog(
+        date=date_str,
+        driver_name=driver_name,
+        truck_number=truck_no,
+        truck_capacity_cum=float(data.get("truckCapacity", 8.0)),
+        start_km=start_km,
+        end_km=end_km,
+        running_km=running_km,
+        handi_start_hr=start_hr,
+        handi_closing_hr=close_hr,
+        handi_running_hr=running_hr,
+        extra_handi_hr=extra_hr,
+        opening_diesel_l=opening_diesel,
+        issued_diesel_l=issued_diesel,
+        closing_diesel_l=closing_diesel,
+        actual_diesel_consumed_l=actual_diesel,
+        km_per_liter=km_per_l,
+        trips_count=int(data.get("tripsCount", 1)),
+        concrete_volume_cum=float(data.get("concreteVolume", 0.0)),
+        remarks=data.get("remarks") or ("Within Fuel Norms" if km_per_l >= 1.8 else "Low Avg: Short Lead / Traffic")
+    )
+    db.session.add(log)
+
+    # Deduct fuel from Material inventory if Diesel (HSD) exists
+    diesel_mat = Material.query.filter(Material.name.ilike("%diesel%")).first()
+    if diesel_mat:
+        diesel_mat.current_stock = max(0.0, diesel_mat.current_stock - actual_diesel)
+        tx = StockTransaction(
+            material_id=diesel_mat.id,
+            type="OUT",
+            quantity=actual_diesel,
+            reference=f"FUEL-{truck_no}",
+            note=f"Diesel issued to TM {truck_no} ({driver_name}) · {running_km:.1f} KM run · Avg {km_per_l} KM/L",
+            created_by="Fleet Fuel Console"
+        )
+        db.session.add(tx)
+
+    # Pass fuel consumption into Daily Production Report (DPR) record
+    dpr = DprRecord.query.filter_by(date=date_str).first()
+    if not dpr:
+        dpr = DprRecord(date=date_str, diesel_consumed_ltr=actual_diesel)
+        db.session.add(dpr)
+    else:
+        dpr.diesel_consumed_ltr += actual_diesel
+
+    db.session.commit()
+    return success_response(data=log.to_dict(), meta={"message": "TM driver fuel log recorded and consumption updated successfully."}, status_code=201)

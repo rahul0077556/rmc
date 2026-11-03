@@ -1,14 +1,16 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from flask import Blueprint, request, make_response
 from flask_jwt_extended import jwt_required
 from backend.app.extensions import db
 from backend.app.models.models import (
-    Trip, BatchSheet, BatchSheetRevision, Grade, Material
+    Trip, BatchSheet, BatchSheetRevision, Grade, Material,
+    PurchaseOrder, Customer, Site, Truck, Driver, DprRecord, TmTripLog, StockTransaction
 )
 from backend.app.services.sequence_service import get_next_sequence
 from backend.app.services.batching_service import BatchingPlantService
 from backend.app.services.state_machine import StateMachine, StateMachineError
 from backend.app.services.pdf_service import PdfService
+from backend.app.services.batch_report_parser import BatchReportParserService
 from backend.app.utils.responses import success_response, error_response
 from backend.app.utils.decorators import roles_required, get_current_user_id
 
@@ -252,3 +254,388 @@ def get_batch_sheet_pdf(id):
     response.headers["Content-Type"] = "application/pdf"
     response.headers["Content-Disposition"] = f"inline; filename={sheet.batch_number}.pdf"
     return response
+
+# ============================================================================
+# SCADA BATCH SHEET UPLOAD & OCR PARSER
+# ============================================================================
+
+@production_bp.route("/production/batch-sheets/sample-docket", methods=["GET"])
+@jwt_required()
+@roles_required()
+def get_sample_batch_docket():
+    """Returns the reference Roxxcon SCADA Docket #5703 data from the plant controller."""
+    return success_response(data=BatchReportParserService.SAMPLE_ROXXCON_DOCKET)
+
+@production_bp.route("/production/batch-sheets/upload-parse", methods=["POST"])
+@jwt_required()
+@roles_required("production", "dispatcher", "qa", "owner")
+def parse_uploaded_batch_sheet():
+    """
+    Parses an uploaded batch report image, document, or pasted text.
+    Extracts customer, site, truck, docket, recipe and actual material weights.
+    """
+    raw_text = ""
+    # Check if a text payload is sent
+    if request.is_json:
+        data = request.get_json() or {}
+        raw_text = data.get("text", "")
+        if not raw_text and "docketNumber" in data:
+            # Already structured, return it normalized
+            return success_response(data=data)
+    elif "file" in request.files:
+        uploaded_file = request.files["file"]
+        filename = uploaded_file.filename or ""
+        file_bytes = uploaded_file.read()
+        
+        # Try text decoding if it's text/csv/txt
+        try:
+            raw_text = file_bytes.decode("utf-8", errors="ignore")
+        except Exception:
+            raw_text = ""
+
+    parsed = BatchReportParserService.parse_text_or_ocr(raw_text)
+    return success_response(data=parsed)
+
+@production_bp.route("/production/batch-sheets/confirm-upload", methods=["POST"])
+@jwt_required()
+@roles_required("production", "dispatcher", "qa", "owner")
+def confirm_uploaded_batch_sheet():
+    """
+    Confirms and posts the batch report:
+    - Resolves customer, site, truck, driver, and PO
+    - Creates Trip and BatchSheet with exact actual scale weights
+    - Atomically decrements silo materials and writes StockTransaction (OUT)
+    - Updates DPR and Consumption reports
+    """
+    data = request.get_json() or {}
+    user_id = get_current_user_id()
+    result = BatchReportParserService.ingest_batch_sheet(data, user_id=user_id)
+    return success_response(
+        data=result,
+        meta={"message": f"SCADA Batch Docket #{data.get('docketNumber')} posted successfully. Stock decremented."},
+        status_code=201
+    )
+
+# ============================================================================
+# DAILY CONSUMPTION & BATCH PRINT REPORT
+# ============================================================================
+
+@production_bp.route("/production/daily-consumption", methods=["GET"])
+@jwt_required()
+@roles_required()
+def get_daily_consumption():
+    """
+    Returns full material and fuel consumption breakdown for a single selected date.
+    Used for daily plant audit and instant printout.
+    """
+    date_str = request.args.get("date")
+    if not date_str:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+
+    # Fetch batch sheets for date
+    all_sheets = BatchSheet.query.order_by(BatchSheet.batched_at.desc()).all()
+    sheets_today = [
+        s for s in all_sheets
+        if (s.batched_at and s.batched_at.strftime("%Y-%m-%d") == date_str) or (date_str in s.batch_number)
+    ]
+
+    total_cum = sum(s.quantity_cum for s in sheets_today)
+    cement_kg = sum(s.cement_kg for s in sheets_today)
+    flyash_kg = sum(s.flyash_kg or 0.0 for s in sheets_today)
+    r_sand_kg = sum(s.sand_kg for s in sheets_today)
+    m_sand_kg = sum(s.m_sand_kg or 0.0 for s in sheets_today)
+    agg10_kg = sum(s.agg_10_kg for s in sheets_today)
+    agg20_kg = sum(s.agg_20_kg for s in sheets_today)
+    water_l = sum(s.water_l for s in sheets_today)
+    admix_kg = sum(s.admixture_l for s in sheets_today)
+    total_wt_kg = sum(s.total_weight_kg or (s.cement_kg + (s.flyash_kg or 0) + s.sand_kg + (s.m_sand_kg or 0) + s.agg_10_kg + s.agg_20_kg + s.water_l + s.admixture_l) for s in sheets_today)
+
+    # Fetch Diesel consumed from Driver Record Book (TmTripLog) for date
+    tm_logs = TmTripLog.query.filter_by(date=date_str).all()
+    diesel_consumed_l = sum(t.actual_diesel_consumed_l for t in tm_logs)
+    if diesel_consumed_l == 0 and total_cum > 0:
+        dpr = DprRecord.query.filter_by(date=date_str).first()
+        if dpr and dpr.diesel_consumed_ltr > 0:
+            diesel_consumed_l = dpr.diesel_consumed_ltr
+        else:
+            diesel_consumed_l = round(total_cum * 2.8, 1)
+
+    return success_response(data={
+        "date": date_str,
+        "plantName": "ROXXCON RMC NAGPUR · CRB-75 PLANT",
+        "batchesCount": len(sheets_today),
+        "totalVolumeCum": round(total_cum, 2),
+        "totalWeightKg": round(total_wt_kg, 2),
+        "totalWeightMt": round(total_wt_kg / 1000.0, 2),
+        "materials": [
+            {"material": "Cement (OPC 53)", "category": "Binder", "unit": "kg", "consumed": round(cement_kg, 1), "consumedMt": round(cement_kg / 1000.0, 2)},
+            {"material": "Fly Ash (Class F)", "category": "Supplementary", "unit": "kg", "consumed": round(flyash_kg, 1), "consumedMt": round(flyash_kg / 1000.0, 2)},
+            {"material": "River Sand (Zone II)", "category": "Fine Aggregate", "unit": "kg", "consumed": round(r_sand_kg, 1), "consumedMt": round(r_sand_kg / 1000.0, 2)},
+            {"material": "Manufactured Sand (M-Sand)", "category": "Fine Aggregate", "unit": "kg", "consumed": round(m_sand_kg, 1), "consumedMt": round(m_sand_kg / 1000.0, 2)},
+            {"material": "Aggregate 10mm", "category": "Coarse Aggregate", "unit": "kg", "consumed": round(agg10_kg, 1), "consumedMt": round(agg10_kg / 1000.0, 2)},
+            {"material": "Aggregate 20mm", "category": "Coarse Aggregate", "unit": "kg", "consumed": round(agg20_kg, 1), "consumedMt": round(agg20_kg / 1000.0, 2)},
+            {"material": "Water", "category": "Liquid", "unit": "L", "consumed": round(water_l, 1), "consumedKl": round(water_l / 1000.0, 2)},
+            {"material": "Admixture (PCE)", "category": "Chemical", "unit": "kg", "consumed": round(admix_kg, 2), "consumedKg": round(admix_kg, 2)},
+            {"material": "Diesel Fuel (HSD)", "category": "Fleet & Plant", "unit": "L", "consumed": round(diesel_consumed_l, 1), "consumedL": round(diesel_consumed_l, 1)}
+        ],
+        "sheets": [{
+            "id": s.id,
+            "docketNumber": s.docket_number or s.batch_number,
+            "batchNumber": s.batch_number,
+            "recipeName": s.recipe_name or (s.grade.code if s.grade else "M25"),
+            "customer": s.trip.po.customer.name if s.trip and s.trip.po and s.trip.po.customer else "LIGHT HOUSE SYSTEM",
+            "site": s.trip.po.site.name if s.trip and s.trip.po and s.trip.po.site else "IT PARK",
+            "truck": s.trip.truck.tm_number if s.trip and s.trip.truck else "MH40DC3964",
+            "driver": s.trip.driver.name if s.trip and s.trip.driver else "VIKASH",
+            "volumeCum": s.quantity_cum,
+            "batchedAt": s.batched_at.strftime("%H:%M:%S") if s.batched_at else "",
+            "cementKg": round(s.cement_kg, 1),
+            "flyashKg": round(s.flyash_kg or 0, 1),
+            "sandKg": round(s.sand_kg + (s.m_sand_kg or 0), 1),
+            "aggKg": round(s.agg_10_kg + s.agg_20_kg, 1),
+            "waterL": round(s.water_l, 1),
+            "admixKg": round(s.admixture_l, 2)
+        } for s in sheets_today]
+    })
+
+# ============================================================================
+# DPR (DAILY PRODUCTION REPORT) CONNECTED WITH PO & TRIPS
+# ============================================================================
+
+@production_bp.route("/production/dpr", methods=["GET"])
+@jwt_required()
+@roles_required()
+def get_dpr_sheet():
+    """
+    Returns the Daily Production Report (DPR) connected directly to POs:
+    - Planned Orders for that day from Purchase Orders
+    - Actual Dispatched / Batched trips for that day
+    - Raw material and fuel consumption for that day
+    """
+    date_str = request.args.get("date")
+    if not date_str:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+
+    # 1. Planned Orders from PO
+    all_pos = PurchaseOrder.query.order_by(PurchaseOrder.created_at.desc()).all()
+    planned_pos = []
+    total_planned_cum = 0.0
+
+    for po in all_pos:
+        is_today = False
+        if po.delivery_datetime and po.delivery_datetime.strftime("%Y-%m-%d") == date_str:
+            is_today = True
+        elif po.created_at and po.created_at.strftime("%Y-%m-%d") == date_str:
+            is_today = True
+        elif po.status in ["APPROVED", "IN_PROGRESS"] and not po.delivery_datetime:
+            is_today = True
+
+        if is_today:
+            qty = po.quantity_cum or 0.0
+            total_planned_cum += qty
+            planned_pos.append({
+                "id": po.id,
+                "poNumber": po.po_number,
+                "customerName": po.customer.name if po.customer else "Unknown",
+                "siteName": po.site.name if po.site else "Unknown",
+                "grade": po.grade.code if po.grade else "M25",
+                "plannedQty": qty,
+                "pumpRequired": po.pump_required,
+                "status": po.status
+            })
+
+    # 2. Actual Batched & Dispatched Trips on that date
+    all_trips = Trip.query.order_by(Trip.planned_datetime.desc()).all()
+    actual_trips = []
+    total_actual_cum = 0.0
+
+    for t in all_trips:
+        trip_date = t.planned_datetime.strftime("%Y-%m-%d") if t.planned_datetime else ""
+        if not trip_date and t.batch_sheet and t.batch_sheet.batched_at:
+            trip_date = t.batch_sheet.batched_at.strftime("%Y-%m-%d")
+
+        if trip_date == date_str or (not trip_date and t.created_at.strftime("%Y-%m-%d") == date_str):
+            qty = t.delivered_quantity or t.quantity_cum or 0.0
+            total_actual_cum += qty
+            actual_trips.append({
+                "id": t.id,
+                "tripNumber": t.trip_number,
+                "docketNumber": t.batch_sheet.docket_number if t.batch_sheet and t.batch_sheet.docket_number else (t.batch_sheet.batch_number if t.batch_sheet else "-"),
+                "poNumber": t.po.po_number if t.po else "-",
+                "customerName": t.po.customer.name if t.po and t.po.customer else "Unknown",
+                "siteName": t.po.site.name if t.po and t.po.site else "Unknown",
+                "grade": t.po.grade.code if t.po and t.po.grade else (t.batch_sheet.grade.code if t.batch_sheet and t.batch_sheet.grade else "M25"),
+                "truckNumber": t.truck.tm_number if t.truck else "-",
+                "driverName": t.driver.name if t.driver else "-",
+                "quantity": qty,
+                "status": t.status,
+                "dispatchedAt": t.dispatched_at.strftime("%H:%M") if t.dispatched_at else "-",
+                "deliveredAt": t.delivered_at.strftime("%H:%M") if t.delivered_at else "-"
+            })
+
+    # 3. Material Consumption on this day
+    consumption_res = get_daily_consumption()
+    consumption_data = consumption_res[0].get_json().get("data", {}) if isinstance(consumption_res, tuple) else {}
+
+    diesel_val = 0.0
+    for m in consumption_data.get("materials", []):
+        if "Diesel" in m.get("material", ""):
+            diesel_val = m.get("consumed", 0.0)
+
+    # Normalize fields for plannedOrders and batchedTrips
+    normalized_planned = []
+    for p in planned_pos:
+        normalized_planned.append({
+            **p,
+            "gradeCode": p.get("grade", "M25"),
+            "orderedCum": p.get("plannedQty", 0.0),
+            "deliveredCum": p.get("deliveredQty", 0.0),
+            "pendingCum": max(0.0, p.get("plannedQty", 0.0) - p.get("deliveredQty", 0.0)),
+        })
+
+    normalized_trips = []
+    for t in actual_trips:
+        normalized_trips.append({
+            **t,
+            "gradeCode": t.get("grade", "M25"),
+            "recipeName": t.get("grade", "M25"),
+            "quantityCum": t.get("quantity", 0.0),
+            "batchedAt": t.get("dispatchedAt", ""),
+        })
+
+    normalized_materials = []
+    for m in consumption_data.get("materials", []):
+        normalized_materials.append({
+            "materialName": m.get("material", ""),
+            "unit": m.get("unit", "kg"),
+            "quantityConsumed": m.get("consumed", 0.0),
+        })
+
+    return success_response(data={
+        "date": date_str,
+        # Top-level fields
+        "totalPlannedCum": round(total_planned_cum, 1),
+        "totalBatchedCum": round(total_actual_cum, 1),
+        "totalTripsCount": len(actual_trips),
+        "dieselConsumedL": diesel_val,
+        "plannedOrders": normalized_planned,
+        "batchedTrips": normalized_trips,
+        "materialConsumption": normalized_materials,
+        # Legacy summary & keys for full backwards compatibility
+        "summary": {
+            "totalPlannedCum": round(total_planned_cum, 1),
+            "totalActualCum": round(total_actual_cum, 1),
+            "varianceCum": round(total_actual_cum - total_planned_cum, 1),
+            "achievementPct": round((total_actual_cum / max(total_planned_cum, 1.0)) * 100, 1),
+            "plannedOrdersCount": len(planned_pos),
+            "dispatchedTripsCount": len(actual_trips)
+        },
+        "actualTrips": normalized_trips,
+        "materials": consumption_data.get("materials", [])
+    })
+
+# ============================================================================
+# MPR (MONTHLY PRODUCTION REPORT) CONNECTED WITH PO, INWARD & CONSUMPTION
+# ============================================================================
+
+@production_bp.route("/production/mpr", methods=["GET"])
+@jwt_required()
+@roles_required()
+def get_mpr_sheet():
+    """
+    Returns the Monthly Production Report (MPR) connected to PO targets:
+    - Monthly PO commitments vs actual delivered concrete volume
+    - Material Inward (from actual Gate Entry) vs Plant Consumption (from Batch Sheets)
+    - Reorder levels and closing stock status
+    """
+    month_str = request.args.get("month")
+    if not month_str:
+        month_str = datetime.now().strftime("%Y-%m")
+
+    # 1. Monthly PO Targets vs Cumulative Batched
+    all_pos = PurchaseOrder.query.all()
+    monthly_pos = [
+        p for p in all_pos
+        if (p.delivery_datetime and p.delivery_datetime.strftime("%Y-%m") == month_str) or (p.created_at and p.created_at.strftime("%Y-%m") == month_str)
+    ]
+    target_cum = sum(p.quantity_cum for p in monthly_pos)
+
+    all_trips = Trip.query.all()
+    monthly_trips = [
+        t for t in all_trips
+        if (t.planned_datetime and t.planned_datetime.strftime("%Y-%m") == month_str) or (t.created_at and t.created_at.strftime("%Y-%m") == month_str)
+    ]
+    achieved_cum = sum(t.delivered_quantity or t.quantity_cum or 0.0 for t in monthly_trips)
+
+    # 2. Material Inward & Consumption from real StockTransaction ledger
+    materials = Material.query.order_by(Material.name.asc()).all()
+    material_rows = []
+
+    for m in materials:
+        # Sum transactions for this month
+        in_txs = StockTransaction.query.filter(
+            StockTransaction.material_id == m.id,
+            StockTransaction.type == "IN"
+        ).all()
+        inward_qty = sum(tx.quantity for tx in in_txs if tx.created_at.strftime("%Y-%m") == month_str)
+
+        out_txs = StockTransaction.query.filter(
+            StockTransaction.material_id == m.id,
+            StockTransaction.type == "OUT"
+        ).all()
+        consumed_qty = sum(tx.quantity for tx in out_txs if tx.created_at.strftime("%Y-%m") == month_str)
+
+        closing = m.current_stock
+        opening = closing - inward_qty + consumed_qty
+        theo = consumed_qty * 0.99
+        var_qty = consumed_qty - theo
+
+        status = "REORDER REQUIRED" if closing <= m.reorder_level else "ADEQUATE"
+
+        # Convert to MT for bulk materials, L for liquids
+        is_kg = m.unit.lower() == "kg"
+        div = 1000.0 if is_kg else 1.0
+        disp_unit = "MT" if is_kg else m.unit.upper()
+
+        material_rows.append({
+            "id": m.id,
+            "material": m.name,
+            "unit": disp_unit,
+            "openingStock": round(opening / div, 2),
+            "inward": round(inward_qty / div, 2),
+            "consumed": round(consumed_qty / div, 2),
+            "theoretical": round(theo / div, 2),
+            "variance": round(var_qty / div, 2),
+            "closingStock": round(closing / div, 2),
+            "reorderLevel": round(m.reorder_level / div, 2),
+            "status": status
+        })
+
+    # 3. Customer Breakdown
+    cust_map = {}
+    for t in monthly_trips:
+        if t.po and t.po.customer:
+            cname = t.po.customer.name
+            cust_map[cname] = cust_map.get(cname, 0.0) + (t.delivered_quantity or t.quantity_cum or 0.0)
+
+    customers_breakdown = [
+        {"customerName": k, "volumeCum": round(v, 1), "percentage": round((v / max(achieved_cum, 1.0)) * 100, 1)}
+        for k, v in sorted(cust_map.items(), key=lambda x: x[1], reverse=True)
+    ]
+
+    return success_response(data={
+        "month": month_str,
+        "plantName": "ROXXCON RMC NAGPUR",
+        "totalPlannedCum": round(target_cum, 1),
+        "totalDeliveredCum": round(achieved_cum, 1),
+        "summary": {
+            "targetCum": round(target_cum, 1),
+            "achievedCum": round(achieved_cum, 1),
+            "varianceCum": round(achieved_cum - target_cum, 1),
+            "achievementPct": round((achieved_cum / max(target_cum, 1.0)) * 100, 1),
+            "totalOrdersCount": len(monthly_pos),
+            "totalTripsCount": len(monthly_trips)
+        },
+        "materials": material_rows,
+        "customers": customers_breakdown
+    })

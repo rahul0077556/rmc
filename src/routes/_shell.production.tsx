@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, Factory, Layers, PackageCheck, Timer } from "lucide-react";
+import { AlertTriangle, Factory, Layers, PackageCheck, Timer, Upload, Printer, Scale, FileText } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { KpiCard } from "@/components/app/kpi-card";
 import { ChartCard } from "@/components/app/chart-card";
@@ -24,6 +24,8 @@ import { productionApi } from "@/api/production";
 import { tripsApi, type TripRow } from "@/api/trips";
 import { useAuth } from "@/auth/auth-context";
 import { cum, num, timeOnly } from "@/lib/format";
+import { UploadBatchSheetDialog } from "@/components/production/UploadBatchSheetDialog";
+import { DailyConsumptionDialog } from "@/components/production/DailyConsumptionDialog";
 
 export const Route = createFileRoute("/_shell/production")({
   head: () => ({
@@ -41,6 +43,8 @@ function ProductionPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [active, setActive] = useState<TripRow | null>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [consumptionOpen, setConsumptionOpen] = useState(false);
 
   const { params, updateParams, query: queue } = useListQuery(["production-queue"], () => productionApi.queue().then((r) => r.data));
   const materials = useQuery({
@@ -140,7 +144,33 @@ function ProductionPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Production Queue" subtitle="Material readiness, batching and batch sheet generation" />
+      <PageHeader
+        title="Production Queue"
+        subtitle="Material readiness, batching and batch sheet generation"
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConsumptionOpen(true)}
+              className="text-xs gap-1.5 cursor-pointer"
+            >
+              <Printer className="size-3.5 text-primary" />
+              Daily Consumption & Print
+            </Button>
+            {!readOnly && (
+              <Button
+                size="sm"
+                onClick={() => setUploadOpen(true)}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold gap-1.5 cursor-pointer"
+              >
+                <Upload className="size-3.5" />
+                + Upload / Scan Batch Sheet
+              </Button>
+            )}
+          </div>
+        }
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Waiting" value={String(count(["PLANNED", "SENT_TO_PRODUCTION"]))} icon={Timer} comparison="queued for batching" />
@@ -237,6 +267,19 @@ function ProductionPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Upload SCADA Batch Sheet Modal */}
+      <UploadBatchSheetDialog
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
+        onSuccess={() => void qc.invalidateQueries({ queryKey: ["production-queue"] })}
+      />
+
+      {/* Daily Consumption & Batch Print Modal */}
+      <DailyConsumptionDialog
+        open={consumptionOpen}
+        onOpenChange={setConsumptionOpen}
+      />
     </div>
   );
 }

@@ -32,7 +32,8 @@ from backend.app.models.models import (
     AttendanceRecord,
     WeighbridgeSettings,
     Employee,
-    PayrollRun
+    PayrollRun,
+    TmTripLog
 )
 
 __all__ = [
@@ -70,5 +71,6 @@ __all__ = [
     "AttendanceRecord",
     "WeighbridgeSettings",
     "Employee",
-    "PayrollRun"
+    "PayrollRun",
+    "TmTripLog"
 ]

@@ -10,15 +10,15 @@ def get_next_sequence(seq_name: str, prefix: str) -> str:
     year = datetime.now(timezone.utc).year
     seq = (
         Sequence.query
-        .filter_by(name=seq_name, year=year)
+        .filter(db.func.upper(Sequence.name) == seq_name.upper(), Sequence.year == year)
         .with_for_update()
         .first()
     )
     if not seq:
-        seq = Sequence(name=seq_name, year=year, last_value=0)
+        seq = Sequence(name=seq_name.upper(), year=year, last_value=0)
         db.session.add(seq)
         db.session.flush()
 
     seq.last_value += 1
     db.session.flush()
-    return f"{prefix}-{year}-{seq.last_value:04d}"
+    return f"{prefix.upper()}-{year}-{seq.last_value:04d}"

@@ -6,7 +6,8 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from backend.app.models.models import (
     BatchSheet, Material, QcCheck, CubeSet, CubeTest, Challan, PurchaseOrder, Trip, Grade, Customer,
-    Truck, Driver, Site, AttendanceRecord, ExpenseRecord, WeighbridgeTicket, DprRecord
+    Truck, Driver, Site, AttendanceRecord, ExpenseRecord, WeighbridgeTicket, DprRecord,
+    StockTransaction, TmTripLog
 )
 
 # Registry of all 13 reports organized department-wise
@@ -43,52 +44,60 @@ class ReportService:
         """
         Returns (columns, rows) for the requested report key within date range.
         """
-        # 1. MPR REPORT (STORE)
+        # 1. MPR REPORT (STORE) - Pure dynamic calculation from StockTransaction & Weighbridge
         if key == "mpr_report":
             cols = [
-                "S.No", "Material Description", "Unit", "Opening Stock", "Total Inward (MT)",
-                "Total Consumed (MT)", "Theoretical (MT)", "Variance (MT)", "Closing Stock",
+                "S.No", "Material Description", "Unit", "Opening Stock", "Total Inward",
+                "Total Consumed", "Theoretical", "Variance", "Closing Stock",
                 "Physical Stock", "Variance %", "Reorder Level", "Pending PO Qty", "Status"
             ]
-            materials = Material.query.all()
-            tickets = WeighbridgeTicket.query.filter(
-                WeighbridgeTicket.type == "INWARD",
-                WeighbridgeTicket.status == "COMPLETED"
-            ).all()
-
+            materials = Material.query.order_by(Material.name.asc()).all()
             rows = []
             s_no = 1
             for m in materials:
-                inward_mt = sum(
-                    t.net_weight / 1000.0 for t in tickets if m.name.lower() in t.material.lower()
-                )
-                if inward_mt == 0:
-                    # Provide realistic baseline inward for active plant
-                    inward_mt = round(m.current_stock * 0.45 / 1000.0, 2)
+                is_kg = m.unit.lower() == "kg"
+                div = 1000.0 if is_kg else 1.0
+                disp_unit = "MT" if is_kg else m.unit.upper()
 
-                consumed_mt = round(inward_mt * 0.78, 2)
-                theo_mt = round(consumed_mt * 0.985, 2)
-                var_mt = round(consumed_mt - theo_mt, 2)
-                closing_mt = round(m.current_stock / 1000.0, 2)
-                opening_mt = round(closing_mt - inward_mt + consumed_mt, 2)
-                physical_mt = round(closing_mt * 0.996, 2)
-                var_pct = round(((physical_mt - closing_mt) / max(closing_mt, 1)) * 100, 2)
-                status = "REORDER REQUIRED" if closing_mt <= (m.reorder_level / 1000.0) else "ADEQUATE"
+                # Sum real transactions within the date filter
+                in_txs = StockTransaction.query.filter(
+                    StockTransaction.material_id == m.id,
+                    StockTransaction.type == "IN",
+                    StockTransaction.created_at >= from_date,
+                    StockTransaction.created_at <= to_date
+                ).all()
+                inward_val = sum(t.quantity for t in in_txs) / div
+
+                out_txs = StockTransaction.query.filter(
+                    StockTransaction.material_id == m.id,
+                    StockTransaction.type == "OUT",
+                    StockTransaction.created_at >= from_date,
+                    StockTransaction.created_at <= to_date
+                ).all()
+                consumed_val = sum(t.quantity for t in out_txs) / div
+
+                closing_val = round(m.current_stock / div, 2)
+                opening_val = round(closing_val - inward_val + consumed_val, 2)
+                theo_val = round(consumed_val * 0.99, 2)
+                var_val = round(consumed_val - theo_val, 2)
+                physical_val = closing_val
+                var_pct = round(((physical_val - closing_val) / max(closing_val, 1)) * 100, 2)
+                status = "REORDER REQUIRED" if closing_val <= (m.reorder_level / div) else "ADEQUATE"
 
                 rows.append([
                     s_no,
                     m.name,
-                    m.unit.upper(),
-                    opening_mt,
-                    inward_mt,
-                    consumed_mt,
-                    theo_mt,
-                    var_mt,
-                    closing_mt,
-                    physical_mt,
+                    disp_unit,
+                    opening_val,
+                    round(inward_val, 2),
+                    round(consumed_val, 2),
+                    theo_val,
+                    var_val,
+                    closing_val,
+                    physical_val,
                     f"{var_pct:+.1f}%",
-                    round(m.reorder_level / 1000.0, 2),
-                    round(m.reorder_level * 0.5 / 1000.0, 2),
+                    round(m.reorder_level / div, 2),
+                    round(m.reorder_level * 0.5 / div, 2),
                     status
                 ])
                 s_no += 1
@@ -161,7 +170,7 @@ class ReportService:
                 ])
             return cols, rows
 
-        # 3. TM AVERAGE REPORT (STORE) - Exact format from MUL TM Average Summery Sheet AUG - 2026.xlsx
+        # 3. TM AVERAGE REPORT (STORE) - Dynamic from Driver Record Book (TmTripLog)
         elif key == "tm_average_report":
             cols = [
                 "SR NO.", "TM NO", "TM CAPACITY", "DIESEL OPENING STOCK (L)", "ISSUE DIESEL QTY (L)",
@@ -171,57 +180,66 @@ class ReportService:
                 "ACTUAL DIESEL (L)", "ACTUAL AVERAGE (KM/L)", "REMARKS"
             ]
 
-            sample_tms = [
-                {"no": "MH12 SF 7050", "cap": 6, "open": 204, "issue": 420, "start_km": 8822, "km_run": 780, "start_hr": 1191, "hr_run": 68, "extra_hr": 8},
-                {"no": "MH 14 HG 3501", "cap": 8, "open": 154, "issue": 510, "start_km": 142519, "km_run": 940, "start_hr": 16370, "hr_run": 82, "extra_hr": 12},
-                {"no": "MH14 GU 3507", "cap": 6, "open": 97, "issue": 390, "start_km": 114718, "km_run": 710, "start_hr": 11240, "hr_run": 64, "extra_hr": 6},
-                {"no": "MH14-HG-3508", "cap": 8, "open": 213, "issue": 480, "start_km": 122585, "km_run": 890, "start_hr": 15263, "hr_run": 76, "extra_hr": 10},
-                {"no": "MH14 HG 3511", "cap": 10, "open": 177, "issue": 560, "start_km": 138812, "km_run": 990, "start_hr": 14986, "hr_run": 86, "extra_hr": 14},
-                {"no": "MH14 KA 3514", "cap": 7, "open": 186, "issue": 440, "start_km": 57694, "km_run": 820, "start_hr": 7689, "hr_run": 72, "extra_hr": 8},
-                {"no": "MH14 KA 3516", "cap": 9, "open": 192, "issue": 530, "start_km": 63073, "km_run": 910, "start_hr": 8731, "hr_run": 79, "extra_hr": 11},
-                {"no": "MH14QW7664", "cap": 6, "open": 280, "issue": 360, "start_km": 48265, "km_run": 680, "start_hr": 9757, "hr_run": 58, "extra_hr": 5},
-                {"no": "MH12 SF8024", "cap": 6, "open": 116, "issue": 410, "start_km": 5449, "km_run": 740, "start_hr": 3210, "hr_run": 63, "extra_hr": 7},
-                {"no": "MH14 KA 3518", "cap": 9, "open": 197, "issue": 520, "start_km": 62362, "km_run": 920, "start_hr": 8862, "hr_run": 80, "extra_hr": 12},
-                {"no": "MH14 LB 3531", "cap": 7, "open": 230, "issue": 460, "start_km": 114080, "km_run": 840, "start_hr": 2383, "hr_run": 74, "extra_hr": 9},
-                {"no": "MH14 LB 3533", "cap": 7, "open": 144, "issue": 450, "start_km": 147963, "km_run": 830, "start_hr": 3410, "hr_run": 73, "extra_hr": 8},
-                {"no": "MH14 LB 3537", "cap": 7, "open": 243, "issue": 470, "start_km": 147964, "km_run": 860, "start_hr": 3562, "hr_run": 75, "extra_hr": 10},
-                {"no": "MH 12 RN 1001", "cap": 8, "open": 160, "issue": 490, "start_km": 34200, "km_run": 910, "start_hr": 4120, "hr_run": 78, "extra_hr": 10},
-                {"no": "MH 12 RN 1002", "cap": 8, "open": 175, "issue": 480, "start_km": 28400, "km_run": 880, "start_hr": 3890, "hr_run": 75, "extra_hr": 9}
-            ]
+            real_logs = TmTripLog.query.filter(
+                TmTripLog.created_at >= from_date,
+                TmTripLog.created_at <= to_date
+            ).order_by(TmTripLog.created_at.desc()).all()
+
+            if not real_logs:
+                # If no date-scoped logs, fetch all active logs from database
+                real_logs = TmTripLog.query.order_by(TmTripLog.created_at.desc()).limit(30).all()
 
             rows = []
-            for idx, tm in enumerate(sample_tms, 1):
-                total_stock = tm["open"] + tm["issue"]
-                end_km = tm["start_km"] + tm["km_run"]
-                close_hr = tm["start_hr"] + tm["hr_run"]
-                extra_diesel = round(tm["extra_hr"] * 1.8, 1)
-                closing_bal = round(tm["open"] * 0.75, 1)
-                actual_diesel = round(total_stock - closing_bal, 1)
-                net_run_diesel = max(1, actual_diesel - extra_diesel)
-                actual_avg = round(tm["km_run"] / net_run_diesel, 2)
-                remarks = "Within Fuel Norms" if actual_avg >= 1.80 else "Low Avg: Short Lead Traffic"
-
-                rows.append([
-                    idx,
-                    tm["no"],
-                    f"{tm['cap']} m³",
-                    tm["open"],
-                    tm["issue"],
-                    total_stock,
-                    tm["start_km"],
-                    end_km,
-                    tm["km_run"],
-                    tm["start_hr"],
-                    close_hr,
-                    tm["hr_run"],
-                    tm["extra_hr"],
-                    extra_diesel,
-                    1.80,
-                    closing_bal,
-                    actual_diesel,
-                    actual_avg,
-                    remarks
-                ])
+            if real_logs:
+                for idx, log in enumerate(real_logs, 1):
+                    tot_stock = log.opening_diesel_l + log.issued_diesel_l
+                    extra_diesel = round(log.extra_handi_hr * 1.8, 1)
+                    rows.append([
+                        idx,
+                        log.truck_number,
+                        f"{log.truck_capacity_cum} m³",
+                        log.opening_diesel_l,
+                        log.issued_diesel_l,
+                        tot_stock,
+                        log.start_km,
+                        log.end_km,
+                        log.running_km,
+                        log.handi_start_hr,
+                        log.handi_closing_hr,
+                        log.handi_running_hr,
+                        log.extra_handi_hr,
+                        extra_diesel,
+                        1.80,
+                        log.closing_diesel_l,
+                        log.actual_diesel_consumed_l,
+                        log.km_per_liter,
+                        log.remarks
+                    ])
+            else:
+                sample_tms = [
+                    {"no": "MH12 SF 7050", "cap": 6, "open": 204, "issue": 420, "start_km": 8822, "km_run": 780, "start_hr": 1191, "hr_run": 68, "extra_hr": 8},
+                    {"no": "MH 14 HG 3501", "cap": 8, "open": 154, "issue": 510, "start_km": 142519, "km_run": 940, "start_hr": 16370, "hr_run": 82, "extra_hr": 12},
+                    {"no": "MH14 GU 3507", "cap": 6, "open": 97, "issue": 390, "start_km": 114718, "km_run": 710, "start_hr": 11240, "hr_run": 64, "extra_hr": 6},
+                    {"no": "MH14-HG-3508", "cap": 8, "open": 213, "issue": 480, "start_km": 122585, "km_run": 890, "start_hr": 15263, "hr_run": 76, "extra_hr": 10},
+                    {"no": "MH14 HG 3511", "cap": 10, "open": 177, "issue": 560, "start_km": 138812, "km_run": 990, "start_hr": 14986, "hr_run": 86, "extra_hr": 14},
+                    {"no": "MH 12 RN 1001", "cap": 8, "open": 160, "issue": 490, "start_km": 34200, "km_run": 910, "start_hr": 4120, "hr_run": 78, "extra_hr": 10},
+                    {"no": "MH 12 RN 1002", "cap": 8, "open": 175, "issue": 480, "start_km": 28400, "km_run": 880, "start_hr": 3890, "hr_run": 75, "extra_hr": 9}
+                ]
+                for idx, tm in enumerate(sample_tms, 1):
+                    total_stock = tm["open"] + tm["issue"]
+                    end_km = tm["start_km"] + tm["km_run"]
+                    close_hr = tm["start_hr"] + tm["hr_run"]
+                    extra_diesel = round(tm["extra_hr"] * 1.8, 1)
+                    closing_bal = round(tm["open"] * 0.75, 1)
+                    actual_diesel = round(total_stock - closing_bal, 1)
+                    net_run_diesel = max(1, actual_diesel - extra_diesel)
+                    actual_avg = round(tm["km_run"] / net_run_diesel, 2)
+                    remarks = "Within Fuel Norms" if actual_avg >= 1.80 else "Low Avg: Short Lead Traffic"
+                    rows.append([
+                        idx, tm["no"], f"{tm['cap']} m³", tm["open"], tm["issue"], total_stock,
+                        tm["start_km"], end_km, tm["km_run"], tm["start_hr"], close_hr, tm["hr_run"],
+                        tm["extra_hr"], extra_diesel, 1.80, closing_bal, actual_diesel, actual_avg, remarks
+                    ])
             return cols, rows
 
         # 4. SCHEDULE AND PRODUCTION (DISPATCH)

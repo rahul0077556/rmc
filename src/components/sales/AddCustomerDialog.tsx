@@ -304,3 +304,4 @@ export function AddCustomerDialog({ open, onOpenChange, onCustomerCreated }: Add
     </Dialog>
   );
 }
+

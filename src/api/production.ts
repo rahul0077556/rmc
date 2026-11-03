@@ -11,6 +11,143 @@ export interface MaterialCheckRow {
   shortfall: number;
 }
 
+export interface ScadaBatchDocketData {
+  plantName: string;
+  plantCapacity: string;
+  customerName: string;
+  siteName: string;
+  truckNumber: string;
+  driverName: string;
+  docketNumber: string;
+  recipeName: string;
+  grade: string;
+  orderQtyCum: number;
+  ticketQtyCum: number;
+  withThisLoadCum: number;
+  batchSizeCum: number;
+  batchesCount: number;
+  date: string;
+  startTime: string;
+  endTime: string;
+  wcRatio: number;
+  thVolume?: number;
+  rSandKg: number;
+  mSandKg: number;
+  agg10mmKg: number;
+  agg20mmKg: number;
+  cementKg: number;
+  flyashKg: number;
+  waterL: number;
+  admixtureKg: number;
+  totalWeightKg: number;
+}
+
+export interface DailyConsumptionData {
+  date: string;
+  plantName: string;
+  batchesCount: number;
+  totalVolumeCum: number;
+  totalWeightKg: number;
+  totalWeightMt: number;
+  materials: {
+    material: string;
+    category: string;
+    unit: string;
+    consumed: number;
+    consumedMt?: number;
+    consumedKl?: number;
+    consumedKg?: number;
+    consumedL?: number;
+  }[];
+  sheets: {
+    id: string;
+    docketNumber: string;
+    batchNumber: string;
+    recipeName: string;
+    customer: string;
+    site: string;
+    truck: string;
+    driver: string;
+    volumeCum: number;
+    batchedAt: string;
+    cementKg: number;
+    flyashKg: number;
+    sandKg: number;
+    aggKg: number;
+    waterL: number;
+    admixKg: number;
+  }[];
+}
+
+export interface DprSheetData {
+  date: string;
+  summary: {
+    totalPlannedCum: number;
+    totalActualCum: number;
+    varianceCum: number;
+    achievementPct: number;
+    plannedOrdersCount: number;
+    dispatchedTripsCount: number;
+  };
+  plannedOrders: {
+    id: string;
+    poNumber: string;
+    customerName: string;
+    siteName: string;
+    grade: string;
+    plannedQty: number;
+    pumpRequired: boolean;
+    status: string;
+  }[];
+  actualTrips: {
+    id: string;
+    tripNumber: string;
+    docketNumber: string;
+    poNumber: string;
+    customerName: string;
+    siteName: string;
+    grade: string;
+    truckNumber: string;
+    driverName: string;
+    quantity: number;
+    status: string;
+    dispatchedAt: string;
+    deliveredAt: string;
+  }[];
+  materials: any[];
+}
+
+export interface MprSheetData {
+  month: string;
+  plantName: string;
+  summary: {
+    targetCum: number;
+    achievedCum: number;
+    varianceCum: number;
+    achievementPct: number;
+    totalOrdersCount: number;
+    totalTripsCount: number;
+  };
+  materials: {
+    id: string;
+    material: string;
+    unit: string;
+    openingStock: number;
+    inward: number;
+    consumed: number;
+    theoretical: number;
+    variance: number;
+    closingStock: number;
+    reorderLevel: number;
+    status: string;
+  }[];
+  customers: {
+    customerName: string;
+    volumeCum: number;
+    percentage: number;
+  }[];
+}
+
 export const productionApi = {
   async queue(): Promise<ApiResponse<TripRow[]>> {
     try {
@@ -141,5 +278,60 @@ export const productionApi = {
         }))
       : [];
     return { data: stockList };
+  },
+
+  async getSampleDocket(): Promise<ApiResponse<ScadaBatchDocketData>> {
+    const res = await request<ScadaBatchDocketData>({
+      url: "/production/batch-sheets/sample-docket",
+      method: "GET",
+    });
+    return res;
+  },
+
+  async parseUploadedBatchSheet(payload: { text?: string; file?: File }): Promise<ApiResponse<ScadaBatchDocketData>> {
+    if (payload.file) {
+      const formData = new FormData();
+      formData.append("file", payload.file);
+      const res = await request<ScadaBatchDocketData>({
+        url: "/production/batch-sheets/upload-parse",
+        method: "POST",
+        data: formData,
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return res;
+    }
+    const res = await request<ScadaBatchDocketData>({
+      url: "/production/batch-sheets/upload-parse",
+      method: "POST",
+      data: { text: payload.text || "" },
+    });
+    return res;
+  },
+
+  async confirmBatchSheetUpload(data: ScadaBatchDocketData): Promise<ApiResponse<any>> {
+    const res = await request<any>({
+      url: "/production/batch-sheets/confirm-upload",
+      method: "POST",
+      data,
+    });
+    return res;
+  },
+
+  async getDailyConsumption(date?: string): Promise<ApiResponse<DailyConsumptionData>> {
+    const url = date ? `/production/daily-consumption?date=${date}` : "/production/daily-consumption";
+    const res = await request<DailyConsumptionData>({ url, method: "GET" });
+    return res;
+  },
+
+  async getDpr(date?: string): Promise<ApiResponse<DprSheetData>> {
+    const url = date ? `/production/dpr?date=${date}` : "/production/dpr";
+    const res = await request<DprSheetData>({ url, method: "GET" });
+    return res;
+  },
+
+  async getMpr(month?: string): Promise<ApiResponse<MprSheetData>> {
+    const url = month ? `/production/mpr?month=${month}` : "/production/mpr";
+    const res = await request<MprSheetData>({ url, method: "GET" });
+    return res;
   },
 };
