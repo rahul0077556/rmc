@@ -157,7 +157,10 @@ def confirm_loaded(id):
     db.session.flush()
 
     # Decrement stock based on actual weighed quantities
-    BatchingPlantService.decrement_stock_for_batch(batch_num, weights, user_id=user_id)
+    cust_name = trip.po.customer.name if (trip.po and trip.po.customer) else "Plant PO"
+    site_name = trip.po.site.name if (trip.po and trip.po.site) else "Site"
+    consumption_note = f"Batch {batch_num} · Trip {trip.trip_number} ({grade.code}) for {cust_name} at {site_name}"
+    BatchingPlantService.decrement_stock_for_batch(batch_num, weights, user_id=user_id, note=consumption_note)
 
     # Update truck to LOADED
     if trip.truck:

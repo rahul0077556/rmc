@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { CalendarDays, Sparkles, CheckCircle2, AlertTriangle, Clock } from "lucide-react";
+import { CalendarDays, Sparkles, CheckCircle2, AlertTriangle, Clock, Plus } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { ChartCard } from "@/components/app/chart-card";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ordersApi } from "@/api/orders";
-import { customersApi } from "@/api/customers";
+import { customersApi, type CustomerRow } from "@/api/customers";
+import { AddCustomerDialog } from "@/components/sales/AddCustomerDialog";
 import { useAuth } from "@/auth/auth-context";
 import { GRADES, GRADE_RATE } from "@/lib/mock-data";
 import { checkDeliveryCapacity } from "@/lib/capacity-data";
@@ -60,6 +61,7 @@ function CreateOrderPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [pump, setPump] = useState(false);
+  const [newCustomerOpen, setNewCustomerOpen] = useState(false);
 
   const customers = useQuery({ queryKey: ["customers"], queryFn: () => customersApi.list().then((r) => r.data) });
 
@@ -116,7 +118,17 @@ function CreateOrderPage() {
         <ChartCard title="Order information" description="Customer, grade and volume">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2">
-              <Label>Customer</Label>
+              <div className="flex items-center justify-between">
+                <Label>Customer</Label>
+                <button
+                  type="button"
+                  onClick={() => setNewCustomerOpen(true)}
+                  className="text-xs text-primary hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="size-3" />
+                  <span>+ Add New Customer</span>
+                </button>
+              </div>
               <Select
                 value={form.watch("customerId")}
                 onValueChange={(v) => {
@@ -340,6 +352,17 @@ function CreateOrderPage() {
           </Button>
         </div>
       </div>
+      <AddCustomerDialog
+        open={newCustomerOpen}
+        onOpenChange={setNewCustomerOpen}
+        onCustomerCreated={(newCust) => {
+          form.setValue("customerId", newCust.id);
+          if (newCust.sites && newCust.sites.length > 0) {
+            form.setValue("siteId", newCust.sites[0].id);
+          }
+          toast.success(`Selected customer "${newCust.name}" and site for new order!`);
+        }}
+      />
     </div>
   );
 }

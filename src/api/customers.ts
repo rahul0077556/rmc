@@ -60,7 +60,16 @@ export const customersApi = {
     };
   },
 
-  async create(input: Omit<Customer, "id">, _actor?: string): Promise<ApiResponse<CustomerRow>> {
+  async create(
+    input: Omit<Customer, "id"> & {
+      siteName?: string;
+      siteAddress?: string;
+      siteContactPerson?: string;
+      sitePhone?: string;
+      accessibilityNotes?: string;
+    },
+    _actor?: string
+  ): Promise<ApiResponse<CustomerRow>> {
     const res = await request<CustomerRow>({
       url: "/customers",
       method: "POST",
@@ -73,6 +82,11 @@ export const customersApi = {
         billingAddress: input.billingAddress,
         creditDays: input.creditDays,
         creditLimit: input.creditLimit,
+        siteName: input.siteName,
+        siteAddress: input.siteAddress,
+        siteContactPerson: input.siteContactPerson,
+        sitePhone: input.sitePhone,
+        accessibilityNotes: input.accessibilityNotes,
       },
     });
     return { data: decorate(res.data), message: "Customer created successfully" };

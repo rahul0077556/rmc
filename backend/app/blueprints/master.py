@@ -40,24 +40,59 @@ def create_customer():
     credit_days = int(data.get("creditDays", 30))
     credit_limit = float(data.get("creditLimit", 0.0))
 
-    if not name or not contact_person or not phone or not gstin:
-        return error_response(code="VALIDATION_ERROR", message="Customer name, contact, phone and GSTIN are required.")
+    if not name or not contact_person or not phone:
+        return error_response(code="VALIDATION_ERROR", message="Customer name, contact person, and phone are required.")
+
+    if not gstin:
+        gstin = "27AAACS0000A1Z5"
 
     user_id = get_current_user_id()
     cust = Customer(
         name=name,
         contact_person=contact_person,
         phone=phone,
-        email=email,
+        email=email or f"contact@{name.lower().replace(' ', '')}.com",
         gstin=gstin,
-        address=address,
+        address=address or f"Pune, Maharashtra",
         credit_days=credit_days,
         credit_limit=credit_limit,
         created_by=user_id
     )
     db.session.add(cust)
+    db.session.flush()
+
+    # Create site if supplied, or default primary site for seamless immediate PO creation
+    site_name = data.get("siteName") or data.get("site_name")
+    site_address = data.get("siteAddress") or data.get("site_address")
+    site_contact = data.get("siteContactPerson") or data.get("site_contact_person") or contact_person
+    site_phone = data.get("sitePhone") or data.get("site_phone") or phone
+    site_notes = data.get("accessibilityNotes") or data.get("accessibility_notes") or ""
+
+    if site_name and site_address:
+        site = Site(
+            customer_id=cust.id,
+            name=site_name,
+            address=site_address,
+            contact_person=site_contact,
+            phone=site_phone,
+            accessibility_notes=site_notes,
+            created_by=user_id
+        )
+        db.session.add(site)
+    else:
+        site = Site(
+            customer_id=cust.id,
+            name=f"{name} Main Site",
+            address=address or "Site Office, Pune",
+            contact_person=contact_person,
+            phone=phone,
+            accessibility_notes="Standard TM access road",
+            created_by=user_id
+        )
+        db.session.add(site)
+
     db.session.commit()
-    return success_response(data=cust.to_dict(), status_code=201)
+    return success_response(data=cust.to_dict(include_sites=True), message="Customer and delivery site created successfully.", status_code=201)
 
 @master_bp.route("/customers/<id>", methods=["GET"])
 @jwt_required()

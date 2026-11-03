@@ -18,7 +18,6 @@ store_bp = Blueprint("store", __name__, url_prefix="/api/v1/store")
 @roles_required()
 def get_inventory():
     materials = Material.query.order_by(Material.name.asc()).all()
-    # Map to InventoryItem structure
     items = []
     for m in materials:
         cat = "CEMENT"
@@ -33,17 +32,60 @@ def get_inventory():
         # Material capacity estimated based on standard plant silos
         capacity = 500000.0 if cat in ["SAND", "AGGREGATE", "WATER"] else 200000.0
 
+        # Dynamic Inward & Consumption from StockTransaction ledger
+        total_in = db.session.query(db.func.sum(StockTransaction.quantity)).filter_by(material_id=m.id, type="IN").scalar() or 0.0
+        total_out = db.session.query(db.func.sum(StockTransaction.quantity)).filter_by(material_id=m.id, type="OUT").scalar() or 0.0
+
+        status = "HEALTHY"
+        if m.current_stock <= (m.reorder_level * 0.5):
+            status = "CRITICAL"
+        elif m.current_stock <= m.reorder_level:
+            status = "LOW"
+
+        silo_name = "Storage Tank" if cat in ["WATER", "ADMIXTURE"] else ("Aggregate Bay" if cat in ["SAND", "AGGREGATE"] else "Vertical Silo")
+
         items.append({
             "id": m.id,
             "material": m.name,
             "category": cat,
+            "siloName": silo_name,
             "currentStock": round(m.current_stock, 1),
             "unit": m.unit,
             "capacity": capacity,
             "reorderLevel": round(m.reorder_level, 1),
+            "totalInward": round(total_in, 1),
+            "totalConsumed": round(total_out, 1),
+            "status": status,
             "lastUpdated": m.updated_at.isoformat() if m.updated_at else datetime.now(timezone.utc).isoformat()
         })
     return success_response(data=items)
+
+@store_bp.route("/transactions", methods=["GET"])
+@jwt_required()
+@roles_required()
+def list_stock_transactions():
+    material_id = request.args.get("materialId")
+    tx_type = request.args.get("type")  # IN, OUT, ADJUST
+
+    query = StockTransaction.query
+    if material_id:
+        query = query.filter_by(material_id=material_id)
+    if tx_type:
+        query = query.filter_by(type=tx_type.upper())
+
+    transactions = query.order_by(StockTransaction.created_at.desc()).limit(150).all()
+    return success_response(data=[{
+        "id": tx.id,
+        "materialId": tx.material_id,
+        "materialName": tx.material.name if tx.material else "Unknown",
+        "unit": tx.material.unit if tx.material else "kg",
+        "type": tx.type,
+        "quantity": round(tx.quantity, 1),
+        "reference": tx.reference,
+        "note": tx.note or "",
+        "createdAt": tx.created_at.isoformat(),
+        "createdBy": tx.created_by or "Plant System"
+    } for tx in transactions])
 
 @store_bp.route("/inventory/adjust", methods=["POST"])
 @jwt_required()
@@ -94,7 +136,7 @@ def list_weighbridge_tickets():
 
 @store_bp.route("/weighbridge/tickets", methods=["POST"])
 @jwt_required()
-@roles_required("store", "owner", "dispatcher")
+@roles_required("store", "owner", "dispatcher", "production")
 def create_weighbridge_ticket():
     data = request.get_json() or {}
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -103,46 +145,92 @@ def create_weighbridge_ticket():
     ticket_num = data.get("ticketNumber")
     if not ticket_num:
         count = WeighbridgeTicket.query.count() + 1
-        ticket_num = f"WB-2026-{str(count).padStart(5, '0')}" if hasattr(str(count), 'padStart') else f"WB-2026-{count:05d}"
+        ticket_num = f"WB-2026-{count:05d}"
+
+    # Calculate net weight or quantity
+    gross_w = float(data.get("grossWeight", 0.0))
+    tare_w = float(data.get("tareWeight", 0.0))
+    net_w = float(data.get("netWeight", 0.0))
+
+    if net_w <= 0 and gross_w > tare_w:
+        net_w = gross_w - tare_w
+    elif net_w <= 0 and data.get("quantity"):
+        net_w = float(data.get("quantity", 0.0))
+
+    # Convert MT to KG if specified or detected (e.g. 25-40 tons truck entered as 25.0)
+    unit = str(data.get("unit", "kg")).strip().upper()
+    is_mt = unit in ["MT", "TONS", "TONNE", "TONNES"] or (0 < net_w < 150 and unit not in ["L", "LTR", "LITRE", "LITRES"])
+    if is_mt:
+        net_w = net_w * 1000.0
+        if 0 < gross_w < 150:
+            gross_w = gross_w * 1000.0
+        if 0 < tare_w < 150:
+            tare_w = tare_w * 1000.0
+
+    mat_name = data.get("material", "Cement (OPC 53)").strip()
+    mat = None
+    if data.get("materialId"):
+        mat = Material.query.get(data.get("materialId"))
+    if not mat and mat_name:
+        # Match plant material names
+        mat = Material.query.filter(Material.name.ilike(f"%{mat_name}%")).first()
+        if not mat:
+            # Fallback keyword match
+            if "cement" in mat_name.lower():
+                mat = Material.query.filter(Material.name.ilike("%cement%")).first()
+            elif "sand" in mat_name.lower():
+                mat = Material.query.filter(Material.name.ilike("%sand%")).first()
+            elif "10" in mat_name.lower():
+                mat = Material.query.filter(Material.name.ilike("%10mm%")).first()
+            elif "20" in mat_name.lower():
+                mat = Material.query.filter(Material.name.ilike("%20mm%")).first()
+            elif "admix" in mat_name.lower():
+                mat = Material.query.filter(Material.name.ilike("%admixture%")).first()
+
+    supplier = data.get("supplierOrCustomer") or data.get("partyName") or "Sai ReadyMix Inward Vendor"
+    vehicle = (data.get("vehicleNumber") or "").strip().upper()
+    gate_pass = data.get("gatePassNo") or f"GP-{datetime.now().strftime('%d%m%H%M')}"
 
     ticket = WeighbridgeTicket(
         ticket_number=ticket_num,
         type=data.get("type", "INWARD"),
-        vehicle_number=data.get("vehicleNumber", "").strip().upper(),
-        material=data.get("material", "River Sand (Zone II)"),
-        supplier_or_customer=data.get("supplierOrCustomer", "Sai ReadyMix Inward"),
-        gross_weight=float(data.get("grossWeight", 0.0)),
-        tare_weight=float(data.get("tareWeight", 0.0)),
-        net_weight=float(data.get("netWeight", 0.0)),
+        vehicle_number=vehicle or "MH-12-INWARD",
+        material=mat.name if mat else mat_name,
+        supplier_or_customer=supplier,
+        gross_weight=gross_w,
+        tare_weight=tare_w,
+        net_weight=net_w,
         gross_time=data.get("grossTime", now_str),
         tare_time=data.get("tareTime", now_str),
-        status=data.get("status", "COMPLETED"),
+        status="COMPLETED",
         variance=float(data.get("variance", 0.0)),
-        challan_weight=float(data.get("challanWeight", 0.0)),
+        challan_weight=float(data.get("challanWeight", net_w)),
         received_rs=float(data.get("receivedRs", 0.0)),
-        wb_name=data.get("wbName", "Weighbridge #1"),
-        driver_name=data.get("driverName", ""),
-        watchman_name=data.get("watchmanName", "Ganesh K"),
-        gate_pass_no=data.get("gatePassNo", "")
+        wb_name=data.get("wbName", "Gate Scale #1"),
+        driver_name=data.get("driverName", "Inward Driver"),
+        watchman_name=data.get("watchmanName", "Ganesh S (Gate Security)"),
+        gate_pass_no=gate_pass
     )
     db.session.add(ticket)
 
-    # If inward and net weight is positive, automatically update material stock in database
-    if ticket.type == "INWARD" and ticket.net_weight > 0 and ticket.status == "COMPLETED":
-        mat = Material.query.filter(Material.name.ilike(f"%{ticket.material}%")).first()
-        if mat:
-            mat.current_stock += ticket.net_weight
-            tx = StockTransaction(
-                material_id=mat.id,
-                type="IN",
-                quantity=ticket.net_weight,
-                reference=ticket.ticket_number,
-                note=f"Weighbridge Inward gate pass {ticket.gate_pass_no or ticket.ticket_number}"
-            )
-            db.session.add(tx)
+    # Immediately increment live material stock in database
+    if ticket.type == "INWARD" and net_w > 0 and mat:
+        mat.current_stock += net_w
+        tx = StockTransaction(
+            material_id=mat.id,
+            type="IN",
+            quantity=net_w,
+            reference=ticket.ticket_number,
+            note=f"Inward from {supplier} (Truck {vehicle}) · Gate Pass {gate_pass}",
+            created_by="Store Gate Console"
+        )
+        db.session.add(tx)
 
     db.session.commit()
-    return success_response(data=ticket.to_dict(), status_code=201)
+    return success_response(data={
+        "ticket": ticket.to_dict(),
+        "updatedStock": mat.to_dict() if mat else None
+    }, status_code=201)
 
 @store_bp.route("/weighbridge/tickets/<id>", methods=["PUT", "PATCH"])
 @jwt_required()

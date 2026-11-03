@@ -58,11 +58,12 @@ class BatchingPlantService:
         return actuals
 
     @staticmethod
-    def decrement_stock_for_batch(batch_number: str, actual_weights: Dict[str, float], user_id: str):
+    def decrement_stock_for_batch(batch_number: str, actual_weights: Dict[str, float], user_id: str, note: str = None):
         """
         Decrement material stock based on weighed batch sheet quantities and record transactions.
         """
         materials = {m.name: m for m in Material.query.all()}
+        tx_note = note or f"Automatic batching consumption for {batch_number}"
         for mat_name, used_qty in actual_weights.items():
             mat = materials.get(mat_name)
             if mat:
@@ -72,7 +73,7 @@ class BatchingPlantService:
                     type="OUT",
                     quantity=used_qty,
                     reference=f"Batch {batch_number}",
-                    note=f"Automatic batching consumption for {batch_number}",
+                    note=tx_note,
                     created_by=user_id
                 )
                 db.session.add(tx)

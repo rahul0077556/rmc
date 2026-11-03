@@ -1,10 +1,15 @@
 from typing import Any, Optional, Dict
 from flask import jsonify
 
-def success_response(data: Any, meta: Optional[Dict[str, Any]] = None, status_code: int = 200):
+def success_response(data: Any, meta: Optional[Dict[str, Any]] = None, message: Optional[str] = None, status_code: int = 200):
     payload = {"data": data}
     if meta is not None:
         payload["meta"] = meta
+    if message is not None:
+        if "meta" not in payload:
+            payload["meta"] = {}
+        payload["meta"]["message"] = message
+        payload["message"] = message
     return jsonify(payload), status_code
 
 def error_response(code: str, message: str, fields: Optional[Dict[str, Any]] = None, status_code: int = 400):

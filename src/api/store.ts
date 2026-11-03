@@ -11,6 +11,23 @@ export interface InventoryItem {
   capacity: number;
   reorderLevel: number;
   lastUpdated: string;
+  siloName?: string;
+  totalInward?: number;
+  totalConsumed?: number;
+  status?: "HEALTHY" | "LOW" | "CRITICAL";
+}
+
+export interface StockTransactionItem {
+  id: string;
+  materialId: string;
+  materialName: string;
+  unit: string;
+  type: "IN" | "OUT" | "ADJUST";
+  quantity: number;
+  reference: string;
+  note: string;
+  createdAt: string;
+  createdBy: string;
 }
 
 export interface WeighbridgeTicket {
@@ -117,6 +134,17 @@ export const storeApi = {
       saveDb(db);
     }
     return { data: db.inventory };
+  },
+
+  transactions: async (type?: "IN" | "OUT"): Promise<ApiResponse<StockTransactionItem[]>> => {
+    try {
+      const url = type ? `/store/transactions?type=${type}` : "/store/transactions";
+      const res = await request<StockTransactionItem[]>({ url, method: "GET" });
+      if (res.data) return res;
+    } catch {
+      // Fallback
+    }
+    return { data: [] };
   },
 
   updateStock: async (materialId: string, addedStock: number): Promise<ApiResponse<InventoryItem>> => {

@@ -1,12 +1,15 @@
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { Plus, Building2 } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { DataTable, type Column } from "@/components/app/data-table";
 import { LoadingState, ErrorState } from "@/components/app/states";
 import { FilterBar } from "@/components/app/filter-bar";
+import { Button } from "@/components/ui/button";
 import { useListQuery } from "@/hooks/use-list-query";
 import { customersApi, type CustomerRow } from "@/api/customers";
+import { AddCustomerDialog } from "@/components/sales/AddCustomerDialog";
 import { inr } from "@/lib/format";
 
 export const Route = createFileRoute("/_shell/sales/customers")({
@@ -20,6 +23,7 @@ export const Route = createFileRoute("/_shell/sales/customers")({
 });
 
 function CustomersPage() {
+  const [addOpen, setAddOpen] = useState(false);
   const { params, updateParams, query: customers } = useListQuery(["customers"], () => customersApi.list().then((r) => r.data));
 
   const filteredCustomers = useMemo(() => {
@@ -50,7 +54,13 @@ function CustomersPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Customers" subtitle="Accounts, credit terms and delivery sites" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <PageHeader title="Customers" subtitle="Accounts, credit terms and delivery sites" />
+        <Button onClick={() => setAddOpen(true)} size="sm" className="font-semibold shrink-0 cursor-pointer">
+          <Plus className="mr-1.5 size-4" />
+          Add New Customer
+        </Button>
+      </div>
       
       <FilterBar
         search={params.q}
@@ -65,6 +75,8 @@ function CustomersPage() {
         emptyTitle="No customers found"
         emptyDescription="Customer accounts will appear here once created."
       />
+
+      <AddCustomerDialog open={addOpen} onOpenChange={setAddOpen} />
     </div>
   );
 }
