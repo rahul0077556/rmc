@@ -168,12 +168,15 @@ def execute_purge():
     if not wb_set:
         wb_set = WeighbridgeSettings(
             plant_name="ROXXCON RMC NAGPUR",
-            weighbridge_name="Weighbridge #1",
-            operator_name="Ganesh S (Gate Weighbridge)"
+            wb_name="WB-01 (Inward/Outward Pitless 60T)",
+            vendor_software_name="RMC Weigh Pro",
+            vendor_company_name="RMC Weighbridge Automation",
+            customer_care="+91 712 288 9900"
         )
         db.session.add(wb_set)
     else:
         wb_set.plant_name = "ROXXCON RMC NAGPUR"
+        wb_set.wb_name = "WB-01 (Inward/Outward Pitless 60T)"
 
     # 10. Ensure Concrete Grades (M15 - M40) exist
     standard_grades = [
