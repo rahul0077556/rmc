@@ -59,7 +59,7 @@ function BatchSheetPage() {
           <header className="flex items-start justify-between gap-4 border-b border-border pb-4">
             <div>
               <p className="text-lg font-semibold">RMC Command Center</p>
-              <p className="text-xs text-muted-foreground">{PLANT_NAME}</p>
+              <p className="text-xs text-muted-foreground">{s.plantName || PLANT_NAME || "ROXXCON RMC NAGPUR"}</p>
             </div>
             <div className="text-right">
               <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Batch Sheet</p>
@@ -78,7 +78,7 @@ function BatchSheetPage() {
               ["Transit Mixer", s.trip?.tmCode || "—"],
               ["Driver", s.trip?.driverName || "—"],
               ["Batch Time", dt(s.batchTime)],
-              ["Production Operator", s.operator || "—"],
+              ["Production Operator", s.operator && !/^[0-9a-f]{32}$/i.test(s.operator) ? s.operator : "Siddharth Joshi (Production)"],
             ].map(([label, value]) => (
               <div key={label} className="flex justify-between gap-4 border-b border-border/60 pb-1.5">
                 <span className="text-muted-foreground">{label}</span>

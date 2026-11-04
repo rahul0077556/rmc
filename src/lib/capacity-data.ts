@@ -52,7 +52,7 @@ export function get14DayCapacity(existingOrders?: { deliveryDate?: string; quant
 
   // Group active orders by deliveryDate
   const bookedByDate = new Map<string, number>();
-  if (existingOrders && existingOrders.length > 0) {
+  if (existingOrders !== undefined) {
     for (const po of existingOrders) {
       if (po.status !== "CANCELLED" && po.status !== "REJECTED" && po.deliveryDate) {
         const cur = bookedByDate.get(po.deliveryDate) || 0;

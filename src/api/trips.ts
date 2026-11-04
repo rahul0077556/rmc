@@ -218,4 +218,34 @@ export const tripsApi = {
     });
     return { data: res.data ? decorateTrip(res.data) : null, message: `Reported issue '${issueType}' to Dispatch` };
   },
+
+  async reassignVehicle(
+    id: string,
+    input: { tmId: string; driverId?: string; reason: string; markOldTruckBreakdown?: boolean },
+  ): Promise<ApiResponse<TripRow | null>> {
+    const res = await request<any>({
+      url: `/trips/${id}/reassign-vehicle`,
+      method: "POST",
+      data: input,
+    });
+    return {
+      data: res.data ? decorateTrip(res.data) : null,
+      message: "Vehicle reassigned successfully",
+    };
+  },
+
+  async replaceTrip(
+    id: string,
+    input: { tmId?: string; driverId?: string; reason: string },
+  ): Promise<ApiResponse<TripRow | null>> {
+    const res = await request<any>({
+      url: `/trips/${id}/replace`,
+      method: "POST",
+      data: input,
+    });
+    return {
+      data: res.data ? decorateTrip(res.data) : null,
+      message: "Replacement trip scheduled",
+    };
+  },
 };

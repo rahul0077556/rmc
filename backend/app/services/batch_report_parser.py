@@ -467,41 +467,68 @@ try? handler.perform([request])
         db.session.add(batch_sheet)
 
         # 7. Stock Deductions & Traceable Ledger Entries (Golden Rule 2: exact ledger, no clamping)
-        deductions = [
-            ("Cement (OPC 53)", cement_kg),
-            ("Fly Ash (Class F)", flyash_kg),
-            ("River Sand (Zone II)", r_sand_kg),
-            ("Manufactured Sand (M-Sand)", m_sand_kg),
-            ("Aggregate 10mm", agg_10mm_kg),
-            ("Aggregate 20mm", agg_20mm_kg),
-            ("Water", water_l),
-            ("Admixture (PCE)", admixture_kg)
-        ]
+        actual_dict = dict(data.get("actualWeights") or {})
+        default_items = {
+            "Cement (OPC 53)": cement_kg,
+            "Fly Ash (Class F)": flyash_kg,
+            "River Sand (Zone II)": r_sand_kg,
+            "Manufactured Sand (M-Sand)": m_sand_kg,
+            "Aggregate 10mm": agg_10mm_kg,
+            "Aggregate 20mm": agg_20mm_kg,
+            "Water": water_l,
+            "Admixture (PCE)": admixture_kg
+        }
+        for k, v in default_items.items():
+            if k not in actual_dict:
+                actual_dict[k] = v
 
-        materials_map = {m.name: m for m in Material.query.all()}
+        materials_map = {m.name.lower(): m for m in Material.query.all()}
         stock_txs = []
-        for mat_name, qty in deductions:
+
+        for mat_name, qty_val in actual_dict.items():
+            qty = float(qty_val or 0.0)
             if qty <= 0:
                 continue
-            mat = materials_map.get(mat_name)
+
+            mat_key = mat_name.strip().lower()
+            mat = materials_map.get(mat_key)
             if not mat:
-                for m_name, m_obj in materials_map.items():
-                    if mat_name.split()[0].lower() in m_name.lower():
+                # Fuzzy match existing materials (e.g. "R SAND" -> "River Sand (Zone II)")
+                for m_k, m_obj in materials_map.items():
+                    if mat_key in m_k or m_k in mat_key or (len(mat_key) > 3 and mat_key[:4] in m_k):
                         mat = m_obj
                         break
-            if mat:
-                if getattr(mat, "is_tracked", True):
-                    mat.current_stock = round(mat.current_stock - qty, 2)
-                tx = StockTransaction(
-                    material_id=mat.id,
-                    type="OUT",
-                    quantity=qty,
-                    reference=f"DOCKET-{docket_no}",
-                    note=f"Batch Docket #{docket_no} ({recipe_name}) · TM {truck_no} for {cust_name} @ {site_name}",
-                    created_by=user_id or "SCADA Console"
+
+            # If material is brand new (e.g. Admixture 2, Silica Fume), auto-register in inventory
+            if not mat:
+                unit_str = "l" if any(w in mat_key for w in ["water", "admix", "additive", "retarder", "diesel", "oil"]) else "kg"
+                is_water_item = "water" in mat_key
+                mat = Material(
+                    name=mat_name.strip(),
+                    unit=unit_str,
+                    current_stock=0.0,
+                    reorder_level=1000.0,
+                    is_tracked=not is_water_item,
+                    is_active=True
                 )
-                db.session.add(tx)
-                stock_txs.append(tx)
+                db.session.add(mat)
+                db.session.flush()
+                materials_map[mat.name.lower()] = mat
+
+            # Decrement stock and write ledger entry
+            if getattr(mat, "is_tracked", True):
+                mat.current_stock = round(mat.current_stock - qty, 2)
+
+            tx = StockTransaction(
+                material_id=mat.id,
+                type="OUT",
+                quantity=qty,
+                reference=f"DOCKET-{docket_no}",
+                note=f"SCADA Batch Docket #{docket_no} ({recipe_name}) · TM {truck_no} for {cust_name} @ {site_name}",
+                created_by=user_id or "SCADA Console"
+            )
+            db.session.add(tx)
+            stock_txs.append(tx)
 
         # 8. Update Daily Production Report (DPR) record for date
         dpr = DprRecord.query.filter_by(date=date_str).first()

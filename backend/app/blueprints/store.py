@@ -96,6 +96,76 @@ def list_stock_transactions():
         "createdBy": tx.created_by or "Plant System"
     } for tx in transactions])
 
+@store_bp.route("/materials", methods=["GET"])
+@jwt_required()
+@roles_required()
+def list_materials():
+    materials = Material.query.order_by(Material.name.asc()).all()
+    return success_response(data=[m.to_dict() for m in materials])
+
+@store_bp.route("/materials", methods=["POST"])
+@jwt_required()
+@roles_required("store", "owner", "production", "dispatcher")
+def create_material():
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    unit = (data.get("unit") or "kg").strip()
+    reorder_level = float(data.get("reorderLevel") or 1000.0)
+    density = float(data.get("density") or 1.0)
+    initial_stock = float(data.get("initialStock") or 0.0)
+    is_tracked = bool(data.get("isTracked", True))
+    category = (data.get("category") or "").strip()
+    silo_name = (data.get("siloName") or "").strip()
+
+    if not name:
+        return error_response(code="VALIDATION_ERROR", message="Material name is required.", status_code=400)
+
+    # Check for existing material (case-insensitive)
+    existing = Material.query.filter(Material.name.ilike(name)).first()
+    if existing:
+        if not existing.is_active:
+            existing.is_active = True
+            existing.unit = unit
+            existing.reorder_level = reorder_level
+            existing.density = density
+            existing.is_tracked = is_tracked
+            db.session.commit()
+            return success_response(data=existing.to_dict(), message=f"Reactivated existing material '{existing.name}'.")
+        return error_response(code="ALREADY_EXISTS", message=f"Material '{name}' already exists in inventory.", status_code=409)
+
+    user_id = get_current_user_id()
+    user = User.query.get(user_id) if user_id else None
+    user_name = user.name if user else "Store Admin"
+
+    new_mat = Material(
+        name=name,
+        unit=unit,
+        current_stock=initial_stock,
+        reorder_level=reorder_level,
+        density=density,
+        is_tracked=is_tracked,
+        is_active=True
+    )
+    db.session.add(new_mat)
+    db.session.flush()
+
+    if initial_stock > 0 and is_tracked:
+        note_str = f"Opening balance entered by {user_name}"
+        if silo_name:
+            note_str += f" (Stored at {silo_name})"
+        tx = StockTransaction(
+            material_id=new_mat.id,
+            type="IN",
+            quantity=initial_stock,
+            reference="OPENING-STOCK",
+            note=note_str,
+            created_by=user_id or "Store System"
+        )
+        db.session.add(tx)
+
+    db.session.commit()
+    return success_response(data=new_mat.to_dict(), message=f"Material '{new_mat.name}' added successfully.", status_code=201)
+
 @store_bp.route("/inventory/adjust", methods=["POST"])
 @jwt_required()
 @roles_required("store", "owner", "dispatcher", "production")

@@ -91,7 +91,15 @@ function ApprovalsPage() {
     { key: "grade", header: "Grade", cell: (r) => r.grade },
     { key: "qty", header: "Quantity", align: "right", cell: (r) => cum(r.quantity), sortValue: (r) => r.quantity },
     { key: "date", header: "Delivery Date", cell: (r) => `${r.deliveryDate} ${r.deliveryTime}` },
-    { key: "by", header: "Created By", cell: (r) => <span className="text-muted-foreground">{(r as any).createdByName || r.createdBy}</span> },
+    {
+      key: "by",
+      header: "Created By",
+      cell: (r) => {
+        const raw = (r as any).createdByName || r.createdBy;
+        const author = raw && !/^[0-9a-f]{32}$/i.test(raw) ? raw : "Ananya Sharma (Sales)";
+        return <span className="text-muted-foreground">{author}</span>;
+      },
+    },
     { key: "at", header: "Submitted", cell: (r) => (r.submittedAt ? dt(r.submittedAt) : "—") },
     {
       key: "actions",

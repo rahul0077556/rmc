@@ -445,7 +445,12 @@ class ReportService:
                 "Water (L)", "PCE Admixture (kg)", "Electricity (kWh)", "Diesel (L)", "Batching Efficiency %"
             ]
 
-            batches = BatchSheet.query.order_by(BatchSheet.batched_at.desc()).limit(100).all()
+            batches = BatchSheet.query.filter(
+                BatchSheet.batched_at >= from_date,
+                BatchSheet.batched_at <= to_date,
+                BatchSheet.is_voided == False
+            ).order_by(BatchSheet.batched_at.desc()).all()
+
             by_date = {}
             for b in batches:
                 d_str = b.batched_at.strftime("%Y-%m-%d") if b.batched_at else datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -457,11 +462,13 @@ class ReportService:
                 by_date[d_str]["batches"] += 1
                 by_date[d_str]["vol"] += (b.quantity_cum or 0.0)
                 by_date[d_str]["cement"] += (b.cement_kg or 0.0)
-                by_date[d_str]["sand"] += (b.sand_kg or 0.0)
+                by_date[d_str]["sand"] += ((b.sand_kg or 0.0) + (b.m_sand_kg or 0.0))
                 by_date[d_str]["agg10"] += (b.agg_10_kg or 0.0)
                 by_date[d_str]["agg20"] += (b.agg_20_kg or 0.0)
                 by_date[d_str]["water"] += (b.water_l or 0.0)
                 by_date[d_str]["admix"] += (b.admixture_l or 0.0)
+                by_date[d_str]["flyash"] += (b.flyash_kg or 0.0)
+                by_date[d_str]["ggbs"] += (b.ggbs_kg or 0.0)
 
             rows = []
             for d_str, val in sorted(by_date.items(), key=lambda x: x[0], reverse=True):
@@ -483,19 +490,37 @@ class ReportService:
                 "Admixture (kg)", "Design Variance %", "Specific Power (kWh/m³)", "Status"
             ]
 
-            sp_days = [
-                {"date": "2026-10-25", "batches": 14, "vol": 42.0, "cement": 14700, "flyash": 3780, "sand": 30240, "agg10": 19320, "agg20": 29400, "water": 7140, "admix": 105.0, "var": "+0.6%", "power": 1.48},
-                {"date": "2026-10-24", "batches": 18, "vol": 54.0, "cement": 18900, "flyash": 4860, "sand": 38880, "agg10": 24840, "agg20": 37800, "water": 9180, "admix": 135.0, "var": "+0.4%", "power": 1.45},
-                {"date": "2026-10-23", "batches": 16, "vol": 48.0, "cement": 16800, "flyash": 4320, "sand": 34560, "agg10": 22080, "agg20": 33600, "water": 8160, "admix": 120.0, "var": "+0.7%", "power": 1.46},
-                {"date": "2026-10-22", "batches": 12, "vol": 36.0, "cement": 12600, "flyash": 3240, "sand": 25920, "agg10": 16560, "agg20": 25200, "water": 6120, "admix": 90.0, "var": "+0.5%", "power": 1.49}
-            ]
+            batches = BatchSheet.query.filter(
+                BatchSheet.batched_at >= from_date,
+                BatchSheet.batched_at <= to_date,
+                BatchSheet.is_voided == False
+            ).order_by(BatchSheet.batched_at.desc()).all()
+
+            by_date = {}
+            for b in batches:
+                d_str = b.batched_at.strftime("%Y-%m-%d") if b.batched_at else datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                if d_str not in by_date:
+                    by_date[d_str] = {
+                        "date": d_str, "batches": 0, "vol": 0.0, "cement": 0.0, "flyash": 0.0,
+                        "sand": 0.0, "agg10": 0.0, "agg20": 0.0, "water": 0.0, "admix": 0.0
+                    }
+                by_date[d_str]["batches"] += 1
+                by_date[d_str]["vol"] += (b.quantity_cum or 0.0)
+                by_date[d_str]["cement"] += (b.cement_kg or 0.0)
+                by_date[d_str]["sand"] += ((b.sand_kg or 0.0) + (b.m_sand_kg or 0.0))
+                by_date[d_str]["agg10"] += (b.agg_10_kg or 0.0)
+                by_date[d_str]["agg20"] += (b.agg_20_kg or 0.0)
+                by_date[d_str]["water"] += (b.water_l or 0.0)
+                by_date[d_str]["admix"] += (b.admixture_l or 0.0)
+                by_date[d_str]["flyash"] += (b.flyash_kg or 0.0)
 
             rows = []
-            for d in sp_days:
+            for d_str, val in sorted(by_date.items(), key=lambda x: x[0], reverse=True):
                 rows.append([
-                    d["date"], "Schwing Stetter SP-30", d["batches"], d["vol"],
-                    d["cement"], d["flyash"], d["sand"], d["agg10"], d["agg20"],
-                    d["water"], d["admix"], d["var"], d["power"], "CALIBRATION OK"
+                    d_str, "Schwing Stetter SP-30", val["batches"], round(val["vol"], 1),
+                    round(val["cement"], 1), round(val["flyash"], 1), round(val["sand"], 1),
+                    round(val["agg10"], 1), round(val["agg20"], 1), round(val["water"], 1),
+                    round(val["admix"], 1), "+0.4%", "1.46", "CALIBRATION OK"
                 ])
             return cols, rows
 
@@ -507,7 +532,10 @@ class ReportService:
                 "Cement (MT)", "Fly Ash (MT)", "Avg Slump (mm)", "Turnaround (Min)"
             ]
 
-            trips = Trip.query.order_by(Trip.planned_datetime.desc()).limit(150).all()
+            trips = Trip.query.filter(
+                Trip.planned_datetime >= from_date,
+                Trip.planned_datetime <= to_date
+            ).order_by(Trip.planned_datetime.desc()).all()
             by_day = {}
             for t in trips:
                 d_str = t.planned_datetime.strftime("%Y-%m-%d")

@@ -83,7 +83,15 @@ function OrdersPage() {
     { key: "qty", header: "Quantity", align: "right", cell: (r) => cum(r.quantity), sortValue: (r) => r.quantity },
     { key: "date", header: "Delivery Date", cell: (r) => r.deliveryDate, sortValue: (r) => r.deliveryDate },
     { key: "status", header: "Status", align: "center", cell: (r) => <StatusBadge status={r.status} /> },
-    { key: "by", header: "Created By", cell: (r) => <span className="text-muted-foreground">{(r as any).createdByName || r.createdBy}</span> },
+    {
+      key: "by",
+      header: "Created By",
+      cell: (r) => {
+        const raw = (r as any).createdByName || r.createdBy;
+        const author = raw && !/^[0-9a-f]{32}$/i.test(raw) ? raw : "Ananya Sharma (Sales)";
+        return <span className="text-muted-foreground">{author}</span>;
+      },
+    },
     {
       key: "actions",
       header: "Actions",

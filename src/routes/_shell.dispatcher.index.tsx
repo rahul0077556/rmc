@@ -2,9 +2,10 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, ClipboardList, Clock, Flame, FlaskConical, PackageCheck, ShieldAlert, Sparkles, Truck, Zap, Tv, CalendarDays, Printer } from "lucide-react";
+import { CheckCircle2, ClipboardList, Clock, Flame, FlaskConical, PackageCheck, ShieldAlert, Sparkles, Truck, Zap, Tv, CalendarDays, Printer, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { CapacityCalendar } from "@/components/common/CapacityCalendar";
+import { ReassignVehicleDialog } from "@/components/dispatch/ReassignVehicleDialog";
 import { KpiCard } from "@/components/app/kpi-card";
 import { ChartCard } from "@/components/app/chart-card";
 import { DataTable, type Column } from "@/components/app/data-table";
@@ -50,6 +51,8 @@ function DispatcherPage() {
   const [receiver, setReceiver] = useState("");
   const [deliveredQty, setDeliveredQty] = useState("");
   const [showCapacity, setShowCapacity] = useState(false);
+  const [selectedTripForSwap, setSelectedTripForSwap] = useState<TripRow | null>(null);
+  const [swapOpen, setSwapOpen] = useState(false);
 
   const { params, updateParams, query: trips } = useListQuery(
     ["trips-list"],
@@ -248,7 +251,7 @@ function DispatcherPage() {
       align: "right",
       className: "min-w-[160px]",
       cell: (r) => (
-        <div className="flex justify-end gap-1.5">
+        <div className="flex justify-end gap-1.5 flex-wrap">
           {r.challanNumber && (
             <Button
               size="sm"
@@ -257,6 +260,20 @@ function DispatcherPage() {
               onClick={() => void navigate({ to: "/challan/$tripId", params: { tripId: r.id }, search: { from: "dispatcher" } })}
             >
               <Printer className="size-3" /> View Challan
+            </Button>
+          )}
+          {["SENT_TO_PRODUCTION", "QC_PENDING", "QC_APPROVED", "DISPATCHED", "PLANNED"].includes(r.status) && user?.role !== "owner" && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="gap-1 text-muted-foreground hover:text-amber-500 h-8 text-xs cursor-pointer"
+              onClick={() => {
+                setSelectedTripForSwap(r);
+                setSwapOpen(true);
+              }}
+              title="Swap / Reassign transit mixer if broken down"
+            >
+              <RefreshCw className="size-3" /> Swap TM
             </Button>
           )}
           {r.status === "QC_APPROVED" && (
@@ -692,6 +709,16 @@ function DispatcherPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Transit Mixer Breakdown / Reassignment Modal */}
+      <ReassignVehicleDialog
+        open={swapOpen}
+        onOpenChange={(open) => {
+          setSwapOpen(open);
+          if (!open) setSelectedTripForSwap(null);
+        }}
+        trip={selectedTripForSwap}
+      />
     </div>
   );
 }

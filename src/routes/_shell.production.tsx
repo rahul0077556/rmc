@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, Factory, Layers, PackageCheck, Timer, Upload, Printer, Scale, FileText, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, Factory, Layers, PackageCheck, Timer, Upload, Printer, Scale, FileText, CheckCircle2, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { KpiCard } from "@/components/app/kpi-card";
 import { ChartCard } from "@/components/app/chart-card";
@@ -26,6 +26,7 @@ import { useAuth } from "@/auth/auth-context";
 import { cum, num, timeOnly } from "@/lib/format";
 import { UploadBatchSheetDialog } from "@/components/production/UploadBatchSheetDialog";
 import { DailyConsumptionDialog } from "@/components/production/DailyConsumptionDialog";
+import { ReassignVehicleDialog } from "@/components/dispatch/ReassignVehicleDialog";
 
 export const Route = createFileRoute("/_shell/production")({
   head: () => ({
@@ -46,6 +47,8 @@ function ProductionPage() {
   const [selectedTripForUpload, setSelectedTripForUpload] = useState<TripRow | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [consumptionOpen, setConsumptionOpen] = useState(false);
+  const [selectedTripForSwap, setSelectedTripForSwap] = useState<TripRow | null>(null);
+  const [swapOpen, setSwapOpen] = useState(false);
 
   const { params, updateParams, query: queue } = useListQuery(["production-queue"], () => productionApi.queue().then((r) => r.data));
   const materials = useQuery({
@@ -127,15 +130,32 @@ function ProductionPage() {
       cell: (r) => (
         <div className="flex items-center justify-end gap-1.5 flex-wrap">
           {r.batchSheetId ? (
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1 border-primary/40 text-primary hover:bg-primary/10 cursor-pointer text-xs"
-              onClick={() => void navigate({ to: "/batch-sheet/$id", params: { id: r.batchSheetId! } })}
-            >
-              <FileText className="size-3.5" />
-              Batch sheet
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1 border-primary/40 text-primary hover:bg-primary/10 cursor-pointer text-xs"
+                onClick={() => void navigate({ to: "/batch-sheet/$id", params: { id: r.batchSheetId! } })}
+              >
+                <FileText className="size-3.5" />
+                Batch sheet
+              </Button>
+              {!readOnly && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="gap-1 text-muted-foreground hover:text-amber-500 cursor-pointer text-xs"
+                  onClick={() => {
+                    setSelectedTripForSwap(r);
+                    setSwapOpen(true);
+                  }}
+                  title="Swap / Reassign transit mixer if broken down"
+                >
+                  <RefreshCw className="size-3.5" />
+                  Swap TM
+                </Button>
+              )}
+            </>
           ) : (
             <>
               {r.status === "PLANNED" && !readOnly ? (
@@ -149,19 +169,34 @@ function ProductionPage() {
               ) : null}
 
               {!readOnly && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1 border-amber-500/40 text-amber-500 hover:bg-amber-500/10 cursor-pointer text-xs font-medium"
-                  onClick={() => {
-                    setSelectedTripForUpload(r);
-                    setUploadOpen(true);
-                  }}
-                  title={`Upload printed plant batch sheet for ${r.tripNumber}`}
-                >
-                  <Upload className="size-3.5" />
-                  Upload Batch Sheet
-                </Button>
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1 border-amber-500/40 text-amber-500 hover:bg-amber-500/10 cursor-pointer text-xs font-medium"
+                    onClick={() => {
+                      setSelectedTripForUpload(r);
+                      setUploadOpen(true);
+                    }}
+                    title={`Upload printed plant batch sheet for ${r.tripNumber}`}
+                  >
+                    <Upload className="size-3.5" />
+                    Upload Batch Sheet
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="gap-1 text-muted-foreground hover:text-foreground cursor-pointer text-xs"
+                    onClick={() => {
+                      setSelectedTripForSwap(r);
+                      setSwapOpen(true);
+                    }}
+                    title="Swap / Reassign transit mixer"
+                  >
+                    <RefreshCw className="size-3.5" />
+                    Swap TM
+                  </Button>
+                </>
               )}
             </>
           )}
@@ -379,6 +414,16 @@ function ProductionPage() {
       <DailyConsumptionDialog
         open={consumptionOpen}
         onOpenChange={setConsumptionOpen}
+      />
+
+      {/* Transit Mixer Breakdown / Vehicle Reassignment Modal */}
+      <ReassignVehicleDialog
+        open={swapOpen}
+        onOpenChange={(open) => {
+          setSwapOpen(open);
+          if (!open) setSelectedTripForSwap(null);
+        }}
+        trip={selectedTripForSwap}
       />
     </div>
   );

@@ -3,7 +3,7 @@ from flask import Blueprint, request, make_response
 from flask_jwt_extended import jwt_required
 from backend.app.extensions import db
 from backend.app.models.models import (
-    Trip, PurchaseOrder, Truck, Driver, Challan
+    Trip, PurchaseOrder, Truck, Driver, Challan, User
 )
 from backend.app.services.sequence_service import get_next_sequence
 from backend.app.services.state_machine import StateMachine, StateMachineError
@@ -388,6 +388,91 @@ def cancel_trip(id):
         return success_response(data=trip.to_dict(), message="Trip cancelled. Quantity returned to PO balance.")
     except StateMachineError as e:
         return error_response(code="INVALID_STATE", message=e.message, status_code=e.status_code)
+
+@trips_bp.route("/<id>/reassign-vehicle", methods=["POST"])
+@jwt_required()
+@roles_required("dispatcher", "production", "owner")
+def reassign_trip_vehicle(id):
+    """
+    Handles plant edge case where a transit mixer breaks down or is swapped:
+    - If concrete is already loaded or in QC, updates the assigned truck/driver.
+    - Creates a BatchSheetRevision on the existing BatchSheet documenting the swap.
+    - Updates Challan so delivery documentation matches the actual replacement vehicle.
+    - Updates old truck status to MAINTENANCE (or AVAILABLE) and new truck to ASSIGNED.
+    """
+    trip = find_trip(id)
+    if not trip:
+        return error_response(code="NOT_FOUND", message="Trip not found.", status_code=404)
+
+    data = request.get_json(silent=True) or {}
+    new_tm_id = data.get("tmId")
+    new_driver_id = data.get("driverId")
+    reason = (data.get("reason") or "Vehicle breakdown / mechanical emergency").strip()
+    mark_breakdown = bool(data.get("markOldTruckBreakdown", True))
+
+    if not new_tm_id:
+        return error_response(code="VALIDATION_ERROR", message="New transit mixer is required.", status_code=400)
+
+    new_truck = Truck.query.get(new_tm_id)
+    if not new_truck:
+        return error_response(code="NOT_FOUND", message="Selected transit mixer not found.", status_code=404)
+
+    new_driver = Driver.query.get(new_driver_id) if new_driver_id else None
+
+    user_id = get_current_user_id()
+    user = User.query.get(user_id) if user_id else None
+    user_name = user.name if user else "Dispatcher"
+
+    old_tm_no = trip.truck.tm_number if trip.truck else "Unassigned"
+    new_tm_no = new_truck.tm_number
+    old_driver_name = trip.driver.name if trip.driver else "Unassigned"
+    new_driver_name = new_driver.name if new_driver else old_driver_name
+
+    # Release or flag old truck
+    if trip.truck and trip.truck.id != new_tm_id:
+        trip.truck.status = "MAINTENANCE" if mark_breakdown else "AVAILABLE"
+    if trip.driver and new_driver and trip.driver.id != new_driver.id:
+        trip.driver.status = "AVAILABLE"
+
+    # Assign new truck/driver
+    trip.truck_id = new_truck.id
+    new_truck.status = "ASSIGNED"
+    if new_driver:
+        trip.driver_id = new_driver.id
+        new_driver.status = "ASSIGNED"
+
+    swap_note = f"TM Reassigned: {old_tm_no} -> {new_tm_no} ({reason}) by {user_name}"
+    trip.notes = f"{trip.notes or ''} [{swap_note}]".strip()
+
+    # If BatchSheet exists, append a formal BatchSheetRevision
+    bs = trip.batch_sheet
+    if bs:
+        from backend.app.models.models import BatchSheetRevision
+        rev_num = len(bs.revisions) + 1
+        rev = BatchSheetRevision(
+            batch_sheet_id=bs.id,
+            revision_number=rev_num,
+            cement_kg=bs.cement_kg,
+            sand_kg=bs.sand_kg,
+            agg_10_kg=bs.agg_10_kg,
+            agg_20_kg=bs.agg_20_kg,
+            water_l=bs.water_l,
+            admixture_l=bs.admixture_l,
+            reason=swap_note,
+            revised_by=user_name,
+            revised_at=datetime.now(timezone.utc)
+        )
+        db.session.add(rev)
+
+    # If Challan exists, record note
+    if trip.challan:
+        trip.challan.notes = f"{trip.challan.notes or ''} [Vehicle Reassigned: {old_tm_no} -> {new_tm_no}]".strip()
+
+    db.session.commit()
+    return success_response(
+        data=trip.to_dict(),
+        message=f"Vehicle successfully swapped to {new_tm_no}. Batch sheet and delivery challan updated with audit note."
+    )
 
 @trips_bp.route("/<id>/replace", methods=["POST"])
 @jwt_required()

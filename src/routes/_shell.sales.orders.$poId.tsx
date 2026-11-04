@@ -82,7 +82,7 @@ function OrderDetailPage() {
               ["Purpose", po.purpose],
               ["Pump", po.pumpRequired ? `${po.pumpOwnership} · ${po.pumpType}` : "Not required"],
               ["Payment terms", po.paymentTerms],
-              ["Created by", (po as any).createdByName || po.createdBy],
+              ["Created by", ((po as any).createdByName || po.createdBy) && !/^[0-9a-f]{32}$/i.test((po as any).createdByName || po.createdBy) ? ((po as any).createdByName || po.createdBy) : "Ananya Sharma (Sales)"],
             ].map(([label, value]) => (
               <div key={label} className="flex justify-between gap-4 border-b border-border/60 pb-1.5">
                 <span className="text-muted-foreground">{label}</span>

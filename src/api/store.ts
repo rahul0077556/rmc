@@ -171,6 +171,23 @@ export const storeApi = {
     return { data: [] };
   },
 
+  createMaterial: async (input: {
+    name: string;
+    unit?: string;
+    category?: string;
+    reorderLevel?: number;
+    density?: number;
+    initialStock?: number;
+    isTracked?: boolean;
+    siloName?: string;
+  }): Promise<ApiResponse<any>> => {
+    return request<any>({
+      url: "/store/materials",
+      method: "POST",
+      data: input,
+    });
+  },
+
   updateStock: async (materialId: string, addedStock: number): Promise<ApiResponse<InventoryItem>> => {
     try {
       const res = await request<InventoryItem>({

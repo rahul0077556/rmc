@@ -40,6 +40,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FilterBar } from "@/components/app/filter-bar";
+import { AddMaterialDialog } from "@/components/store/AddMaterialDialog";
 import { useListQuery } from "@/hooks/use-list-query";
 import {
   Dialog,
@@ -108,6 +109,7 @@ function StorePage() {
 
   // Inward Entry Modal State
   const [inwardOpen, setInwardOpen] = useState(false);
+  const [addMaterialOpen, setAddMaterialOpen] = useState(false);
   const [selectedMaterialName, setSelectedMaterialName] = useState("Cement (OPC 53)");
   const [supplierName, setSupplierName] = useState("");
   const [vehicleNo, setVehicleNo] = useState("");
@@ -685,17 +687,28 @@ function StorePage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!readOnly && (
-            <Button
-              size="sm"
-              onClick={() => {
-                setSelectedMaterialName("Cement (OPC 53)");
-                setInwardOpen(true);
-              }}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold cursor-pointer shadow-md"
-            >
-              <Plus className="mr-1.5 size-4" />
-              Record Inward Material (Gate Entry)
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setAddMaterialOpen(true)}
+                className="font-semibold cursor-pointer border-border hover:bg-accent text-xs"
+              >
+                <Plus className="mr-1.5 size-4" />
+                Add New Material
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setSelectedMaterialName("Cement (OPC 53)");
+                  setInwardOpen(true);
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold cursor-pointer shadow-md text-xs"
+              >
+                <Plus className="mr-1.5 size-4" />
+                Record Inward Material (Gate Entry)
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -1774,6 +1787,9 @@ function StorePage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Add New Material to Inventory Dialog */}
+      <AddMaterialDialog open={addMaterialOpen} onOpenChange={setAddMaterialOpen} />
     </div>
   );
 }

@@ -38,7 +38,11 @@ apiClient.interceptors.request.use((config) => {
       }
     }
     if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
+      if (typeof (config.headers as any).set === "function") {
+        (config.headers as any).set("Authorization", `Bearer ${token}`);
+      } else {
+        config.headers["Authorization"] = `Bearer ${token}`;
+      }
     }
   }
   return config;
@@ -50,8 +54,9 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401 && typeof window !== "undefined") {
       const isLoginUrl = error.config?.url?.includes("/auth/login");
-      // Only clear credentials if we sent an authorization header that was rejected as invalid/expired
-      if (!isLoginUrl && error.config?.headers?.Authorization) {
+      // Only clear credentials if server explicitly reported token expiry or invalid signature
+      const errCode = error.response?.data?.error?.code;
+      if (!isLoginUrl && (errCode === "TOKEN_EXPIRED" || errCode === "INVALID_TOKEN")) {
         window.localStorage.removeItem(TOKEN_STORAGE_KEY);
         window.localStorage.removeItem("token");
         window.localStorage.removeItem("rmc.session");

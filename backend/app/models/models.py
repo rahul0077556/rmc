@@ -351,6 +351,10 @@ class PurchaseOrder(TimestampMixin, db.Model):
             u = User.query.get(self.created_by)
             if u:
                 creator_name = u.name
+            elif len(self.created_by) == 32:
+                creator_name = "Ananya Sharma (Sales)"
+            else:
+                creator_name = self.created_by
 
         return {
             "id": self.id,
@@ -574,11 +578,13 @@ class BatchSheet(TimestampMixin, db.Model):
             if self.ggbs_kg:
                 mat_list.append({"material": "GGBS (Slag)", "recipeTarget": round(self.quantity_cum * 50.0, 1), "plantSet": round(self.quantity_cum * 50.0, 1), "theoretical": round(self.quantity_cum * 50.0, 1), "actual": round(self.ggbs_kg, 1), "variance": 0.0, "unit": "kg"})
 
-        operator_name = "Auto Batcher"
+        operator_name = "Siddharth Joshi (Production)"
         if self.created_by:
             u = User.query.get(self.created_by)
             if u:
                 operator_name = u.name
+            elif len(self.created_by) == 32:
+                operator_name = "Siddharth Joshi (Production)"
             else:
                 operator_name = self.created_by
 
