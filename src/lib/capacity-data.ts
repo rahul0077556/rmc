@@ -46,12 +46,28 @@ export interface DeliveryCheckResult {
 
 const PLANT_DAILY_CAPACITY = 850; // 75 cum/hr (CRB-75) + 30 cum/hr (SP-30) across 2 shifts
 
-// Deterministic seed offsets for 14-day rolling schedule
-const SEED_BOOKINGS = [720, 480, 810, 560, 780, 350, 620, 840, 410, 530, 710, 390, 280, 490];
-
-export function get14DayCapacity(): DayCapacity[] {
+export function get14DayCapacity(existingOrders?: { deliveryDate?: string; quantity?: number; status?: string }[]): DayCapacity[] {
   const today = new Date();
   const schedule: DayCapacity[] = [];
+
+  // Group active orders by deliveryDate
+  const bookedByDate = new Map<string, number>();
+  if (existingOrders && existingOrders.length > 0) {
+    for (const po of existingOrders) {
+      if (po.status !== "CANCELLED" && po.status !== "REJECTED" && po.deliveryDate) {
+        const cur = bookedByDate.get(po.deliveryDate) || 0;
+        bookedByDate.set(po.deliveryDate, cur + (Number(po.quantity) || 0));
+      }
+    }
+  } else {
+    // Check fallback in memory store if available
+    for (const po of db.purchaseOrders) {
+      if (po.status !== "CANCELLED" && po.status !== "REJECTED" && po.deliveryDate) {
+        const cur = bookedByDate.get(po.deliveryDate) || 0;
+        bookedByDate.set(po.deliveryDate, cur + (Number(po.quantity) || 0));
+      }
+    }
+  }
 
   for (let i = 0; i < 14; i++) {
     const d = addDays(today, i);
@@ -59,24 +75,21 @@ export function get14DayCapacity(): DayCapacity[] {
     const displayDate = format(d, "d MMM");
     const dayName = format(d, "EEE");
 
-    // Gather actual booked orders for this date if present
-    const actualOrders = db.purchaseOrders.filter((po) => po.deliveryDate === dateStr);
-    const actualBooked = actualOrders.reduce((sum, po) => sum + po.quantity, 0);
-
-    // Baseline from realistic shift simulation
-    const simulatedBooked = SEED_BOOKINGS[i % SEED_BOOKINGS.length]!;
-    const totalBooked = Math.min(PLANT_DAILY_CAPACITY + 80, Math.max(actualBooked, simulatedBooked));
-    const available = Math.max(0, PLANT_DAILY_CAPACITY - totalBooked);
+    const totalBooked = Math.round((bookedByDate.get(dateStr) || 0) * 10) / 10;
+    const available = Math.max(0, Math.round((PLANT_DAILY_CAPACITY - totalBooked) * 10) / 10);
     const util = Math.round((totalBooked / PLANT_DAILY_CAPACITY) * 100);
 
     let status: "open" | "tight" | "overbooked" = "open";
     if (util >= 90) status = "overbooked";
     else if (util >= 70) status = "tight";
 
-    // Split into 3 shift windows
-    const morningBooked = Math.round(totalBooked * 0.45);
+    // Split into 3 shift windows based on realistic plant operations
+    const morningCap = 380;
+    const afternoonCap = 300;
+    const nightCap = 170;
+    const morningBooked = Math.round(totalBooked * 0.5);
     const afternoonBooked = Math.round(totalBooked * 0.35);
-    const nightBooked = totalBooked - morningBooked - afternoonBooked;
+    const nightBooked = Math.max(0, Math.round(totalBooked - morningBooked - afternoonBooked));
 
     schedule.push({
       date: dateStr,
@@ -92,23 +105,23 @@ export function get14DayCapacity(): DayCapacity[] {
       slots: [
         {
           timeWindow: "Morning (07:00 - 12:00)",
-          capacityCum: 380,
+          capacityCum: morningCap,
           bookedCum: morningBooked,
-          availableCum: Math.max(0, 380 - morningBooked),
+          availableCum: Math.max(0, morningCap - morningBooked),
           status: morningBooked >= 340 ? "overbooked" : morningBooked >= 265 ? "tight" : "open",
         },
         {
           timeWindow: "Afternoon (12:00 - 17:00)",
-          capacityCum: 300,
+          capacityCum: afternoonCap,
           bookedCum: afternoonBooked,
-          availableCum: Math.max(0, 300 - afternoonBooked),
+          availableCum: Math.max(0, afternoonCap - afternoonBooked),
           status: afternoonBooked >= 270 ? "overbooked" : afternoonBooked >= 210 ? "tight" : "open",
         },
         {
           timeWindow: "Night (17:00 - 22:00)",
-          capacityCum: 170,
+          capacityCum: nightCap,
           bookedCum: nightBooked,
-          availableCum: Math.max(0, 170 - nightBooked),
+          availableCum: Math.max(0, nightCap - nightBooked),
           status: nightBooked >= 155 ? "overbooked" : nightBooked >= 120 ? "tight" : "open",
         },
       ],
@@ -121,9 +134,10 @@ export function get14DayCapacity(): DayCapacity[] {
 export function checkDeliveryCapacity(
   targetDate: string,
   quantityCum: number,
-  preferredTimeWindow?: string
+  preferredTimeWindow?: string,
+  existingOrders?: { deliveryDate?: string; quantity?: number; status?: string }[]
 ): DeliveryCheckResult {
-  const schedule = get14DayCapacity();
+  const schedule = get14DayCapacity(existingOrders);
   const day = schedule.find((s) => s.date === targetDate) ?? schedule[0]!;
 
   const qty = Number(quantityCum) || 0;

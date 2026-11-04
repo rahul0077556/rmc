@@ -45,6 +45,20 @@ interface PlannedTrip {
   plannedTime: string;
 }
 
+function calcTripPlannedTime(deliveryDate?: string, startTime?: string, index = 0, spacingMins = 45): string {
+  const dDate = deliveryDate || new Date().toISOString().slice(0, 10);
+  const [hStr, mStr] = (startTime || "09:00").split(":");
+  let totalMins = (parseInt(hStr || "9", 10) || 9) * 60 + (parseInt(mStr || "0", 10) || 0) + index * spacingMins;
+  const maxDayMins = 20 * 60; // 20:00 limit for auto-planned daytime operations
+  if (totalMins > maxDayMins) {
+    totalMins = maxDayMins;
+  }
+  const h = Math.floor(totalMins / 60) % 24;
+  const m = totalMins % 60;
+  const timeFormatted = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  return `${dDate}T${timeFormatted}:00`;
+}
+
 const CHECKS = [
   "Grade verified against customer requirement",
   "Quantity verified",
@@ -95,7 +109,6 @@ function PlanPage() {
       parts.push(Math.min(per, left));
       left -= per;
     }
-    const base = new Date(`${po.deliveryDate}T${po.deliveryTime || "09:00"}:00`);
     const availableTrucks = (trucksQuery.data || []).filter((t) => t.status === "AVAILABLE");
     const availableDrivers = (driversQuery.data || []).filter((d) => d.status === "AVAILABLE");
     setTrips(
@@ -104,7 +117,7 @@ function PlanPage() {
         quantity: q,
         tmId: availableTrucks[i]?.id ?? "",
         driverId: availableDrivers[i]?.id ?? "",
-        plannedTime: new Date(base.getTime() + i * 90 * 60000).toISOString(),
+        plannedTime: calcTripPlannedTime(po.deliveryDate, po.deliveryTime || "09:00", i, 45),
       })),
     );
   }, [po, trucksQuery.data, driversQuery.data, trips.length, balance]);
@@ -140,7 +153,7 @@ function PlanPage() {
   });
 
   if (order.isLoading) return <LoadingState rows={5} />;
-  if (order.error || !order.data) return <ErrorState message="This purchase order could not be loaded." />;
+  if (order.error || !po) return <ErrorState message="This purchase order could not be loaded." />;
 
 
   return (
@@ -174,13 +187,13 @@ function PlanPage() {
                         <StatusBadge status={et.status} />
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {et.tmNumber || "TM Pending"} · {et.driverName || "Driver Pending"} · {cum(et.quantity)}
+                        {et.tmNumber || et.tmCode || "TM Pending"} · {et.driverName || "Driver Pending"} · {cum(et.quantity)}
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
                     <span className="text-xs text-muted-foreground">
-                      Planned: {et.plannedTime ? new Date(et.plannedTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
+                      Planned: {et.plannedTime ? et.plannedTime.slice(11, 16) : "—"}
                     </span>
                   </div>
                 </div>
@@ -213,7 +226,7 @@ function PlanPage() {
           <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
             <ChartCard
               title={existingTrips.length > 0 ? "Plan Remaining Balance" : "Trip planning"}
-              description={`${cum(planned)} planned of remaining ${cum(balance)}`}
+              description={`${cum(planned)} planned · ${cum(Math.max(0, Math.round((balance - planned) * 100) / 100))} remaining balance of ${cum(balance)}`}
               actions={
                 <Button
                   size="sm"
@@ -223,10 +236,10 @@ function PlanPage() {
                       ...t,
                       {
                         key: `t${Date.now()}`,
-                        quantity: Math.max(1, balance - planned),
+                        quantity: Math.max(1, Math.min(8, Math.round((balance - planned) * 10) / 10)),
                         tmId: "",
                         driverId: "",
-                        plannedTime: new Date().toISOString(),
+                        plannedTime: calcTripPlannedTime(po.deliveryDate, po.deliveryTime || "09:00", t.length, 45),
                       },
                     ])
                   }
@@ -236,6 +249,12 @@ function PlanPage() {
               }
             >
               <div className="space-y-3">
+                {planned > balance + 0.001 && (
+                  <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive flex items-center gap-2">
+                    <AlertCircle className="size-4 shrink-0" />
+                    <span>Over-planned by {cum(planned - balance)}. Trips cannot exceed remaining PO quantity ({cum(balance)}).</span>
+                  </div>
+                )}
                 {trips.map((trip, i) => (
                   <div key={trip.key} className="rounded-xl border border-border bg-surface-raised p-3">
                     <div className="mb-3 flex items-center justify-between">
@@ -274,6 +293,17 @@ function PlanPage() {
                             ))}
                           </SelectContent>
                         </Select>
+                        {(() => {
+                          const selectedTruck = (trucksQuery.data || []).find((tm) => tm.id === trip.tmId);
+                          if (selectedTruck && trip.quantity > selectedTruck.capacity) {
+                            return (
+                              <p className="text-[10px] text-destructive font-medium leading-tight">
+                                ⚠️ Exceeds {selectedTruck.tmNumber} capacity ({selectedTruck.capacity} cum · {selectedTruck.capacity * 2500} kg).
+                              </p>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs">Driver</Label>
@@ -297,12 +327,12 @@ function PlanPage() {
                         <Label className="text-xs">Planned time</Label>
                         <Input
                           type="time"
-                          value={trip.plannedTime.slice(11, 16)}
+                          value={trip.plannedTime ? trip.plannedTime.slice(11, 16) : "09:00"}
                           onChange={(e) =>
                             setTrips((t) =>
                               t.map((x) =>
                                 x.key === trip.key
-                                  ? { ...x, plannedTime: `${x.plannedTime.slice(0, 11)}${e.target.value}:00.000Z` }
+                                  ? { ...x, plannedTime: `${x.plannedTime.slice(0, 11)}${e.target.value}:00` }
                                   : x,
                               ),
                             )
@@ -336,20 +366,30 @@ function PlanPage() {
                 <p className="text-sm text-muted-foreground">{po.siteAddress ?? "Standard transit mixer and concrete pump access."}</p>
               </ChartCard>
 
-              <Button className="w-full" disabled={!allChecked || trips.length === 0 || savePlan.isPending} onClick={() => savePlan.mutate()}>
+              <Button
+                className="w-full"
+                disabled={!allChecked || trips.length === 0 || planned > balance + 0.001 || savePlan.isPending}
+                onClick={() => savePlan.mutate()}
+              >
                 {savePlan.isPending ? (
                   <>
-                    <Loader2 className="size-4 animate-spin" /> Sending to production...
+                    <Loader2 className="size-4 animate-spin mr-1.5" /> Sending to production...
                   </>
                 ) : (
                   <>
-                    <MessageSquare className="size-4" /> Send to production
+                    <MessageSquare className="size-4 mr-1.5" /> Send to production
                   </>
                 )}
               </Button>
-              {!allChecked && (
-                <p className="text-center text-xs text-muted-foreground">Complete every verification item to continue.</p>
-              )}
+              {!allChecked ? (
+                <p className="text-center text-xs text-amber-500 font-medium">
+                  Complete all 6 verification items before sending to production.
+                </p>
+              ) : planned > balance + 0.001 ? (
+                <p className="text-center text-xs text-destructive font-medium">
+                  Total planned quantity exceeds remaining PO balance.
+                </p>
+              ) : null}
             </div>
           </div>
         )}

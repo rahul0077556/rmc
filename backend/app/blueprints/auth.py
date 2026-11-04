@@ -24,6 +24,9 @@ def login():
 
     # JWT additional claims
     effective_role = "sales_manager" if (user.role == "sales" and user.is_manager) else user.role
+    from backend.app.models.models import Plant
+    plant_obj = Plant.query.first()
+    plant_name = plant_obj.name if plant_obj else "ROXXCON RMC NAGPUR"
     additional_claims = {
         "role": effective_role,
         "base_role": user.role,
@@ -31,7 +34,7 @@ def login():
         "customer_id": user.customer_id,
         "name": user.name,
         "email": user.email,
-        "plant": "Apex Ready-Mix Plant"
+        "plant": plant_name
     }
 
     token = create_access_token(identity=user.id, additional_claims=additional_claims)

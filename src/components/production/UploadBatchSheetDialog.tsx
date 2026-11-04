@@ -36,6 +36,37 @@ interface UploadBatchSheetDialogProps {
   onSuccess?: () => void;
 }
 
+const DOCKET_5812: ScadaBatchDocketData = {
+  plantName: "ROXXCON RMC NAGPUR",
+  plantCapacity: "75 CBM",
+  customerName: "Rahul wagh cop",
+  siteName: "IT PARK",
+  truckNumber: "MH40DC4288",
+  driverName: "VIKASH",
+  docketNumber: "5812",
+  recipeName: "M 25 LIGTH",
+  grade: "M25",
+  orderQtyCum: 50.0,
+  ticketQtyCum: 5.0,
+  withThisLoadCum: 17.0,
+  batchSizeCum: 1.25,
+  batchesCount: 4,
+  date: new Date().toISOString().slice(0, 10),
+  startTime: "19:26:10",
+  endTime: "19:35:00",
+  wcRatio: 0.39,
+  thVolume: 2508.87,
+  cementKg: 1601.7,
+  flyashKg: 451.8,
+  rSandKg: 2368.0,
+  mSandKg: 1582.0,
+  agg10mmKg: 2224.0,
+  agg20mmKg: 3441.0,
+  waterL: 895.4,
+  admixtureKg: 14.35,
+  totalWeightKg: 12578.3,
+};
+
 const DEFAULT_DOCKET: ScadaBatchDocketData = {
   plantName: "ROXXCON RMC NAGPUR",
   plantCapacity: "75 CBM",
@@ -72,6 +103,7 @@ export function UploadBatchSheetDialog({ open, onOpenChange, onSuccess }: Upload
   const [form, setForm] = useState<ScadaBatchDocketData>({ ...DEFAULT_DOCKET });
   const [file, setFile] = useState<File | null>(null);
   const [isParsing, setIsParsing] = useState(false);
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
 
   // Recalculate total weight dynamically when components change
   const calculatedTotalKg =
@@ -88,6 +120,7 @@ export function UploadBatchSheetDialog({ open, onOpenChange, onSuccess }: Upload
   const parseMutation = useMutation({
     mutationFn: async (uploadedFile: File) => {
       setIsParsing(true);
+      setDuplicateError(null);
       return productionApi.parseUploadedBatchSheet({ file: uploadedFile });
     },
     onSuccess: (res) => {
@@ -116,14 +149,16 @@ export function UploadBatchSheetDialog({ open, onOpenChange, onSuccess }: Upload
 
   // Mutation: Confirm and post batch sheet
   const submitMutation = useMutation({
-    mutationFn: () => {
-      const payload: ScadaBatchDocketData = {
+    mutationFn: (overridePayload?: any) => {
+      const payload: any = {
         ...form,
         totalWeightKg: calculatedTotalKg,
+        ...(overridePayload || {}),
       };
       return productionApi.confirmBatchSheetUpload(payload);
     },
     onSuccess: (res) => {
+      setDuplicateError(null);
       toast.success(
         res.data?.message || `Batch Docket #${form.docketNumber} confirmed and stock deducted!`
       );
@@ -138,12 +173,14 @@ export function UploadBatchSheetDialog({ open, onOpenChange, onSuccess }: Upload
     },
     onError: (err: any) => {
       const status = err?.response?.status;
+      const errorMsg = err?.response?.data?.error?.message || err?.message || "Failed to post batch sheet.";
       if (status === 502) {
         toast.error("Backend server is offline (502). Please start backend with: python backend/wsgi.py");
+      } else if (errorMsg.includes("already exists")) {
+        setDuplicateError(errorMsg);
+        toast.warning(errorMsg);
       } else {
-        toast.error(
-          err?.response?.data?.error?.message || err?.message || "Failed to post batch sheet."
-        );
+        toast.error(errorMsg);
       }
     },
   });
@@ -180,19 +217,59 @@ export function UploadBatchSheetDialog({ open, onOpenChange, onSuccess }: Upload
               </div>
             </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleLoadSample}
-              className="text-xs border-dashed gap-1.5"
-            >
-              <Sparkles className="size-3.5 text-amber-500" />
-              Sample Docket (#5703)
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setForm({ ...DOCKET_5812 });
+                  setDuplicateError(null);
+                  toast.info("Loaded Roxxcon Docket #5812 (TM MH40DC4288, 5 cum M25 Light)");
+                }}
+                className="text-xs border-dashed gap-1.5"
+              >
+                <Sparkles className="size-3.5 text-primary" />
+                Docket #5812
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setForm({ ...DEFAULT_DOCKET });
+                  setDuplicateError(null);
+                  toast.info("Loaded Roxxcon Docket #5703 (TM MH40DC3964, 5 cum M25 Light)");
+                }}
+                className="text-xs border-dashed gap-1.5"
+              >
+                <Sparkles className="size-3.5 text-amber-500" />
+                Docket #5703
+              </Button>
+            </div>
           </div>
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
+          {duplicateError && (
+            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs flex flex-wrap items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
+                <AlertCircle className="size-4 shrink-0 text-amber-500" />
+                <span>{duplicateError}</span>
+              </div>
+              <Button
+                size="sm"
+                variant="destructive"
+                className="text-xs h-7 gap-1 font-semibold"
+                disabled={submitMutation.isPending}
+                onClick={() => {
+                  submitMutation.mutate({ replaceExisting: true });
+                }}
+              >
+                <RefreshCw className="size-3" />
+                Replace & Re-import Docket
+              </Button>
+            </div>
+          )}
+
           {/* File Upload Zone */}
           <div className="rounded-lg border-2 border-dashed border-border p-4 text-center hover:border-primary/50 transition-colors bg-muted/20">
             <input

@@ -2,7 +2,7 @@ from datetime import datetime
 from flask import Blueprint, request, make_response
 from flask_jwt_extended import jwt_required
 from backend.app.extensions import db
-from backend.app.models.models import PurchaseOrder, Customer, Site, Grade
+from backend.app.models.models import PurchaseOrder, Customer, Site, Grade, MixDesign
 from backend.app.services.sequence_service import get_next_sequence
 from backend.app.services.state_machine import StateMachine, StateMachineError
 from backend.app.services.erp_service import ErpService
@@ -69,11 +69,26 @@ def create_order():
     if not customer:
         return error_response(code="NOT_FOUND", message="Customer not found.", status_code=404)
 
+    site = Site.query.filter_by(id=site_id, customer_id=customer_id).first()
+    if not site:
+        return error_response(code="VALIDATION_ERROR", message="Delivery site must belong to the selected customer.")
+
     # Parse delivery datetime
     try:
         deliv_dt = datetime.strptime(f"{delivery_date} {delivery_time}", "%Y-%m-%d %H:%M")
     except Exception:
         deliv_dt = datetime.now()
+
+    if deliv_dt.date() < datetime.now().date():
+        return error_response(code="VALIDATION_ERROR", message="Delivery date cannot be in the past.")
+
+    mix_design_id = data.get("mixDesignId")
+    if not mix_design_id and grade_id:
+        default_mix = MixDesign.query.filter_by(grade_id=grade_id, is_default=True).first() or MixDesign.query.filter_by(grade_id=grade_id).first()
+        if default_mix:
+            mix_design_id = default_mix.id
+    slump_required_mm = int(data.get("slumpRequiredMm", 120))
+    rate_reason = data.get("rateReason", "").strip()
 
     po_number = get_next_sequence("PO", "PO")
     user_id = get_current_user_id()
@@ -86,6 +101,9 @@ def create_order():
         customer_id=customer_id,
         site_id=site_id,
         grade_id=grade_id,
+        mix_design_id=mix_design_id,
+        slump_required_mm=slump_required_mm,
+        rate_reason=rate_reason,
         quantity_cum=quantity_cum,
         rate_per_cum=rate_per_cum or (Grade.query.get(grade_id).default_rate if grade_id else 4500.0),
         delivery_datetime=deliv_dt,
@@ -106,12 +124,18 @@ def create_order():
     db.session.commit()
     return success_response(data=po.to_dict(), status_code=201)
 
+def find_po(id):
+    return PurchaseOrder.query.filter(
+        (PurchaseOrder.id == id) | (PurchaseOrder.po_number == id),
+        PurchaseOrder.is_deleted == False
+    ).first()
+
 @orders_bp.route("/<id>", methods=["GET"])
 @jwt_required()
 @roles_required()
 def get_order(id):
     scoped_cust = get_scoped_customer_id()
-    po = PurchaseOrder.query.filter_by(id=id, is_deleted=False).first()
+    po = find_po(id)
     if not po:
         return error_response(code="NOT_FOUND", message="Purchase order not found.", status_code=404)
 
@@ -124,19 +148,40 @@ def get_order(id):
 @jwt_required()
 @roles_required("sales", "sales_manager")
 def update_order(id):
-    po = PurchaseOrder.query.filter_by(id=id, is_deleted=False).first()
+    po = find_po(id)
     if not po:
         return error_response(code="NOT_FOUND", message="Purchase order not found.", status_code=404)
 
-    if po.status not in ["DRAFT", "REJECTED"]:
+    if po.status not in ["DRAFT", "REJECTED", "APPROVED"]:
         return error_response(
             code="INVALID_STATE", 
-            message=f"Cannot edit order in status '{po.status}'. Only DRAFT or REJECTED orders can be edited.",
+            message=f"Cannot edit order in status '{po.status}'. Only DRAFT, REJECTED, or APPROVED orders can be edited.",
             status_code=409
         )
 
     data = request.get_json(silent=True) or {}
-    if "quantity" in data: po.quantity_cum = float(data["quantity"])
+
+    # If PO is already APPROVED, controlled edits are enforced
+    if po.status == "APPROVED":
+        if "quantity" in data:
+            new_qty = float(data["quantity"])
+            active_trips_qty = sum(t.quantity_cum for t in po.trips if t.status not in ["CANCELLED", "REPLACED"])
+            min_allowed = max(po.delivered_quantity, active_trips_qty)
+            if new_qty < min_allowed:
+                return error_response(
+                    code="VALIDATION_ERROR",
+                    message=f"Cannot reduce PO quantity to {new_qty} cum. Minimum {min_allowed} cum has already been planned or delivered.",
+                    status_code=400
+                )
+            reason = data.get("reason", "").strip() or data.get("rateReason", "").strip()
+            if not reason and new_qty != po.quantity_cum:
+                return error_response(code="VALIDATION_ERROR", message="Reason is required when modifying quantity of an approved PO.")
+            old_qty = po.quantity_cum
+            po.quantity_cum = new_qty
+            if reason:
+                po.notes = f"{po.notes or ''}\n[Qty revised from {old_qty} to {new_qty} cum on {datetime.now().strftime('%Y-%m-%d %H:%M')}: {reason}]".strip()
+    else:
+        if "quantity" in data: po.quantity_cum = float(data["quantity"])
     if "ratePerCum" in data: po.rate_per_cum = float(data["ratePerCum"])
     if "purpose" in data: po.purpose = data["purpose"]
     if "pumpRequired" in data: po.pump_required = bool(data["pumpRequired"])
@@ -180,7 +225,7 @@ def delete_order(id):
 @jwt_required()
 @roles_required("sales", "sales_manager")
 def submit_order(id):
-    po = PurchaseOrder.query.filter_by(id=id, is_deleted=False).first()
+    po = find_po(id)
     if not po:
         return error_response(code="NOT_FOUND", message="Purchase order not found.", status_code=404)
 
@@ -195,7 +240,7 @@ def submit_order(id):
 @jwt_required()
 @roles_required("sales_manager")
 def approve_order(id):
-    po = PurchaseOrder.query.filter_by(id=id, is_deleted=False).first()
+    po = find_po(id)
     if not po:
         return error_response(code="NOT_FOUND", message="Purchase order not found.", status_code=404)
 
@@ -213,7 +258,7 @@ def approve_order(id):
 @jwt_required()
 @roles_required("sales_manager")
 def reject_order(id):
-    po = PurchaseOrder.query.filter_by(id=id, is_deleted=False).first()
+    po = find_po(id)
     if not po:
         return error_response(code="NOT_FOUND", message="Purchase order not found.", status_code=404)
 
@@ -231,12 +276,30 @@ def reject_order(id):
 @jwt_required()
 @roles_required("sales", "sales_manager", "dispatcher")
 def cancel_order(id):
-    po = PurchaseOrder.query.filter_by(id=id, is_deleted=False).first()
+    po = find_po(id)
     if not po:
         return error_response(code="NOT_FOUND", message="Purchase order not found.", status_code=404)
 
+    # Golden rule / requirement: Cancel only when no trip has loaded
+    loaded_trips = [t for t in po.trips if t.status in ["LOADED", "QC_PENDING", "QC_APPROVED", "DISPATCHED", "IN_TRANSIT", "DELIVERED"]]
+    if loaded_trips:
+        return error_response(
+            code="CANNOT_CANCEL",
+            message=f"Cannot cancel PO: trip {loaded_trips[0].trip_number} is already {loaded_trips[0].status}. Once batching or loading has occurred, cancellation is blocked.",
+            status_code=409
+        )
+
     data = request.get_json(silent=True) or {}
     reason = data.get("reason", "Cancelled by user")
+
+    # Cancel any planned / sent to production trips and restore truck/driver availability
+    for t in po.trips:
+        if t.status in ["PLANNED", "SENT_TO_PRODUCTION"]:
+            t.status = "CANCELLED"
+            if t.truck:
+                t.truck.status = "AVAILABLE"
+            if t.driver:
+                t.driver.status = "AVAILABLE"
 
     try:
         StateMachine.transition_po(po, "CANCELLED", user_id=get_current_user_id(), remarks=reason)

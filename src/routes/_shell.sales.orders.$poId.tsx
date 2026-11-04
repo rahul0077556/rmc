@@ -82,7 +82,7 @@ function OrderDetailPage() {
               ["Purpose", po.purpose],
               ["Pump", po.pumpRequired ? `${po.pumpOwnership} · ${po.pumpType}` : "Not required"],
               ["Payment terms", po.paymentTerms],
-              ["Created by", po.createdBy],
+              ["Created by", (po as any).createdByName || po.createdBy],
             ].map(([label, value]) => (
               <div key={label} className="flex justify-between gap-4 border-b border-border/60 pb-1.5">
                 <span className="text-muted-foreground">{label}</span>

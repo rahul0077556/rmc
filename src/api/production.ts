@@ -81,6 +81,10 @@ export interface DailyConsumptionData {
 
 export interface DprSheetData {
   date: string;
+  totalPlannedCum?: number;
+  totalBatchedCum?: number;
+  totalTripsCount?: number;
+  dieselConsumedL?: number;
   summary: {
     totalPlannedCum: number;
     totalActualCum: number;
@@ -95,7 +99,11 @@ export interface DprSheetData {
     customerName: string;
     siteName: string;
     grade: string;
+    gradeCode?: string;
     plannedQty: number;
+    orderedCum?: number;
+    deliveredCum?: number;
+    pendingCum?: number;
     pumpRequired: boolean;
     status: string;
   }[];
@@ -113,6 +121,30 @@ export interface DprSheetData {
     status: string;
     dispatchedAt: string;
     deliveredAt: string;
+  }[];
+  batchedTrips?: {
+    id: string;
+    tripNumber: string;
+    docketNumber: string;
+    poNumber: string;
+    customerName: string;
+    siteName: string;
+    grade: string;
+    gradeCode?: string;
+    recipeName?: string;
+    truckNumber: string;
+    driverName: string;
+    quantity: number;
+    quantityCum?: number;
+    status: string;
+    batchedAt: string;
+    dispatchedAt?: string;
+    deliveredAt?: string;
+  }[];
+  materialConsumption?: {
+    materialName: string;
+    unit: string;
+    quantityConsumed: number;
   }[];
   materials: any[];
 }

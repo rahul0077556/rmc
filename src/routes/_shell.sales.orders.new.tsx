@@ -1,11 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { CalendarDays, Sparkles, CheckCircle2, AlertTriangle, Clock, Plus } from "lucide-react";
+import { CalendarDays, Sparkles, CheckCircle2, AlertTriangle, Clock, Plus, MapPin } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { ChartCard } from "@/components/app/chart-card";
 import { Button } from "@/components/ui/button";
@@ -17,11 +17,13 @@ import { Switch } from "@/components/ui/switch";
 import { ordersApi } from "@/api/orders";
 import { customersApi, type CustomerRow } from "@/api/customers";
 import { AddCustomerDialog } from "@/components/sales/AddCustomerDialog";
+import { AddSiteDialog } from "@/components/sales/AddSiteDialog";
+import { request } from "@/api/client";
 import { useAuth } from "@/auth/auth-context";
 import { GRADES, GRADE_RATE } from "@/lib/mock-data";
 import { checkDeliveryCapacity } from "@/lib/capacity-data";
 import { cn } from "@/lib/utils";
-import type { Grade } from "@/types";
+import type { Grade, Site } from "@/types";
 
 export const Route = createFileRoute("/_shell/sales/orders/new")({
   head: () => ({
@@ -35,13 +37,18 @@ export const Route = createFileRoute("/_shell/sales/orders/new")({
   component: CreateOrderPage,
 });
 
+const todayDateStr = new Date().toISOString().slice(0, 10);
+
 const schema = z.object({
   customerId: z.string().min(1, "Select a customer"),
   siteId: z.string().min(1, "Select a delivery site"),
   grade: z.enum(GRADES as unknown as [Grade, ...Grade[]]),
+  mixDesignId: z.string().optional(),
+  slumpRequiredMm: z.coerce.number().min(50, "Slump must be at least 50mm").max(220, "Slump must be under 220mm").default(120),
+  rateReason: z.string().optional(),
   quantity: z.coerce.number().positive("Quantity must be greater than zero"),
   ratePerCum: z.coerce.number().positive("Enter a rate"),
-  deliveryDate: z.string().min(1, "Choose a delivery date"),
+  deliveryDate: z.string().min(1, "Choose a delivery date").refine((val) => val >= todayDateStr, "Delivery date cannot be in the past"),
   deliveryTime: z.string().min(1, "Choose a delivery time"),
   purpose: z.enum(["Slab", "Column", "Beam", "Footing", "Other"]),
   pumpRequired: z.boolean(),
@@ -52,6 +59,16 @@ const schema = z.object({
   paymentTerms: z.string().min(1, "Enter payment terms"),
   reference: z.string(),
   notes: z.string(),
+}).refine((data) => {
+  const baseRate = GRADE_RATE[data.grade] || 4500;
+  const deviation = Math.abs(data.ratePerCum - baseRate) / baseRate;
+  if (deviation > 0.15 && (!data.rateReason || data.rateReason.trim().length === 0)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Rate deviates by >15% from standard. Please enter a justification reason.",
+  path: ["rateReason"],
 });
 
 type FormValues = z.input<typeof schema>;
@@ -62,8 +79,17 @@ function CreateOrderPage() {
   const qc = useQueryClient();
   const [pump, setPump] = useState(false);
   const [newCustomerOpen, setNewCustomerOpen] = useState(false);
+  const [newSiteOpen, setNewSiteOpen] = useState(false);
 
   const customers = useQuery({ queryKey: ["customers"], queryFn: () => customersApi.list().then((r) => r.data) });
+  const grades = useQuery({
+    queryKey: ["grades"],
+    queryFn: () => request<any[]>({ url: "/grades", method: "GET" }).then((r) => r.data || []),
+  });
+  const ordersList = useQuery({
+    queryKey: ["orders", "sales-orders"],
+    queryFn: () => ordersApi.list().then((r) => r.data || []),
+  });
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -71,9 +97,12 @@ function CreateOrderPage() {
       customerId: "",
       siteId: "",
       grade: "M25",
+      mixDesignId: "",
+      slumpRequiredMm: 120,
+      rateReason: "",
       quantity: 24,
       ratePerCum: GRADE_RATE.M25,
-      deliveryDate: new Date().toISOString().slice(0, 10),
+      deliveryDate: todayDateStr,
       deliveryTime: "09:00",
       purpose: "Slab",
       pumpRequired: false,
@@ -83,18 +112,34 @@ function CreateOrderPage() {
     },
   });
 
+  const watchGrade = form.watch("grade");
+  const selectedGradeObj = grades.data?.find((g) => g.code === watchGrade);
+  const availableMixes = selectedGradeObj?.mixDesigns || [];
+
+  // When grade changes, pick default mix
+  useEffect(() => {
+    if (availableMixes.length > 0) {
+      const defaultMix = availableMixes.find((m: any) => m.isDefault) || availableMixes[0];
+      if (defaultMix && !form.getValues("mixDesignId")) {
+        form.setValue("mixDesignId", defaultMix.id);
+      }
+    }
+  }, [watchGrade, availableMixes, form]);
+
   const create = useMutation({
-    mutationFn: (input: { values: FormValues; status: "DRAFT" | "SUBMITTED" }) =>
-      ordersApi.create(
-        { ...schema.parse(input.values), status: input.status },
+    mutationFn: (input: { values: FormValues; status: "DRAFT" | "SUBMITTED" }) => {
+      const parsed = schema.parse(input.values);
+      return ordersApi.create(
+        { ...parsed, status: input.status },
         user?.name ?? "Sales",
-      ),
+      );
+    },
     onSuccess: (res) => {
       toast.success(res.message ?? "PO saved");
       void qc.invalidateQueries({ queryKey: ["orders"] });
       void navigate({ to: "/sales/orders" });
     },
-    onError: () => toast.error("Please fix the highlighted fields before saving."),
+    onError: (err: any) => toast.error(err?.message || "Please fix the highlighted fields before saving."),
   });
 
   const selectedCustomer = customers.data?.find((c) => c.id === form.watch("customerId"));
@@ -102,12 +147,23 @@ function CreateOrderPage() {
 
   const watchDate = form.watch("deliveryDate");
   const watchQty = form.watch("quantity");
+  const watchRate = form.watch("ratePerCum");
+  const baseRate = GRADE_RATE[watchGrade as Grade] || 4500;
+  const isRateDeviated = Math.abs((Number(watchRate) || 0) - baseRate) / baseRate > 0.15;
+
   const capacityCheck = useMemo(() => {
-    return checkDeliveryCapacity(watchDate, Number(watchQty) || 0);
-  }, [watchDate, watchQty]);
+    return checkDeliveryCapacity(watchDate, Number(watchQty) || 0, undefined, ordersList.data);
+  }, [watchDate, watchQty, ordersList.data]);
 
   function save(status: "DRAFT" | "SUBMITTED") {
-    void form.handleSubmit((values) => create.mutate({ values, status }))();
+    void form.handleSubmit(
+      (values) => create.mutate({ values, status }),
+      (validationErrors) => {
+        const firstErrorKey = Object.keys(validationErrors)[0];
+        const errorMsg = firstErrorKey ? (validationErrors as any)[firstErrorKey]?.message || "Validation failed" : "Validation failed";
+        toast.error(`Please check ${firstErrorKey || "fields"}: ${errorMsg}`);
+      }
+    )();
   }
 
   return (
@@ -147,25 +203,49 @@ function CreateOrderPage() {
             </div>
 
             <div className="space-y-1.5 sm:col-span-2">
-              <Label>Delivery site</Label>
+              <div className="flex items-center justify-between">
+                <Label>Delivery site *</Label>
+                {selectedCustomer && (
+                  <button
+                    type="button"
+                    onClick={() => setNewSiteOpen(true)}
+                    className="text-xs text-primary hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="size-3" />
+                    <span>+ Add Site</span>
+                  </button>
+                )}
+              </div>
               <Select value={form.watch("siteId")} onValueChange={(v) => form.setValue("siteId", v)} disabled={!selectedCustomer}>
-                <SelectTrigger><SelectValue placeholder={selectedCustomer ? "Select site" : "Select a customer first"} /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={selectedCustomer ? ((selectedCustomer.sites ?? []).length > 0 ? "Select site" : "No sites added yet — click + Add Site") : "Select a customer first"} /></SelectTrigger>
                 <SelectContent>
                   {(selectedCustomer?.sites ?? []).map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    <SelectItem key={s.id} value={s.id}>{s.name} ({s.address})</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {selectedCustomer && (selectedCustomer.sites ?? []).length === 0 && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-300 flex items-center justify-between">
+                  <span>This customer has no delivery sites yet.</span>
+                  <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => setNewSiteOpen(true)}>
+                    + Add Site Now
+                  </Button>
+                </div>
+              )}
               {err.siteId && <p className="text-xs text-destructive">{err.siteId.message}</p>}
             </div>
 
             <div className="space-y-1.5">
-              <Label>Grade / mix</Label>
+              <Label>Grade</Label>
               <Select
                 value={form.watch("grade")}
                 onValueChange={(v) => {
                   form.setValue("grade", v as Grade);
                   form.setValue("ratePerCum", GRADE_RATE[v as Grade]);
+                  const gradeObj = grades.data?.find((g) => g.code === v);
+                  const mixes = gradeObj?.mixDesigns || [];
+                  const def = mixes.find((m: any) => m.isDefault) || mixes[0];
+                  if (def) form.setValue("mixDesignId", def.id);
                 }}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -178,15 +258,62 @@ function CreateOrderPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Quantity (cum)</Label>
+              <Label>Mix Design Recipe</Label>
+              <Select
+                value={form.watch("mixDesignId")}
+                onValueChange={(v) => form.setValue("mixDesignId", v)}
+              >
+                <SelectTrigger><SelectValue placeholder="Select mix recipe" /></SelectTrigger>
+                <SelectContent>
+                  {availableMixes.map((m: any) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.name} {m.description ? `(${m.description})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Required Slump (mm)</Label>
+              <Input
+                type="number"
+                min={50}
+                max={220}
+                placeholder="120"
+                {...form.register("slumpRequiredMm")}
+              />
+              {err.slumpRequiredMm && <p className="text-xs text-destructive">{err.slumpRequiredMm.message}</p>}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Quantity (cum) *</Label>
               <Input inputMode="decimal" {...form.register("quantity")} />
               {err.quantity && <p className="text-xs text-destructive">{err.quantity.message}</p>}
             </div>
 
-            <div className="space-y-1.5">
-              <Label>Rate per cum (₹)</Label>
+            <div className="space-y-1.5 sm:col-span-2">
+              <div className="flex items-center justify-between">
+                <Label>Rate per cum (₹) *</Label>
+                <span className="text-[11px] text-muted-foreground">Standard base rate: ₹{baseRate}/cum</span>
+              </div>
               <Input inputMode="decimal" {...form.register("ratePerCum")} />
               {err.ratePerCum && <p className="text-xs text-destructive">{err.ratePerCum.message}</p>}
+
+              {isRateDeviated && (
+                <div className="mt-2 space-y-1 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-800 dark:text-amber-200">
+                  <div className="flex items-center gap-1.5 font-semibold">
+                    <AlertTriangle className="size-3.5 text-amber-500" />
+                    Rate deviation &gt; 15% from standard (₹{baseRate}). Justification reason required:
+                  </div>
+                  <Input
+                    placeholder="e.g. Volume discount approved by sales manager / Special high-slump admixture"
+                    {...form.register("rateReason")}
+                    className="mt-1 bg-background text-foreground text-xs h-8"
+                  />
+                  {err.rateReason && <p className="text-xs text-destructive">{err.rateReason.message}</p>}
+                </div>
+              )}
             </div>
           </div>
         </ChartCard>
@@ -357,12 +484,25 @@ function CreateOrderPage() {
         onOpenChange={setNewCustomerOpen}
         onCustomerCreated={(newCust) => {
           form.setValue("customerId", newCust.id);
-          if (newCust.sites && newCust.sites.length > 0) {
+          if (newCust.sites && newCust.sites.length > 0 && newCust.sites[0]) {
             form.setValue("siteId", newCust.sites[0].id);
           }
           toast.success(`Selected customer "${newCust.name}" and site for new order!`);
         }}
       />
+      {selectedCustomer && (
+        <AddSiteDialog
+          open={newSiteOpen}
+          onOpenChange={setNewSiteOpen}
+          customerId={selectedCustomer.id}
+          customerName={selectedCustomer.name}
+          onSiteCreated={(newSite) => {
+            void qc.invalidateQueries({ queryKey: ["customers"] });
+            form.setValue("siteId", newSite.id);
+            toast.success(`Selected newly created site "${newSite.name}"!`);
+          }}
+        />
+      )}
     </div>
   );
 }

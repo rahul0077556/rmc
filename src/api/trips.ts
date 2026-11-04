@@ -7,6 +7,7 @@ export interface TripRow extends Trip {
   siteName: string;
   grade: string;
   tmCode: string;
+  tmNumber?: string;
   tmCapacity?: number;
   driverName: string;
   notes?: string;
@@ -41,6 +42,7 @@ export function decorateTrip(trip: any): TripRow {
     gstAmount: gst,
     totalAmount: tot,
     tmId: trip.tmId || trip.truck_id,
+    tmNumber: trip.tmNumber || trip.tmCode || "Unassigned",
     tmCode: trip.tmNumber || trip.tmCode || "Unassigned",
     tmCapacity: trip.tmCapacity,
     driverId: trip.driverId || trip.driver_id,

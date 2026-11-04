@@ -14,6 +14,17 @@ from backend.app.utils.decorators import roles_required, get_scoped_customer_id,
 
 trips_bp = Blueprint("trips", __name__, url_prefix="/api/v1/trips")
 
+def find_trip(id_or_num):
+    if not id_or_num:
+        return None
+    clean = str(id_or_num).split("?")[0].strip()
+    trip = Trip.query.filter((Trip.id == clean) | (Trip.trip_number == clean)).first()
+    if not trip:
+        challan = Challan.query.filter((Challan.id == clean) | (Challan.challan_number == clean)).first()
+        if challan and challan.trip:
+            trip = challan.trip
+    return trip
+
 @trips_bp.route("", methods=["GET"])
 @jwt_required()
 @roles_required()
@@ -141,13 +152,7 @@ def create_trip():
 @jwt_required()
 @roles_required()
 def get_trip(id):
-    clean_id = (id or "").split("?")[0].strip()
-    trip = Trip.query.filter((Trip.id == clean_id) | (Trip.trip_number == clean_id)).first()
-    if not trip:
-        # Also check if passed ID is a Challan ID or Challan Number
-        challan = Challan.query.filter((Challan.id == clean_id) | (Challan.challan_number == clean_id)).first()
-        if challan and challan.trip:
-            trip = challan.trip
+    trip = find_trip(id)
     if not trip:
         return error_response(code="NOT_FOUND", message="Trip or challan not found.", status_code=404)
     return success_response(data=trip.to_dict())
@@ -156,7 +161,7 @@ def get_trip(id):
 @jwt_required()
 @roles_required("dispatcher")
 def assign_trip(id):
-    trip = Trip.query.get(id)
+    trip = find_trip(id)
     if not trip:
         return error_response(code="NOT_FOUND", message="Trip not found.", status_code=404)
 
@@ -187,7 +192,7 @@ def assign_trip(id):
 @jwt_required()
 @roles_required("dispatcher")
 def send_to_production(id):
-    trip = Trip.query.get(id)
+    trip = find_trip(id)
     if not trip:
         return error_response(code="NOT_FOUND", message="Trip not found.", status_code=404)
 
@@ -219,7 +224,7 @@ def send_to_production(id):
 @jwt_required()
 @roles_required("dispatcher")
 def release_trip(id):
-    trip = Trip.query.get(id)
+    trip = find_trip(id)
     if not trip:
         return error_response(code="NOT_FOUND", message="Trip not found.", status_code=404)
 
@@ -278,7 +283,7 @@ def release_trip(id):
 @jwt_required()
 @roles_required("dispatcher", "supervisor")
 def mark_in_transit(id):
-    trip = Trip.query.get(id)
+    trip = find_trip(id)
     if not trip:
         return error_response(code="NOT_FOUND", message="Trip not found.", status_code=404)
 
@@ -293,7 +298,7 @@ def mark_in_transit(id):
 @jwt_required()
 @roles_required("supervisor", "dispatcher")
 def mark_arrived(id):
-    trip = Trip.query.get(id)
+    trip = find_trip(id)
     if not trip:
         return error_response(code="NOT_FOUND", message="Trip not found.", status_code=404)
 
@@ -312,7 +317,7 @@ def mark_arrived(id):
 @jwt_required()
 @roles_required("supervisor", "dispatcher", "owner")
 def report_site_issue(id):
-    trip = Trip.query.get(id)
+    trip = find_trip(id)
     if not trip:
         return error_response(code="NOT_FOUND", message="Trip not found.", status_code=404)
 
@@ -327,7 +332,7 @@ def report_site_issue(id):
 @jwt_required()
 @roles_required("dispatcher", "supervisor")
 def mark_delivered(id):
-    trip = Trip.query.get(id)
+    trip = find_trip(id)
     if not trip:
         return error_response(code="NOT_FOUND", message="Trip not found.", status_code=404)
 
@@ -351,6 +356,89 @@ def mark_delivered(id):
         return success_response(data=trip.to_dict())
     except StateMachineError as e:
         return error_response(code="INVALID_STATE", message=e.message, status_code=e.status_code)
+
+@trips_bp.route("/<id>/cancel", methods=["POST"])
+@jwt_required()
+@roles_required("dispatcher", "sales_manager")
+def cancel_trip(id):
+    trip = find_trip(id)
+    if not trip:
+        return error_response(code="NOT_FOUND", message="Trip not found.", status_code=404)
+
+    # Cannot cancel if trip is already batched/loaded or in transit
+    if trip.status in ["LOADED", "QC_PENDING", "QC_APPROVED", "DISPATCHED", "IN_TRANSIT", "DELIVERED"]:
+        return error_response(
+            code="CANNOT_CANCEL",
+            message=f"Cannot cancel trip {trip.trip_number} in status '{trip.status}'. Batch has already been batched or dispatched.",
+            status_code=409
+        )
+
+    data = request.get_json(silent=True) or {}
+    reason = data.get("reason", "Cancelled by dispatcher")
+
+    user_id = get_current_user_id()
+    try:
+        StateMachine.transition_trip(trip, "CANCELLED", user_id=user_id)
+        trip.notes = f"{trip.notes or ''} [Cancelled on {datetime.now().strftime('%Y-%m-%d %H:%M')}: {reason}]".strip()
+        if trip.truck:
+            trip.truck.status = "AVAILABLE"
+        if trip.driver:
+            trip.driver.status = "AVAILABLE"
+        db.session.commit()
+        return success_response(data=trip.to_dict(), message="Trip cancelled. Quantity returned to PO balance.")
+    except StateMachineError as e:
+        return error_response(code="INVALID_STATE", message=e.message, status_code=e.status_code)
+
+@trips_bp.route("/<id>/replace", methods=["POST"])
+@jwt_required()
+@roles_required("dispatcher")
+def replace_trip(id):
+    old_trip = find_trip(id)
+    if not old_trip:
+        return error_response(code="NOT_FOUND", message="Trip not found.", status_code=404)
+
+    data = request.get_json(silent=True) or {}
+    reason = data.get("reason", "TM breakdown/reassignment")
+    new_tm_id = data.get("tmId")
+    new_driver_id = data.get("driverId")
+
+    new_truck = Truck.query.get(new_tm_id) if new_tm_id else None
+    new_driver = Driver.query.get(new_driver_id) if new_driver_id else None
+
+    user_id = get_current_user_id()
+    # Create replacement trip
+    new_trip_number = get_next_sequence("TRIP", "TRIP")
+    new_trip = Trip(
+        trip_number=new_trip_number,
+        po_id=old_trip.po_id,
+        truck_id=new_tm_id or old_trip.truck_id,
+        driver_id=new_driver_id or old_trip.driver_id,
+        sequence=len(old_trip.po.trips) + 1,
+        quantity_cum=old_trip.quantity_cum,
+        planned_datetime=datetime.now(timezone.utc),
+        status="PLANNED",
+        notes=f"Replacement for {old_trip.trip_number}. Reason: {reason}",
+        created_by=user_id
+    )
+
+    # Release old truck/driver
+    if old_trip.truck and old_trip.truck.id != new_tm_id:
+        old_trip.truck.status = "AVAILABLE"
+    if old_trip.driver and old_trip.driver.id != new_driver_id:
+        old_trip.driver.status = "AVAILABLE"
+
+    # Assign new truck/driver
+    if new_truck:
+        new_truck.status = "ASSIGNED"
+    if new_driver:
+        new_driver.status = "ASSIGNED"
+
+    old_trip.status = "REPLACED"
+    old_trip.notes = f"{old_trip.notes or ''} [Replaced by {new_trip_number}: {reason}]".strip()
+
+    db.session.add(new_trip)
+    db.session.commit()
+    return success_response(data=new_trip.to_dict(), message=f"Trip replaced with {new_trip_number}")
 
 @trips_bp.route("/<id>/challan/pdf", methods=["GET"])
 @jwt_required()

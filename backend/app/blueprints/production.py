@@ -32,7 +32,7 @@ def get_production_queue():
 @jwt_required()
 @roles_required("production", "dispatcher")
 def check_materials(id):
-    trip = Trip.query.get(id)
+    trip = Trip.query.filter((Trip.id == id) | (Trip.trip_number == id)).first()
     if not trip:
         return error_response(code="NOT_FOUND", message="Trip not found.", status_code=404)
 
@@ -66,19 +66,20 @@ def check_materials(id):
         "grade": grade.code,
         "requiredMaterials": required_rows,
         "shortfalls": shortfalls,
-        "canBatch": len(shortfalls) == 0
+        "canBatch": True,
+        "hasWarning": len(shortfalls) > 0
     })
 
 @production_bp.route("/production/trips/<id>/start-batching", methods=["POST"])
 @jwt_required()
 @roles_required("production", "dispatcher", "owner")
 def start_batching(id):
-    trip = Trip.query.get(id)
+    trip = Trip.query.filter((Trip.id == id) | (Trip.trip_number == id)).first()
     if not trip:
         return error_response(code="NOT_FOUND", message="Trip not found.", status_code=404)
 
     # If trip already has a batch sheet generated, return it
-    if trip.batch_sheet:
+    if trip.batch_sheet and not trip.batch_sheet.is_voided:
         return success_response(data={
             "trip": trip.to_dict(),
             "batchSheet": trip.batch_sheet.to_dict(),
@@ -89,16 +90,14 @@ def start_batching(id):
     if not grade or not grade.mix_design:
         return error_response(code="MIX_DESIGN_MISSING", message="Mix design missing.", status_code=400)
 
-    # RULE 3: Block batching if any required material is insufficient
+    # Golden rule 1: The plant physically batched it, so the software must never block recording a batch.
+    # Shortfalls become an informative warning rather than blocking production.
     shortfalls = BatchingPlantService.check_material_shortfalls(grade.mix_design, trip.quantity_cum)
+    warning_msg = None
     if shortfalls:
         shortfall_names = ", ".join([f"{s['material']} (need {s['shortfall']} {s['unit']})" for s in shortfalls])
-        return error_response(
-            code="INSUFFICIENT_STOCK",
-            message=f"Batching blocked due to insufficient material stock: {shortfall_names}",
-            fields={"shortfalls": shortfalls},
-            status_code=409
-        )
+        warning_msg = f"Low stock warning: {shortfall_names}. Batched load will reflect on stock ledger."
+        trip.notes = f"{trip.notes or ''} [Low stock: {shortfall_names}]".strip()
 
     try:
         user_id = get_current_user_id()
@@ -107,13 +106,14 @@ def start_batching(id):
         if trip.status == "SENT_TO_PRODUCTION":
             StateMachine.transition_trip(trip, "BATCHING", user_id=user_id)
 
-        # Simulate automatic AJAX scale weights
+        # Simulate automatic scale weights based on mix design
         simulated_weights = BatchingPlantService.simulate_actual_weights(grade.mix_design, trip.quantity_cum)
         db.session.commit()
 
         return success_response(data={
             "trip": trip.to_dict(),
-            "simulatedWeights": simulated_weights
+            "simulatedWeights": simulated_weights,
+            "warning": warning_msg
         })
     except StateMachineError as e:
         return error_response(code="INVALID_STATE", message=e.message, status_code=e.status_code)
@@ -122,7 +122,7 @@ def start_batching(id):
 @jwt_required()
 @roles_required("production", "dispatcher", "owner")
 def confirm_loaded(id):
-    trip = Trip.query.get(id)
+    trip = Trip.query.filter((Trip.id == id) | (Trip.trip_number == id)).first()
     if not trip:
         return error_response(code="NOT_FOUND", message="Trip not found.", status_code=404)
 
@@ -138,15 +138,17 @@ def confirm_loaded(id):
     if not weights:
         weights = BatchingPlantService.simulate_actual_weights(grade.mix_design, trip.quantity_cum)
 
-    # Check stock shortfall
-    shortfalls = BatchingPlantService.check_material_shortfalls(grade.mix_design, trip.quantity_cum)
-    if shortfalls:
-        return error_response(
-            code="INSUFFICIENT_STOCK",
-            message="Batching blocked due to insufficient stock.",
-            fields={"shortfalls": shortfalls},
-            status_code=409
-        )
+    # Dynamic material weights
+    cement_val = float(weights.get("Cement (OPC 53)", weights.get("cementKg", grade.mix_design.cement_kg * trip.quantity_cum)))
+    sand_val = float(weights.get("River Sand (Zone II)", weights.get("rSandKg", weights.get("sandKg", grade.mix_design.sand_kg * trip.quantity_cum))))
+    agg10_val = float(weights.get("Aggregate 10mm", weights.get("agg10mmKg", grade.mix_design.aggregate_10mm_kg * trip.quantity_cum)))
+    agg20_val = float(weights.get("Aggregate 20mm", weights.get("agg20mmKg", grade.mix_design.aggregate_20mm_kg * trip.quantity_cum)))
+    water_val = float(weights.get("Water", weights.get("waterL", grade.mix_design.water_l * trip.quantity_cum)))
+    admix_val = float(weights.get("Admixture (PCE)", weights.get("admixtureKg", grade.mix_design.admixture_l * trip.quantity_cum)))
+    flyash_val = float(weights.get("Fly Ash (Class F)", weights.get("flyashKg", getattr(grade.mix_design, "flyash_kg", 0.0) * trip.quantity_cum)))
+    m_sand_val = float(weights.get("Manufactured Sand (M-Sand)", weights.get("mSandKg", getattr(grade.mix_design, "m_sand_kg", 0.0) * trip.quantity_cum)))
+    ggbs_val = float(weights.get("GGBS (Slag)", weights.get("ggbsKg", getattr(grade.mix_design, "ggbs_kg", 0.0) * trip.quantity_cum)))
+    total_wt = float(data.get("totalWeightKg") or sum([cement_val, sand_val, agg10_val, agg20_val, water_val, admix_val, flyash_val, m_sand_val, ggbs_val]))
 
     # Generate Batch Sheet
     batch_num = get_next_sequence("BATCH", "BS")
@@ -155,12 +157,18 @@ def confirm_loaded(id):
         trip_id=trip.id,
         grade_id=grade.id,
         quantity_cum=trip.quantity_cum,
-        cement_kg=float(weights.get("Cement (OPC 53)", grade.mix_design.cement_kg * trip.quantity_cum)),
-        sand_kg=float(weights.get("River Sand (Zone II)", grade.mix_design.sand_kg * trip.quantity_cum)),
-        agg_10_kg=float(weights.get("Aggregate 10mm", grade.mix_design.aggregate_10mm_kg * trip.quantity_cum)),
-        agg_20_kg=float(weights.get("Aggregate 20mm", grade.mix_design.aggregate_20mm_kg * trip.quantity_cum)),
-        water_l=float(weights.get("Water", grade.mix_design.water_l * trip.quantity_cum)),
-        admixture_l=float(weights.get("Admixture (PCE)", grade.mix_design.admixture_l * trip.quantity_cum)),
+        cement_kg=cement_val,
+        sand_kg=sand_val,
+        m_sand_kg=m_sand_val,
+        agg_10_kg=agg10_val,
+        agg_20_kg=agg20_val,
+        water_l=water_val,
+        admixture_l=admix_val,
+        flyash_kg=flyash_val,
+        ggbs_kg=ggbs_val,
+        total_weight_kg=total_wt,
+        actual_weights_json=weights,
+        plant_set_weights=data.get("plantSetWeights") or data.get("targetWeights") or {},
         batched_at=datetime.now(timezone.utc),
         qc_status="PENDING",
         created_by="AJAX Auto-Batcher"
@@ -326,6 +334,7 @@ def parse_uploaded_batch_sheet():
     return success_response(data=parsed)
 
 @production_bp.route("/production/batch-sheets/confirm-upload", methods=["POST"])
+@production_bp.route("/production/batch-sheets/ingest", methods=["POST"])
 @jwt_required()
 @roles_required("production", "dispatcher", "qa", "owner")
 def confirm_uploaded_batch_sheet():
@@ -344,6 +353,61 @@ def confirm_uploaded_batch_sheet():
         meta={"message": f"SCADA Batch Docket #{data.get('docketNumber')} posted successfully. Stock decremented."},
         status_code=201
     )
+
+@production_bp.route("/production/batch-sheets/<id>/void", methods=["POST"])
+@jwt_required()
+@roles_required("production", "dispatcher", "owner")
+def void_batch_sheet(id):
+    """
+    Voids an existing batch sheet and creates reversal transactions for its deductions.
+    Resets associated trip back to SENT_TO_PRODUCTION.
+    """
+    batch = BatchSheet.query.get(id)
+    if not batch:
+        return error_response(code="NOT_FOUND", message="Batch sheet not found.", status_code=404)
+
+    if batch.is_voided:
+        return error_response(code="ALREADY_VOIDED", message="This batch sheet is already voided.", status_code=400)
+
+    data = request.get_json(silent=True) or {}
+    reason = data.get("reason", "Operator void / re-import correction")
+    user_id = get_current_user_id()
+
+    # Reversal of all StockTransactions for this batch
+    docket_ref = f"DOCKET-{batch.docket_number}" if batch.docket_number else f"Batch {batch.batch_number}"
+    txs = StockTransaction.query.filter(
+        (StockTransaction.reference == docket_ref) | (StockTransaction.reference == f"Batch {batch.batch_number}"),
+        StockTransaction.is_reversal == False,
+        StockTransaction.type == "OUT"
+    ).all()
+
+    for tx in txs:
+        mat = tx.material
+        if mat and getattr(mat, "is_tracked", True):
+            mat.current_stock = round(mat.current_stock + tx.quantity, 2)
+        rev = StockTransaction(
+            material_id=tx.material_id,
+            type="REVERSAL",
+            quantity=tx.quantity,
+            reference=f"REVERSAL-{batch.batch_number}",
+            note=f"Reversal of {tx.reference}: {reason}",
+            is_reversal=True,
+            reversed_transaction_id=tx.id,
+            reversal_reason=reason,
+            created_by=user_id
+        )
+        db.session.add(rev)
+
+    batch.is_voided = True
+    batch.void_reason = reason
+    batch.voided_at = datetime.now(timezone.utc)
+    batch.voided_by = user_id
+
+    if batch.trip:
+        batch.trip.status = "SENT_TO_PRODUCTION"
+
+    db.session.commit()
+    return success_response(data=batch.to_dict(), message="Batch sheet voided and material stock deductions reversed.")
 
 # ============================================================================
 # DAILY CONSUMPTION & BATCH PRINT REPORT

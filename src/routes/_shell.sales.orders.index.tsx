@@ -83,7 +83,7 @@ function OrdersPage() {
     { key: "qty", header: "Quantity", align: "right", cell: (r) => cum(r.quantity), sortValue: (r) => r.quantity },
     { key: "date", header: "Delivery Date", cell: (r) => r.deliveryDate, sortValue: (r) => r.deliveryDate },
     { key: "status", header: "Status", align: "center", cell: (r) => <StatusBadge status={r.status} /> },
-    { key: "by", header: "Created By", cell: (r) => <span className="text-muted-foreground">{r.createdBy}</span> },
+    { key: "by", header: "Created By", cell: (r) => <span className="text-muted-foreground">{(r as any).createdByName || r.createdBy}</span> },
     {
       key: "actions",
       header: "Actions",

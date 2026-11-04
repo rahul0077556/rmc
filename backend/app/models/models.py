@@ -33,6 +33,8 @@ class User(TimestampMixin, db.Model):
         return check_password_hash(self.password_hash, password)
 
     def to_dict(self):
+        plant_obj = Plant.query.first()
+        plant_name = plant_obj.name if plant_obj else "ROXXCON RMC NAGPUR"
         return {
             "id": self.id,
             "name": self.name,
@@ -43,7 +45,7 @@ class User(TimestampMixin, db.Model):
             "customer_id": self.customer_id,
             "customer_name": self.customer.name if self.customer else None,
             "is_active": self.is_active,
-            "plant": "Apex Ready-Mix Plant"
+            "plant": plant_name
         }
 
 # --- PLANT ---
@@ -130,7 +132,18 @@ class Grade(TimestampMixin, db.Model):
     slump_max_mm = db.Column(db.Integer, nullable=False)
     default_rate = db.Column(db.Float, nullable=False)
 
-    mix_design = db.relationship("MixDesign", backref="grade", uselist=False, lazy=True)
+    mix_designs = db.relationship("MixDesign", backref="grade", lazy=True)
+
+    @property
+    def default_mix(self):
+        for m in self.mix_designs:
+            if getattr(m, "is_default", False):
+                return m
+        return self.mix_designs[0] if self.mix_designs else None
+
+    @property
+    def mix_design(self):
+        return self.default_mix
 
     def to_dict(self):
         return {
@@ -140,30 +153,43 @@ class Grade(TimestampMixin, db.Model):
             "slumpMinMm": self.slump_min_mm,
             "slumpMaxMm": self.slump_max_mm,
             "defaultRate": self.default_rate,
-            "mixDesign": self.mix_design.to_dict() if self.mix_design else None
+            "mixDesign": self.default_mix.to_dict() if self.default_mix else None,
+            "mixDesigns": [m.to_dict() for m in self.mix_designs]
         }
 
 class MixDesign(TimestampMixin, db.Model):
     __tablename__ = "mix_designs"
     
-    grade_id = db.Column(db.String(36), db.ForeignKey("grades.id"), nullable=False, unique=True, index=True)
+    grade_id = db.Column(db.String(36), db.ForeignKey("grades.id"), nullable=False, index=True)
+    name = db.Column(db.String(100), default="Standard Mix", nullable=True)
+    description = db.Column(db.String(200), nullable=True)
+    is_default = db.Column(db.Boolean, default=True, nullable=False)
     cement_kg = db.Column(db.Float, nullable=False)
     sand_kg = db.Column(db.Float, nullable=False)
     aggregate_10mm_kg = db.Column(db.Float, nullable=False)
     aggregate_20mm_kg = db.Column(db.Float, nullable=False)
     water_l = db.Column(db.Float, nullable=False)
     admixture_l = db.Column(db.Float, nullable=False)
+    flyash_kg = db.Column(db.Float, default=0.0, nullable=True)
+    m_sand_kg = db.Column(db.Float, default=0.0, nullable=True)
+    ggbs_kg = db.Column(db.Float, default=0.0, nullable=True)
 
     def to_dict(self):
         return {
             "id": self.id,
             "gradeId": self.grade_id,
+            "name": self.name or "Standard Mix",
+            "description": self.description or "",
+            "isDefault": self.is_default,
             "cementKg": self.cement_kg,
             "sandKg": self.sand_kg,
             "aggregate10mmKg": self.aggregate_10mm_kg,
             "aggregate20mmKg": self.aggregate_20mm_kg,
             "waterL": self.water_l,
-            "admixtureL": self.admixture_l
+            "admixtureL": self.admixture_l,
+            "flyashKg": self.flyash_kg or 0.0,
+            "mSandKg": self.m_sand_kg or 0.0,
+            "ggbsKg": self.ggbs_kg or 0.0
         }
 
 # --- MATERIALS & STOCK TRANSACTIONS ---
@@ -174,6 +200,9 @@ class Material(TimestampMixin, db.Model):
     unit = db.Column(db.String(20), nullable=False)  # kg, l
     current_stock = db.Column(db.Float, default=0.0, nullable=False)
     reorder_level = db.Column(db.Float, default=0.0, nullable=False)
+    density = db.Column(db.Float, default=1.0, nullable=False)  # kg/l density for volume-weight conversion (admixture ~1.15)
+    is_tracked = db.Column(db.Boolean, default=True, nullable=False)  # False for consumption-only items like Water
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
 
     transactions = db.relationship("StockTransaction", backref="material", lazy=True)
 
@@ -184,17 +213,24 @@ class Material(TimestampMixin, db.Model):
             "unit": self.unit,
             "currentStock": round(self.current_stock, 2),
             "reorderLevel": round(self.reorder_level, 2),
-            "isLowStock": self.current_stock <= self.reorder_level
+            "density": self.density or 1.0,
+            "isTracked": self.is_tracked,
+            "isActive": self.is_active,
+            "isLowStock": self.is_tracked and (self.current_stock <= self.reorder_level),
+            "isNegative": self.current_stock < 0.0
         }
 
 class StockTransaction(TimestampMixin, db.Model):
     __tablename__ = "stock_transactions"
     
     material_id = db.Column(db.String(36), db.ForeignKey("materials.id"), nullable=False, index=True)
-    type = db.Column(db.String(20), nullable=False)  # IN, OUT, ADJUST
+    type = db.Column(db.String(20), nullable=False)  # IN, OUT, ADJUST, REVERSAL
     quantity = db.Column(db.Float, nullable=False)
     reference = db.Column(db.String(100), nullable=True)
     note = db.Column(db.Text, nullable=True)
+    is_reversal = db.Column(db.Boolean, default=False, nullable=False)
+    reversed_transaction_id = db.Column(db.String(36), nullable=True)
+    reversal_reason = db.Column(db.Text, nullable=True)
 
     def to_dict(self):
         return {
@@ -205,6 +241,9 @@ class StockTransaction(TimestampMixin, db.Model):
             "quantity": self.quantity,
             "reference": self.reference,
             "note": self.note,
+            "isReversal": self.is_reversal,
+            "reversedTransactionId": self.reversed_transaction_id,
+            "reversalReason": self.reversal_reason,
             "createdAt": self.created_at.isoformat()
         }
 
@@ -269,6 +308,9 @@ class PurchaseOrder(TimestampMixin, db.Model):
     payment_terms_days = db.Column(db.Integer, default=30, nullable=False)
     ubitech_ref = db.Column(db.String(100), nullable=True)
     status = db.Column(db.String(30), default="DRAFT", nullable=False, index=True)
+    mix_design_id = db.Column(db.String(36), db.ForeignKey("mix_designs.id"), nullable=True)
+    slump_required_mm = db.Column(db.Integer, default=120, nullable=True)
+    rate_reason = db.Column(db.Text, nullable=True)
     
     approved_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True)
     approved_at = db.Column(db.DateTime, nullable=True)
@@ -281,8 +323,10 @@ class PurchaseOrder(TimestampMixin, db.Model):
 
     site = db.relationship("Site", lazy=True)
     grade = db.relationship("Grade", lazy=True)
+    mix_design = db.relationship("MixDesign", lazy=True)
     trips = db.relationship("Trip", backref="po", lazy=True)
     approver = db.relationship("User", foreign_keys=[approved_by], lazy=True)
+    creator = db.relationship("User", foreign_keys="PurchaseOrder.created_by", primaryjoin="PurchaseOrder.created_by == User.id", lazy=True)
 
     @property
     def delivered_quantity(self) -> float:
@@ -302,6 +346,12 @@ class PurchaseOrder(TimestampMixin, db.Model):
         return max(0.0, round(self.quantity_cum - active_trips_qty, 2))
 
     def to_dict(self):
+        creator_name = self.creator.name if self.creator else None
+        if not creator_name and self.created_by:
+            u = User.query.get(self.created_by)
+            if u:
+                creator_name = u.name
+
         return {
             "id": self.id,
             "poNumber": self.po_number,
@@ -312,6 +362,9 @@ class PurchaseOrder(TimestampMixin, db.Model):
             "siteAddress": self.site.address if self.site else None,
             "gradeId": self.grade_id,
             "grade": self.grade.code if self.grade else None,
+            "mixDesignId": self.mix_design_id,
+            "slumpRequiredMm": self.slump_required_mm or 120,
+            "rateReason": self.rate_reason or "",
             "quantity": self.quantity_cum,
             "deliveredQuantity": round(self.delivered_quantity, 2),
             "balanceQuantity": round(self.balance_quantity, 2),
@@ -330,7 +383,9 @@ class PurchaseOrder(TimestampMixin, db.Model):
             "reference": self.ubitech_ref or "",
             "notes": self.notes or "",
             "status": self.status,
-            "createdBy": self.created_by,
+            "createdBy": creator_name or "Sales Desk",
+            "createdByName": creator_name or "Sales Desk",
+            "createdById": self.created_by,
             "createdAt": self.created_at.isoformat(),
             "submittedAt": self.submitted_at.isoformat() if self.submitted_at else None,
             "approvedAt": self.approved_at.isoformat() if self.approved_at else None,
@@ -439,6 +494,15 @@ class BatchSheet(TimestampMixin, db.Model):
     total_weight_kg = db.Column(db.Float, default=0.0, nullable=True)
     plant_name = db.Column(db.String(100), default="ROXXCON RMC NAGPUR", nullable=True)
     
+    plant_set_weights = db.Column(db.JSON, nullable=True)
+    actual_weights_json = db.Column(db.JSON, nullable=True)
+    raw_docket_data = db.Column(db.JSON, nullable=True)
+    file_hash = db.Column(db.String(64), nullable=True, index=True)
+    is_voided = db.Column(db.Boolean, default=False, nullable=False)
+    void_reason = db.Column(db.Text, nullable=True)
+    voided_at = db.Column(db.DateTime, nullable=True)
+    voided_by = db.Column(db.String(36), nullable=True)
+
     batched_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     qc_status = db.Column(db.String(30), default="PENDING", nullable=False)  # PENDING, APPROVED, REJECTED
     qc_signed_by = db.Column(db.String(100), nullable=True)
@@ -449,27 +513,66 @@ class BatchSheet(TimestampMixin, db.Model):
 
     def to_dict(self):
         mix = self.grade.mix_design if self.grade else None
-        theo_cement = round(mix.cement_kg * self.quantity_cum, 1) if mix else 0
-        theo_sand = round(mix.sand_kg * self.quantity_cum, 1) if mix else 0
-        theo_agg10 = round(mix.aggregate_10mm_kg * self.quantity_cum, 1) if mix else 0
-        theo_agg20 = round(mix.aggregate_20mm_kg * self.quantity_cum, 1) if mix else 0
-        theo_water = round(mix.water_l * self.quantity_cum, 1) if mix else 0
-        theo_admix = round(mix.admixture_l * self.quantity_cum, 2) if mix else 0
+        
+        # Build dynamic materials list
+        mat_list = []
+        if self.actual_weights_json and isinstance(self.actual_weights_json, dict):
+            plant_sets = self.plant_set_weights if isinstance(self.plant_set_weights, dict) else {}
+            # Theoretical targets map
+            theo_map = {}
+            if mix:
+                theo_map = {
+                    "Cement (OPC 53)": round(mix.cement_kg * self.quantity_cum, 1),
+                    "River Sand (Zone II)": round(mix.sand_kg * self.quantity_cum, 1),
+                    "Aggregate 10mm": round(mix.aggregate_10mm_kg * self.quantity_cum, 1),
+                    "Aggregate 20mm": round(mix.aggregate_20mm_kg * self.quantity_cum, 1),
+                    "Water": round(mix.water_l * self.quantity_cum, 1),
+                    "Admixture (PCE)": round(mix.admixture_l * self.quantity_cum, 2),
+                    "Fly Ash (Class F)": round(self.quantity_cum * 90.0, 1),
+                    "Manufactured Sand (M-Sand)": round(self.quantity_cum * 318.0, 1),
+                }
 
-        mat_list = [
-            {"material": "Cement (OPC 53)", "theoretical": theo_cement, "actual": round(self.cement_kg, 1), "unit": "kg"},
-            {"material": "River Sand (Zone II)", "theoretical": theo_sand, "actual": round(self.sand_kg, 1), "unit": "kg"},
-            {"material": "Aggregate 10mm", "theoretical": theo_agg10, "actual": round(self.agg_10_kg, 1), "unit": "kg"},
-            {"material": "Aggregate 20mm", "theoretical": theo_agg20, "actual": round(self.agg_20_kg, 1), "unit": "kg"},
-            {"material": "Water", "theoretical": theo_water, "actual": round(self.water_l, 1), "unit": "l"},
-            {"material": "Admixture (PCE)", "theoretical": theo_admix, "actual": round(self.admixture_l, 2), "unit": "l"}
-        ]
-        if self.flyash_kg:
-            mat_list.append({"material": "Fly Ash (Class F)", "theoretical": round(self.quantity_cum * 90.0, 1), "actual": round(self.flyash_kg, 1), "unit": "kg"})
-        if self.m_sand_kg:
-            mat_list.append({"material": "Manufactured Sand (M-Sand)", "theoretical": round(self.quantity_cum * 318.0, 1), "actual": round(self.m_sand_kg, 1), "unit": "kg"})
-        if self.ggbs_kg:
-            mat_list.append({"material": "GGBS (Slag)", "theoretical": round(self.quantity_cum * 50.0, 1), "actual": round(self.ggbs_kg, 1), "unit": "kg"})
+            for mat_name, act_w in self.actual_weights_json.items():
+                unit = "l" if "water" in mat_name.lower() or "admix" in mat_name.lower() else "kg"
+                theo_val = theo_map.get(mat_name, round(act_w, 1))
+                set_val = round(plant_sets.get(mat_name, theo_val), 1)
+                act_val = round(float(act_w), 2)
+                var_val = round(act_val - set_val, 2)
+                var_pct = round((var_val / set_val * 100), 2) if set_val > 0 else 0.0
+
+                mat_list.append({
+                    "material": mat_name,
+                    "recipeTarget": theo_val,
+                    "plantSet": set_val,
+                    "theoretical": theo_val,
+                    "set": set_val,
+                    "actual": act_val,
+                    "variance": var_val,
+                    "variancePercent": var_pct,
+                    "unit": unit
+                })
+        else:
+            theo_cement = round(mix.cement_kg * self.quantity_cum, 1) if mix else 0
+            theo_sand = round(mix.sand_kg * self.quantity_cum, 1) if mix else 0
+            theo_agg10 = round(mix.aggregate_10mm_kg * self.quantity_cum, 1) if mix else 0
+            theo_agg20 = round(mix.aggregate_20mm_kg * self.quantity_cum, 1) if mix else 0
+            theo_water = round(mix.water_l * self.quantity_cum, 1) if mix else 0
+            theo_admix = round(mix.admixture_l * self.quantity_cum, 2) if mix else 0
+
+            mat_list = [
+                {"material": "Cement (OPC 53)", "recipeTarget": theo_cement, "plantSet": theo_cement, "theoretical": theo_cement, "set": theo_cement, "actual": round(self.cement_kg, 1), "variance": round(self.cement_kg - theo_cement, 1), "unit": "kg"},
+                {"material": "River Sand (Zone II)", "recipeTarget": theo_sand, "plantSet": theo_sand, "theoretical": theo_sand, "set": theo_sand, "actual": round(self.sand_kg, 1), "variance": round(self.sand_kg - theo_sand, 1), "unit": "kg"},
+                {"material": "Aggregate 10mm", "recipeTarget": theo_agg10, "plantSet": theo_agg10, "theoretical": theo_agg10, "set": theo_agg10, "actual": round(self.agg_10_kg, 1), "variance": round(self.agg_10_kg - theo_agg10, 1), "unit": "kg"},
+                {"material": "Aggregate 20mm", "recipeTarget": theo_agg20, "plantSet": theo_agg20, "theoretical": theo_agg20, "set": theo_agg20, "actual": round(self.agg_20_kg, 1), "variance": round(self.agg_20_kg - theo_agg20, 1), "unit": "kg"},
+                {"material": "Water", "recipeTarget": theo_water, "plantSet": theo_water, "theoretical": theo_water, "set": theo_water, "actual": round(self.water_l, 1), "variance": round(self.water_l - theo_water, 1), "unit": "l"},
+                {"material": "Admixture (PCE)", "recipeTarget": theo_admix, "plantSet": theo_admix, "theoretical": theo_admix, "set": theo_admix, "actual": round(self.admixture_l, 2), "variance": round(self.admixture_l - theo_admix, 2), "unit": "l"}
+            ]
+            if self.flyash_kg:
+                mat_list.append({"material": "Fly Ash (Class F)", "recipeTarget": round(self.quantity_cum * 90.0, 1), "plantSet": round(self.quantity_cum * 90.0, 1), "theoretical": round(self.quantity_cum * 90.0, 1), "actual": round(self.flyash_kg, 1), "variance": 0.0, "unit": "kg"})
+            if self.m_sand_kg:
+                mat_list.append({"material": "Manufactured Sand (M-Sand)", "recipeTarget": round(self.quantity_cum * 318.0, 1), "plantSet": round(self.quantity_cum * 318.0, 1), "theoretical": round(self.quantity_cum * 318.0, 1), "actual": round(self.m_sand_kg, 1), "variance": 0.0, "unit": "kg"})
+            if self.ggbs_kg:
+                mat_list.append({"material": "GGBS (Slag)", "recipeTarget": round(self.quantity_cum * 50.0, 1), "plantSet": round(self.quantity_cum * 50.0, 1), "theoretical": round(self.quantity_cum * 50.0, 1), "actual": round(self.ggbs_kg, 1), "variance": 0.0, "unit": "kg"})
 
         return {
             "id": self.id,
@@ -485,11 +588,35 @@ class BatchSheet(TimestampMixin, db.Model):
             "qcSignedBy": self.qc_signed_by,
             "qcSignedAt": self.qc_signed_at.isoformat() if self.qc_signed_at else None,
             "plantName": self.plant_name or "ROXXCON RMC NAGPUR",
-            "wcRatio": self.wc_ratio or 0.39,
+            "wcRatio": self.wc_ratio if (self.wc_ratio is not None and self.wc_ratio > 0) else None,
             "totalWeightKg": round(self.total_weight_kg or 0.0, 2),
+            "isVoided": self.is_voided,
+            "voidReason": self.void_reason,
+            "voidedAt": self.voided_at.isoformat() if self.voided_at else None,
             "materials": mat_list,
+            "plantSetWeights": self.plant_set_weights or {},
+            "rawDocketData": self.raw_docket_data or {},
             "revisions": [r.to_dict() for r in self.revisions],
             "trip": self.trip.to_dict() if self.trip else None
+        }
+
+class PlantMapping(TimestampMixin, db.Model):
+    __tablename__ = "plant_mappings"
+
+    mapping_type = db.Column(db.String(30), nullable=False, index=True)  # MATERIAL, RECIPE
+    raw_name = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    target_id = db.Column(db.String(36), nullable=True)
+    target_name = db.Column(db.String(100), nullable=False)
+    unit = db.Column(db.String(20), default="kg", nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "mappingType": self.mapping_type,
+            "rawName": self.raw_name,
+            "targetId": self.target_id,
+            "targetName": self.target_name,
+            "unit": self.unit,
         }
 
 class BatchSheetRevision(TimestampMixin, db.Model):

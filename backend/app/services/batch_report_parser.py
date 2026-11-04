@@ -231,11 +231,14 @@ try? handler.perform([request])
     def ingest_batch_sheet(cls, data: Dict[str, Any], user_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Creates/links Customer, Site, Truck, Driver, Grade, PO, Trip, and BatchSheet.
-        Atomically decrements plant materials and updates DPR & MPR.
+        Matches existing queued trips by normalized truck number.
+        Prevents duplicates unless replaceExisting is flagged.
+        Atomically decrements plant materials into ledger and updates DPR & MPR.
         """
         cust_name = str(data.get("customerName", "LIGHT HOUSE SYSTEM")).strip()
         site_name = str(data.get("siteName", "IT PARK")).strip()
         truck_no = str(data.get("truckNumber", "MH40DC3964")).strip().upper()
+        clean_truck = truck_no.replace("-", "").replace(" ", "").upper()
         driver_name = str(data.get("driverName", "VIKASH")).strip()
         docket_no = str(data.get("docketNumber") or f"570{Trip.query.count() + 1}").strip()
         recipe_name = str(data.get("recipeName", "M 25 LIGTH")).strip()
@@ -255,116 +258,174 @@ try? handler.perform([request])
         admixture_kg = float(data.get("admixtureKg", 14.19))
         total_weight_kg = float(data.get("totalWeightKg", 12550.38))
 
-        # 1. Resolve or Create Customer
-        customer = Customer.query.filter(Customer.name.ilike(f"%{cust_name}%")).first()
-        if not customer:
-            customer = Customer(
-                name=cust_name,
-                contact_person="Site Project Manager",
-                phone="+91 98220 11223",
-                email=f"contact@{cust_name.lower().replace(' ', '')}.com",
-                gstin="27AAACL1234H1Z5",
-                address="Commercial Complex, Nagpur, Maharashtra",
-                credit_days=30,
-                credit_limit=2500000.0,
-                created_by=user_id
-            )
-            db.session.add(customer)
-            db.session.flush()
+        # Duplicate protection check
+        existing_bs = BatchSheet.query.filter_by(docket_number=docket_no).first()
+        if existing_bs and not getattr(existing_bs, "is_voided", False):
+            if data.get("replaceExisting"):
+                # Void and reverse previous deductions
+                docket_ref = f"DOCKET-{existing_bs.docket_number}"
+                old_txs = StockTransaction.query.filter(
+                    (StockTransaction.reference == docket_ref) | (StockTransaction.reference == f"Batch {existing_bs.batch_number}"),
+                    StockTransaction.is_reversal == False,
+                    StockTransaction.type == "OUT"
+                ).all()
+                for otx in old_txs:
+                    m = otx.material
+                    if m and getattr(m, "is_tracked", True):
+                        m.current_stock = round(m.current_stock + otx.quantity, 2)
+                    rev = StockTransaction(
+                        material_id=otx.material_id,
+                        type="REVERSAL",
+                        quantity=otx.quantity,
+                        reference=f"REVERSAL-{existing_bs.batch_number}",
+                        note=f"Reversal of {otx.reference}: replaced by docket #{docket_no} re-import",
+                        is_reversal=True,
+                        reversed_transaction_id=otx.id,
+                        reversal_reason="Replaced by re-import",
+                        created_by=user_id
+                    )
+                    db.session.add(rev)
+                existing_bs.is_voided = True
+                existing_bs.void_reason = "Replaced by re-import"
+                existing_bs.voided_at = datetime.now(timezone.utc)
+                existing_bs.voided_by = user_id
+                db.session.flush()
+            else:
+                raise ValueError(f"Batch docket #{docket_no} already exists in the system (imported on {existing_bs.created_at.strftime('%d-%b-%Y %H:%M')}). Select 'Replace & Re-import' to overwrite.")
 
-        # 2. Resolve or Create Site
-        site = Site.query.filter_by(customer_id=customer.id).filter(Site.name.ilike(f"%{site_name}%")).first()
-        if not site:
-            site = Site(
-                customer_id=customer.id,
-                name=site_name,
-                address=f"{site_name}, Gayatri Nagar, Nagpur",
-                contact_person=driver_name,
-                phone="+91 98220 44556",
-                accessibility_notes="Concrete pump access gate open",
-                created_by=user_id
-            )
-            db.session.add(site)
-            db.session.flush()
-
-        # 3. Resolve or Create Truck
-        truck = Truck.query.filter(Truck.tm_number.ilike(f"%{truck_no}%")).first()
+        # 1. Resolve or Create Truck
+        all_trucks = Truck.query.all()
+        truck = next((t for t in all_trucks if t.tm_number.replace("-", "").replace(" ", "").upper() == clean_truck), None)
         if not truck:
             truck = Truck(
                 tm_number=truck_no,
                 capacity_cum=int(ticket_qty + 1),
-                status="IN_USE",
+                status="LOADED",
                 created_by=user_id
             )
             db.session.add(truck)
             db.session.flush()
+        else:
+            truck.status = "LOADED"
 
-        # 4. Resolve or Create Driver
+        # 2. Resolve or Create Driver
         driver = Driver.query.filter(Driver.name.ilike(f"%{driver_name}%")).first()
         if not driver:
             driver = Driver(
                 name=driver_name,
                 phone="+91 98220 77889",
                 license_no=f"MH40-{driver_name[:3].upper()}-9988",
-                status="AVAILABLE",
+                status="ASSIGNED",
                 created_by=user_id
             )
             db.session.add(driver)
             db.session.flush()
+        else:
+            driver.status = "ASSIGNED"
 
-        # 5. Resolve Grade
+        # 3. Resolve Grade
         grade_code = "M25"
         for g_cand in ["M15", "M20", "M25", "M30", "M35", "M40"]:
             if g_cand.lower() in recipe_name.lower():
                 grade_code = g_cand
                 break
-        grade = Grade.query.filter_by(code=grade_code).first()
-        if not grade:
-            grade = Grade.query.first()
+        grade = Grade.query.filter_by(code=grade_code).first() or Grade.query.first()
 
-        # 6. Resolve or Create Purchase Order
-        po = PurchaseOrder.query.filter_by(customer_id=customer.id, site_id=site.id).order_by(PurchaseOrder.created_at.desc()).first()
-        if not po:
-            order_qty = float(data.get("orderQtyCum", 50.0))
-            po_num = get_next_sequence("po", "PO")
-            rate = grade.default_rate if grade else 4200.0
-            po = PurchaseOrder(
-                po_number=po_num,
-                customer_id=customer.id,
-                site_id=site.id,
-                grade_id=grade.id if grade else None,
-                quantity_cum=order_qty,
-                rate_per_cum=rate,
-                delivery_datetime=datetime.now(timezone.utc),
-                purpose="Slab",
-                status="APPROVED",
-                pump_required=False,
+        # 4. Resolve Trip: check explicit tripId, or matching queued trip for this truck
+        trip = None
+        if data.get("tripId"):
+            trip = Trip.query.get(data.get("tripId"))
+        
+        if not trip and truck:
+            trip = (
+                Trip.query.filter_by(truck_id=truck.id)
+                .filter(Trip.status.in_(["SENT_TO_PRODUCTION", "BATCHING", "PLANNED"]))
+                .order_by(Trip.planned_datetime.asc())
+                .first()
+            )
+
+        # 5. If no queued trip matched, resolve Customer, Site, and PO to create one
+        if not trip:
+            customer = Customer.query.filter(Customer.name.ilike(f"%{cust_name}%")).first()
+            if not customer:
+                customer = Customer(
+                    name=cust_name,
+                    contact_person="Site Project Manager",
+                    phone="+91 98220 11223",
+                    email=f"contact@{cust_name.lower().replace(' ', '')}.com",
+                    gstin="27AAACL1234H1Z5",
+                    address="Commercial Complex, Nagpur, Maharashtra",
+                    credit_days=30,
+                    credit_limit=2500000.0,
+                    created_by=user_id
+                )
+                db.session.add(customer)
+                db.session.flush()
+
+            site = Site.query.filter_by(customer_id=customer.id).filter(Site.name.ilike(f"%{site_name}%")).first()
+            if not site:
+                site = Site(
+                    customer_id=customer.id,
+                    name=site_name,
+                    address=f"{site_name}, Gayatri Nagar, Nagpur",
+                    contact_person=driver_name,
+                    phone="+91 98220 44556",
+                    accessibility_notes="Concrete pump access gate open",
+                    created_by=user_id
+                )
+                db.session.add(site)
+                db.session.flush()
+
+            po = PurchaseOrder.query.filter_by(customer_id=customer.id, site_id=site.id).order_by(PurchaseOrder.created_at.desc()).first()
+            if not po:
+                order_qty = float(data.get("orderQtyCum", 50.0))
+                po_num = get_next_sequence("po", "PO")
+                rate = grade.default_rate if grade else 4200.0
+                po = PurchaseOrder(
+                    po_number=po_num,
+                    customer_id=customer.id,
+                    site_id=site.id,
+                    grade_id=grade.id if grade else None,
+                    quantity_cum=order_qty,
+                    rate_per_cum=rate,
+                    delivery_datetime=datetime.now(timezone.utc),
+                    purpose="Slab",
+                    status="APPROVED",
+                    pump_required=False,
+                    created_by=user_id
+                )
+                db.session.add(po)
+                db.session.flush()
+
+            trip_num = get_next_sequence("trip", "TRIP")
+            trip = Trip(
+                trip_number=trip_num,
+                po_id=po.id,
+                truck_id=truck.id,
+                driver_id=driver.id,
+                quantity_cum=ticket_qty,
+                status="QC_PENDING",
+                planned_datetime=datetime.now(timezone.utc),
+                dispatched_at=datetime.now(timezone.utc),
+                notes=f"SCADA Batch Docket #{docket_no} · Recipe: {recipe_name}",
                 created_by=user_id
             )
-            db.session.add(po)
+            db.session.add(trip)
+            db.session.flush()
+        else:
+            # Advance queued trip to QC_PENDING
+            trip.status = "QC_PENDING"
+            trip.truck_id = truck.id
+            if driver:
+                trip.driver_id = driver.id
+            trip.dispatched_at = datetime.now(timezone.utc)
+            trip.notes = f"{trip.notes or ''} [Batched Docket #{docket_no}: {recipe_name}]".strip()
             db.session.flush()
 
-        # 7. Create Trip
-        trip_num = get_next_sequence("trip", "TRIP")
-        trip = Trip(
-            trip_number=trip_num,
-            po_id=po.id,
-            truck_id=truck.id,
-            driver_id=driver.id,
-            quantity_cum=ticket_qty,
-            status="LOADED",
-            planned_datetime=datetime.now(timezone.utc),
-            dispatched_at=datetime.now(timezone.utc),
-            notes=f"SCADA Batch Docket #{docket_no} · Recipe: {recipe_name}",
-            created_by=user_id
-        )
-        db.session.add(trip)
-        db.session.flush()
-
-        # 8. Create BatchSheet
+        # 6. Create BatchSheet with dynamic weights and plant set targets
         batch_num = f"BS-{docket_no}"
-        existing_bs = BatchSheet.query.filter_by(batch_number=batch_num).first()
-        if existing_bs:
+        existing_any_bs = BatchSheet.query.filter_by(batch_number=batch_num).first()
+        if existing_any_bs:
             batch_num = f"BS-{docket_no}-{datetime.now().strftime('%H%M%S')}"
 
         batch_sheet = BatchSheet(
@@ -372,7 +433,7 @@ try? handler.perform([request])
             docket_number=docket_no,
             recipe_name=recipe_name,
             trip_id=trip.id,
-            grade_id=grade.id if grade else None,
+            grade_id=grade.id if grade else (trip.po.grade_id if trip.po else None),
             quantity_cum=ticket_qty,
             cement_kg=cement_kg,
             sand_kg=r_sand_kg,
@@ -385,14 +446,26 @@ try? handler.perform([request])
             total_weight_kg=total_weight_kg,
             wc_ratio=wc_ratio,
             plant_name=plant_name,
+            plant_set_weights=data.get("targetWeights") or {},
+            actual_weights_json=data.get("actualWeights") or {
+                "Cement (OPC 53)": cement_kg,
+                "Fly Ash (Class F)": flyash_kg,
+                "River Sand (Zone II)": r_sand_kg,
+                "Manufactured Sand (M-Sand)": m_sand_kg,
+                "Aggregate 10mm": agg_10mm_kg,
+                "Aggregate 20mm": agg_20mm_kg,
+                "Water": water_l,
+                "Admixture (PCE)": admixture_kg
+            },
+            raw_docket_data=data,
             batched_at=datetime.now(timezone.utc),
-            qc_status="APPROVED",
-            qc_signed_by=driver_name,
+            qc_status="PENDING",
+            qc_signed_by=None,
             created_by=user_id or "SCADA Upload Console"
         )
         db.session.add(batch_sheet)
 
-        # 9. Stock Deductions & Traceable Ledger Entries
+        # 7. Stock Deductions & Traceable Ledger Entries (Golden Rule 2: exact ledger, no clamping)
         deductions = [
             ("Cement (OPC 53)", cement_kg),
             ("Fly Ash (Class F)", flyash_kg),
@@ -405,34 +478,19 @@ try? handler.perform([request])
         ]
 
         materials_map = {m.name: m for m in Material.query.all()}
-        # Fallback for M-Sand if zero or not present: combine into River Sand
-        m_sand_mat = materials_map.get("Manufactured Sand (M-Sand)")
-        if not m_sand_mat:
-            r_sand_mat = materials_map.get("River Sand (Zone II)")
-            if r_sand_mat:
-                deductions = [
-                    ("Cement (OPC 53)", cement_kg),
-                    ("Fly Ash (Class F)", flyash_kg),
-                    ("River Sand (Zone II)", r_sand_kg + m_sand_kg),
-                    ("Aggregate 10mm", agg_10mm_kg),
-                    ("Aggregate 20mm", agg_20mm_kg),
-                    ("Water", water_l),
-                    ("Admixture (PCE)", admixture_kg)
-                ]
-
         stock_txs = []
         for mat_name, qty in deductions:
             if qty <= 0:
                 continue
             mat = materials_map.get(mat_name)
             if not mat:
-                # Fallback match by keyword
                 for m_name, m_obj in materials_map.items():
                     if mat_name.split()[0].lower() in m_name.lower():
                         mat = m_obj
                         break
             if mat:
-                mat.current_stock = max(0.0, mat.current_stock - qty)
+                if getattr(mat, "is_tracked", True):
+                    mat.current_stock = round(mat.current_stock - qty, 2)
                 tx = StockTransaction(
                     material_id=mat.id,
                     type="OUT",
@@ -444,7 +502,7 @@ try? handler.perform([request])
                 db.session.add(tx)
                 stock_txs.append(tx)
 
-        # 10. Update Daily Production Report (DPR) record for date
+        # 8. Update Daily Production Report (DPR) record for date
         dpr = DprRecord.query.filter_by(date=date_str).first()
         if not dpr:
             dpr = DprRecord(
@@ -476,9 +534,6 @@ try? handler.perform([request])
         return {
             "batchSheet": batch_sheet.to_dict(),
             "trip": trip.to_dict(),
-            "customer": customer.to_dict(),
-            "site": site.to_dict(),
-            "po": po.to_dict(),
-            "dpr": dpr.to_dict(),
+            "po": trip.po.to_dict() if trip.po else None,
             "deductionsCount": len(stock_txs)
         }

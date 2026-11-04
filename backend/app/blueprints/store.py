@@ -5,10 +5,11 @@ from backend.app.extensions import db
 from backend.app.models.models import (
     Material, StockTransaction, WeighbridgeTicket,
     TransitMixerPayload, DprRecord, ExpenseRecord,
-    AttendanceRecord, WeighbridgeSettings, TmTripLog
+    AttendanceRecord, WeighbridgeSettings, TmTripLog,
+    Plant, User
 )
 from backend.app.utils.responses import success_response, error_response
-from backend.app.utils.decorators import roles_required
+from backend.app.utils.decorators import roles_required, get_current_user_id
 
 store_bp = Blueprint("store", __name__, url_prefix="/api/v1/store")
 
@@ -37,7 +38,9 @@ def get_inventory():
         total_out = db.session.query(db.func.sum(StockTransaction.quantity)).filter_by(material_id=m.id, type="OUT").scalar() or 0.0
 
         status = "HEALTHY"
-        if m.current_stock <= (m.reorder_level * 0.5):
+        if m.current_stock < 0:
+            status = "NEEDS_RECONCILIATION"
+        elif m.current_stock <= (m.reorder_level * 0.5):
             status = "CRITICAL"
         elif m.current_stock <= m.reorder_level:
             status = "LOW"
@@ -51,8 +54,11 @@ def get_inventory():
             "siloName": silo_name,
             "currentStock": round(m.current_stock, 1),
             "unit": m.unit,
-            "capacity": capacity,
+            "capacity": capacity if getattr(m, "is_tracked", True) else None,
             "reorderLevel": round(m.reorder_level, 1),
+            "density": getattr(m, "density", 1.0) or 1.0,
+            "isTracked": getattr(m, "is_tracked", True),
+            "isNegative": m.current_stock < 0,
             "totalInward": round(total_in, 1),
             "totalConsumed": round(total_out, 1),
             "status": status,
@@ -96,7 +102,10 @@ def adjust_inventory():
     material_name = data.get("material")
     qty = float(data.get("quantity", 0))
     action_type = data.get("type", "ADJUST")  # IN, OUT, ADJUST
-    note = data.get("note", "Manual adjustment via Store console")
+    note = (data.get("note") or data.get("reason") or "").strip()
+
+    if not note or len(note) < 3:
+        return error_response(code="REASON_REQUIRED", message="A mandatory reason is required for manual stock issue or adjustment.", status_code=400)
 
     material = None
     if material_id:
@@ -106,6 +115,18 @@ def adjust_inventory():
 
     if not material:
         return error_response(code="NOT_FOUND", message="Material not found in database.", status_code=404)
+
+    # Golden Rule 1: Only manual store issues and adjustments are blocked from going below zero
+    if action_type == "OUT" and (material.current_stock - qty < 0):
+        return error_response(
+            code="INSUFFICIENT_STOCK",
+            message=f"Manual issue cannot reduce stock below zero. Current stock of {material.name} is {material.current_stock} {material.unit}.",
+            status_code=409
+        )
+
+    user_id = get_current_user_id()
+    user = User.query.get(user_id) if user_id else None
+    user_name = user.name if user else "Store Admin"
 
     if action_type == "IN":
         material.current_stock += qty
@@ -119,7 +140,8 @@ def adjust_inventory():
         type=action_type,
         quantity=qty,
         reference=data.get("reference", "MANUAL-STORE"),
-        note=note
+        note=note,
+        created_by=user_name
     )
     db.session.add(tx)
     db.session.commit()
@@ -151,6 +173,14 @@ def create_weighbridge_ticket():
     gross_w = float(data.get("grossWeight", 0.0))
     tare_w = float(data.get("tareWeight", 0.0))
     net_w = float(data.get("netWeight", 0.0))
+    ticket_type = data.get("type", "INWARD").upper()
+
+    if ticket_type == "INWARD" and gross_w > 0 and tare_w > 0 and tare_w >= gross_w:
+        return error_response(
+            code="INVALID_WEIGHTS",
+            message=f"Tare weight ({tare_w} kg) cannot be greater than or equal to Gross weight ({gross_w} kg) for inward material consignment.",
+            status_code=400
+        )
 
     if net_w <= 0 and gross_w > tare_w:
         net_w = gross_w - tare_w
@@ -187,13 +217,26 @@ def create_weighbridge_ticket():
             elif "admix" in mat_name.lower():
                 mat = Material.query.filter(Material.name.ilike("%admixture%")).first()
 
-    supplier = data.get("supplierOrCustomer") or data.get("partyName") or "Sai ReadyMix Inward Vendor"
+    supplier = data.get("supplierOrCustomer") or data.get("partyName") or "Plant Inward Vendor"
     vehicle = (data.get("vehicleNumber") or "").strip().upper()
+
+    # Block duplicate open tickets for the same vehicle
+    if vehicle:
+        open_ticket = WeighbridgeTicket.query.filter_by(vehicle_number=vehicle, status="PENDING").first()
+        if open_ticket:
+            return error_response(
+                code="VEHICLE_HAS_OPEN_TICKET",
+                message=f"Vehicle {vehicle} already has an open ticket #{open_ticket.ticket_number}. Complete that ticket first.",
+                status_code=409
+            )
+
     gate_pass = data.get("gatePassNo") or f"GP-{datetime.now().strftime('%d%m%H%M')}"
+    challan_w = float(data.get("challanWeight", net_w))
+    variance_kg = round(net_w - challan_w, 2)
 
     ticket = WeighbridgeTicket(
         ticket_number=ticket_num,
-        type=data.get("type", "INWARD"),
+        type=ticket_type,
         vehicle_number=vehicle or "MH-12-INWARD",
         material=mat.name if mat else mat_name,
         supplier_or_customer=supplier,
@@ -203,8 +246,8 @@ def create_weighbridge_ticket():
         gross_time=data.get("grossTime", now_str),
         tare_time=data.get("tareTime", now_str),
         status="COMPLETED",
-        variance=float(data.get("variance", 0.0)),
-        challan_weight=float(data.get("challanWeight", net_w)),
+        variance=variance_kg,
+        challan_weight=challan_w,
         received_rs=float(data.get("receivedRs", 0.0)),
         wb_name=data.get("wbName", "Gate Scale #1"),
         driver_name=data.get("driverName", "Inward Driver"),
@@ -215,13 +258,22 @@ def create_weighbridge_ticket():
 
     # Immediately increment live material stock in database
     if ticket.type == "INWARD" and net_w > 0 and mat:
-        mat.current_stock += net_w
+        # If material unit is Litres (e.g. Admixture), convert kg to Litres using density
+        added_qty = net_w
+        density = getattr(mat, "density", 1.0) or 1.0
+        if mat.unit.lower() in ["l", "ltr", "litre"] and unit not in ["L", "LTR", "LITRE", "LITRES"]:
+            added_qty = round(net_w / density, 2)
+            note_str = f"Inward from {supplier} (Truck {vehicle}) · {net_w} kg ({added_qty} L @ density {density}) · Gate Pass {gate_pass}"
+        else:
+            note_str = f"Inward from {supplier} (Truck {vehicle}) · Gate Pass {gate_pass}"
+
+        mat.current_stock = round(mat.current_stock + added_qty, 2)
         tx = StockTransaction(
             material_id=mat.id,
             type="IN",
-            quantity=net_w,
+            quantity=added_qty,
             reference=ticket.ticket_number,
-            note=f"Inward from {supplier} (Truck {vehicle}) · Gate Pass {gate_pass}",
+            note=note_str,
             created_by="Store Gate Console"
         )
         db.session.add(tx)
@@ -434,7 +486,11 @@ def update_settings():
         db.session.add(settings)
 
     data = request.get_json() or {}
-    if "plantName" in data: settings.plant_name = data["plantName"]
+    if "plantName" in data:
+        settings.plant_name = data["plantName"]
+        plant = Plant.query.first()
+        if plant:
+            plant.name = data["plantName"]
     if "vendorSoftwareName" in data: settings.vendor_software_name = data["vendorSoftwareName"]
     if "vendorCompanyName" in data: settings.vendor_company_name = data["vendorCompanyName"]
     if "customerCare" in data: settings.customer_care = data["customerCare"]

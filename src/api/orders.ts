@@ -15,6 +15,9 @@ export interface CreateOrderInput {
   customerId: string;
   siteId: string;
   grade: Grade;
+  mixDesignId?: string;
+  slumpRequiredMm?: number;
+  rateReason?: string;
   quantity: number;
   ratePerCum: number;
   deliveryDate: string;
@@ -58,7 +61,7 @@ function decorate(po: any): OrderRow {
     notes: po.notes || "",
     status: po.status as PoStatus,
     tripCount: po.tripCount ?? 0,
-    createdBy: po.createdBy,
+    createdBy: po.createdByName || po.createdBy || "—",
     createdAt: po.createdAt || new Date().toISOString(),
     submittedAt: po.submittedAt,
     approvedAt: po.approvedAt,
@@ -122,6 +125,9 @@ export const ordersApi = {
         customerId: input.customerId,
         siteId: input.siteId,
         grade: input.grade,
+        mixDesignId: input.mixDesignId,
+        slumpRequiredMm: input.slumpRequiredMm,
+        rateReason: input.rateReason,
         quantity: input.quantity,
         ratePerCum: input.ratePerCum,
         deliveryDate: input.deliveryDate,

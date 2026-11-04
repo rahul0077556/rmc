@@ -3,7 +3,8 @@ from flask import Blueprint, request
 from flask_jwt_extended import jwt_required
 from backend.app.extensions import db
 from backend.app.models.models import (
-    Trip, BatchSheet, QcCheck, CubeSet, CubeTest, MaterialTest, User
+    Trip, BatchSheet, QcCheck, CubeSet, CubeTest, MaterialTest, User,
+    Material, StockTransaction
 )
 from backend.app.services.sequence_service import get_next_sequence
 from backend.app.services.state_machine import StateMachine, StateMachineError
@@ -41,11 +42,19 @@ def submit_qc_check():
     reject_action = data.get("rejectAction")  # CORRECT, REPLACE
     remarks = data.get("remarks", "")
 
-    trip = Trip.query.get(trip_id)
+    trip = Trip.query.filter((Trip.id == trip_id) | (Trip.trip_number == trip_id)).first()
     if not trip:
         return error_response(code="NOT_FOUND", message="Trip not found.", status_code=404)
 
-    batch_sheet = BatchSheet.query.get(batch_sheet_id) if batch_sheet_id else trip.batch_sheet
+    batch_sheet = (
+        BatchSheet.query.filter(
+            (BatchSheet.id == batch_sheet_id) | 
+            (BatchSheet.batch_number == batch_sheet_id) | 
+            (BatchSheet.docket_number == str(batch_sheet_id))
+        ).first()
+        if batch_sheet_id
+        else trip.batch_sheet
+    )
     if not batch_sheet:
         return error_response(code="NOT_FOUND", message="Batch sheet not found for this trip.", status_code=404)
 
@@ -80,6 +89,23 @@ def submit_qc_check():
         created_by=user_id
     )
     db.session.add(qc)
+
+    # QA adding admixture at site reduces stock
+    if admixture_qty > 0:
+        admix_mat = Material.query.filter(Material.name.ilike("%admixture%")).first()
+        if admix_mat:
+            density = getattr(admix_mat, "density", 1.15) or 1.15
+            deduct_qty = round(admixture_qty / density, 2) if admix_mat.unit.lower() in ["l", "ltr", "litre"] else round(admixture_qty, 2)
+            admix_mat.current_stock = round(admix_mat.current_stock - deduct_qty, 2)
+            tx = StockTransaction(
+                material_id=admix_mat.id,
+                type="OUT",
+                quantity=deduct_qty,
+                reference=f"QC-{trip.trip_number}",
+                note=f"QA slump correction at site (+{admixture_qty} kg / {deduct_qty} L {admixture_type or 'admixture'}) for Trip {trip.trip_number}",
+                created_by=inspector_name
+            )
+            db.session.add(tx)
 
     try:
         if decision == "APPROVE":
@@ -141,7 +167,7 @@ def create_cube_set():
     cube_count = int(data.get("cubeCount", 6))
     cast_date_str = data.get("castDate")
 
-    trip = Trip.query.get(trip_id)
+    trip = Trip.query.filter((Trip.id == trip_id) | (Trip.trip_number == trip_id)).first()
     if not trip:
         return error_response(code="NOT_FOUND", message="Trip not found.", status_code=404)
 

@@ -241,12 +241,15 @@ function ProductionPage() {
               {materials.data && (
                 <>
                   {shortfalls.length > 0 && (
-                    <div className="flex items-start gap-2 rounded-xl border border-destructive/35 bg-destructive/10 p-3 text-sm text-destructive">
-                      <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                      <span>
-                        Batching blocked — insufficient {shortfalls[0]!.material} by {num(shortfalls[0]!.shortfall)}{" "}
-                        {shortfalls[0]!.unit}.
-                      </span>
+                    <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">
+                      <AlertTriangle className="mt-0.5 size-4 text-amber-500 shrink-0" />
+                      <div className="space-y-0.5">
+                        <span className="font-bold">Stock Warning:</span>
+                        <p>
+                          Low stock for {shortfalls.map((s) => `${s.material} (need ${num(s.shortfall)} ${s.unit})`).join(", ")}.
+                          Per plant policy, physically batched loads are never blocked; consumption will be recorded to the inventory ledger.
+                        </p>
+                      </div>
                     </div>
                   )}
 

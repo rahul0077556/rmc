@@ -90,6 +90,8 @@ function StorePage() {
   const dpr = useQuery({ queryKey: ["dpr-reports"], queryFn: () => storeApi.dprReports().then((r) => r.data) });
   const expenses = useQuery({ queryKey: ["store-expenses"], queryFn: () => storeApi.expenses().then((r) => r.data) });
   const attendance = useQuery({ queryKey: ["store-attendance"], queryFn: () => storeApi.attendance().then((r) => r.data) });
+  const settings = useQuery({ queryKey: ["weighbridge-settings"], queryFn: () => storeApi.settings().then((r) => r.data) });
+  const plantName = settings.data?.plantName || user?.plant || "ROXXCON RMC NAGPUR";
 
   // Connected DPR Query (PO + Batches + Material Consumption)
   const [dprDate, setDprDate] = useState(new Date().toISOString().slice(0, 10));
@@ -278,6 +280,21 @@ function StorePage() {
     return inventory.data.reduce((acc: number, item: InventoryItem) => acc + (item.totalConsumed || 0), 0);
   }, [inventory.data]);
 
+  // Count distinct batch sheet runs from reference
+  const uniqueBatchRunsCount = useMemo(() => {
+    if (!transactions.data) return 0;
+    const outRefs = transactions.data
+      .filter((t: StockTransactionItem) => t.type === "OUT")
+      .map((t: StockTransactionItem) => t.reference);
+    return new Set(outRefs).size;
+  }, [transactions.data]);
+
+  // Negative Materials needing reconciliation
+  const negativeMaterials = useMemo(() => {
+    if (!inventory.data) return [];
+    return inventory.data.filter((i: InventoryItem) => (i.currentStock < 0) || i.status === "NEEDS_RECONCILIATION");
+  }, [inventory.data]);
+
   // TM Fleet Mileage & Fuel Metrics
   const tmMetrics = useMemo(() => {
     const logs = tmLogsQuery.data || [];
@@ -310,16 +327,25 @@ function StorePage() {
       header: "Current Available",
       align: "right",
       cell: (r) => {
+        const isNegative = r.currentStock < 0;
         const isCritical = r.currentStock <= r.reorderLevel * 0.5;
         const isLow = r.currentStock <= r.reorderLevel;
+        const formattedStock = Math.abs(r.currentStock) < 0.001 ? 0 : r.currentStock;
         return (
           <div className="text-right">
-            <span className={cn("tabular-nums font-bold text-sm", isCritical ? "text-destructive" : isLow ? "text-amber-500" : "text-emerald-500")}>
-              {num(r.currentStock)} {r.unit}
+            <span
+              className={cn(
+                "tabular-nums font-bold text-sm",
+                isNegative ? "text-destructive font-mono" : isCritical ? "text-destructive" : isLow ? "text-amber-500" : "text-emerald-500"
+              )}
+            >
+              {num(formattedStock)} {r.unit}
             </span>
-            <span className="block text-[10px] text-muted-foreground">
-              {((r.currentStock / r.capacity) * 100).toFixed(0)}% Capacity
-            </span>
+            {r.capacity && r.capacity > 0 && r.currentStock >= 0 ? (
+              <span className="block text-[10px] text-muted-foreground">
+                {((r.currentStock / r.capacity) * 100).toFixed(0)}% Capacity
+              </span>
+            ) : null}
           </div>
         );
       },
@@ -358,6 +384,14 @@ function StorePage() {
       header: "Status",
       align: "center",
       cell: (r) => {
+        if (r.currentStock < 0 || r.status === "NEEDS_RECONCILIATION") {
+          return (
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase border bg-destructive/15 text-destructive border-destructive/40 flex items-center justify-center gap-1 animate-pulse">
+              <AlertTriangle className="size-3" />
+              Needs Reconciliation
+            </span>
+          );
+        }
         const status = r.status || (r.currentStock <= r.reorderLevel ? "LOW" : "HEALTHY");
         return (
           <span
@@ -382,12 +416,17 @@ function StorePage() {
       cell: (r) => (
         <Button
           size="sm"
-          variant="outline"
-          className="h-7 text-xs cursor-pointer border-primary/30 text-primary hover:bg-primary/10"
+          variant={r.currentStock < 0 ? "destructive" : "outline"}
+          className={cn(
+            "h-7 text-xs cursor-pointer",
+            r.currentStock < 0
+              ? "font-semibold shadow-sm"
+              : "border-primary/30 text-primary hover:bg-primary/10"
+          )}
           onClick={() => handleOpenInwardFor(r.material, r.siloName || "Silo")}
         >
           <Plus className="size-3 mr-1" />
-          Add Inward
+          {r.currentStock < 0 ? "Reconcile Inward" : "Add Inward"}
         </Button>
       ),
     },
@@ -637,7 +676,7 @@ function StorePage() {
         <div>
           <PageHeader
             title="Store & Inventory Management"
-            subtitle="Sai ReadyMix Concrete · Live Silo Stock, Inward Gate Receipts, Batching Deductions & Material Flow"
+            subtitle={`${plantName} · Live Silo Stock, Inward Gate Receipts, Batching Deductions & Material Flow`}
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -657,13 +696,50 @@ function StorePage() {
         </div>
       </div>
 
+      {/* Prominent Negative Stock Reconciliation Alert */}
+      {negativeMaterials.length > 0 && (
+        <div className="bg-destructive/15 border-2 border-destructive/50 text-foreground p-4 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg animate-in fade-in duration-300">
+          <div className="flex items-start sm:items-center gap-3">
+            <span className="flex size-9 items-center justify-center rounded-lg bg-destructive/20 text-destructive shrink-0">
+              <AlertTriangle className="size-5 animate-bounce" />
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="font-bold text-sm text-destructive">
+                  Negative Stock Detected ({negativeMaterials.length} Material{negativeMaterials.length > 1 ? "s" : ""})
+                </h4>
+                <span className="text-[10px] bg-destructive/20 text-destructive border border-destructive/40 font-mono font-bold px-2 py-0.5 rounded-full uppercase">
+                  Action Required
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Physical concrete has been batched ahead of gate inward entries for:{" "}
+                <strong className="text-destructive font-semibold">
+                  {negativeMaterials.map((m) => `${m.material} (${num(m.currentStock)} ${m.unit})`).join(", ")}
+                </strong>
+                . Record gate inward consignments to reconcile inventory balances.
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="destructive"
+            className="font-semibold cursor-pointer shrink-0 shadow-md"
+            onClick={() => handleOpenInwardFor(negativeMaterials[0].material, negativeMaterials[0].siloName || "Silo")}
+          >
+            <Plus className="mr-1.5 size-4" />
+            Reconcile Inward Consignment
+          </Button>
+        </div>
+      )}
+
       {/* Dynamic KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          label="Total Available Stock"
+          label="Total Available Solids"
           value={`${(totalStockKg / 1000).toFixed(1)} MT`}
           icon={Box}
-          comparison="across 8 plant silos & bays"
+          comparison="raw aggregates & cement stock"
         />
         <KpiCard
           label="Total Inward Received"
@@ -675,13 +751,13 @@ function StorePage() {
           label="Total Batched & Consumed"
           value={`-${(totalConsumedKg / 1000).toFixed(1)} MT`}
           icon={ArrowUpRight}
-          comparison={`${consumptionLogs.length} production batch sheet runs`}
+          comparison={`${uniqueBatchRunsCount} production batch run${uniqueBatchRunsCount === 1 ? "" : "s"}`}
         />
         <KpiCard
           label="Today's Production"
-          value={`${dpr.data?.[0]?.totalCum ?? 24} m³`}
+          value={`${num(dprSheetQuery.data?.totalBatchedCum ?? 0)} m³`}
           icon={Layers}
-          comparison={`${dpr.data?.[0]?.totalBatches ?? 3} TM trips mixed`}
+          comparison={`${dprSheetQuery.data?.totalTripsCount ?? 0} TM trips mixed`}
         />
       </div>
 
@@ -1260,34 +1336,47 @@ function StorePage() {
               </span>
 
               {weightMode === "tare_gross" ? (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Gross Weight (Loaded Truck)</Label>
-                    <Input
-                      type="number"
-                      placeholder="e.g. 42000"
-                      value={grossWeight || ""}
-                      onChange={(e) => setGrossWeight(Number(e.target.value))}
-                      className="h-8 text-xs font-mono text-right"
-                    />
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Gross Weight (Loaded Truck)</Label>
+                      <Input
+                        type="number"
+                        placeholder="e.g. 42000"
+                        value={grossWeight || ""}
+                        onChange={(e) => setGrossWeight(Number(e.target.value))}
+                        className="h-8 text-xs font-mono text-right"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Tare Weight (Empty Truck)</Label>
+                      <Input
+                        type="number"
+                        placeholder="e.g. 12500"
+                        value={tareWeight || ""}
+                        onChange={(e) => setTareWeight(Number(e.target.value))}
+                        className="h-8 text-xs font-mono text-right"
+                      />
+                    </div>
+                    <div className="space-y-1 bg-background/80 p-2 rounded border border-border text-right">
+                      <Label className="text-[11px] text-muted-foreground block">Net Material Added</Label>
+                      <span className="font-mono font-bold text-base text-emerald-400">
+                        +{num(calculatedNetWeight)} kg
+                      </span>
+                      {selectedMaterialName.toLowerCase().includes("admixture") && calculatedNetWeight > 0 && (
+                        <span className="block text-[10px] text-cyan-400 font-mono">
+                          = {(calculatedNetWeight / 1.15).toFixed(1)} L (@ 1.15 kg/L)
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Tare Weight (Empty Truck)</Label>
-                    <Input
-                      type="number"
-                      placeholder="e.g. 12500"
-                      value={tareWeight || ""}
-                      onChange={(e) => setTareWeight(Number(e.target.value))}
-                      className="h-8 text-xs font-mono text-right"
-                    />
-                  </div>
-                  <div className="space-y-1 bg-background/80 p-2 rounded border border-border text-right">
-                    <Label className="text-[11px] text-muted-foreground block">Net Material Added</Label>
-                    <span className="font-mono font-bold text-base text-emerald-400">
-                      +{num(calculatedNetWeight)} kg
-                    </span>
-                  </div>
-                </div>
+                  {grossWeight > 0 && tareWeight > 0 && tareWeight >= grossWeight && (
+                    <div className="p-2 rounded bg-destructive/15 border border-destructive/40 text-destructive text-xs flex items-center gap-1.5">
+                      <AlertTriangle className="size-3.5 shrink-0" />
+                      <span>Tare weight ({tareWeight} kg) cannot be greater than or equal to Gross weight ({grossWeight} kg) for inward material.</span>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   <div className="space-y-1">
@@ -1339,7 +1428,7 @@ function StorePage() {
             </Button>
             <Button
               size="sm"
-              disabled={saveInwardMutation.isPending || calculatedNetWeight <= 0 || !supplierName.trim() || !vehicleNo.trim()}
+              disabled={saveInwardMutation.isPending || calculatedNetWeight <= 0 || !supplierName.trim() || !vehicleNo.trim() || (weightMode === "tare_gross" && grossWeight > 0 && tareWeight > 0 && tareWeight >= grossWeight)}
               onClick={() => saveInwardMutation.mutate()}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold cursor-pointer"
             >
@@ -1615,7 +1704,7 @@ function StorePage() {
           <DialogContent className="max-w-md font-mono text-xs">
             <DialogHeader>
               <DialogTitle className="text-center font-bold text-sm tracking-wider uppercase border-b pb-2">
-                SAI READYMIX CONCRETE · MULKHED
+                {plantName}
               </DialogTitle>
               <DialogDescription className="text-center text-[10px]">
                 OFFICIAL INWARD WEIGHMENT GATE PASS SLIP
