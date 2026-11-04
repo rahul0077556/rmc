@@ -38,7 +38,10 @@ def get_inventory():
         total_out = db.session.query(db.func.sum(StockTransaction.quantity)).filter_by(material_id=m.id, type="OUT").scalar() or 0.0
 
         status = "HEALTHY"
-        if m.current_stock < 0:
+        is_water = "water" in m.name.lower()
+        if is_water:
+            status = "HEALTHY"
+        elif m.current_stock < 0:
             status = "NEEDS_RECONCILIATION"
         elif m.current_stock <= (m.reorder_level * 0.5):
             status = "CRITICAL"

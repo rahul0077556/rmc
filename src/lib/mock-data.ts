@@ -32,7 +32,7 @@ const rand = makeRandom(20260928);
 const pick = <T,>(items: readonly T[]): T => items[Math.floor(rand() * items.length)]!;
 const between = (min: number, max: number) => min + Math.floor(rand() * (max - min + 1));
 
-export const PLANT_NAME = "ABC Ready Mix Concrete Plant";
+export const PLANT_NAME = "ROXXCON RMC NAGPUR";
 export const GRADES: Grade[] = ["M15", "M20", "M25", "M30", "M35", "M40"];
 
 export const GRADE_RATE: Record<Grade, number> = {

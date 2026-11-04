@@ -574,6 +574,14 @@ class BatchSheet(TimestampMixin, db.Model):
             if self.ggbs_kg:
                 mat_list.append({"material": "GGBS (Slag)", "recipeTarget": round(self.quantity_cum * 50.0, 1), "plantSet": round(self.quantity_cum * 50.0, 1), "theoretical": round(self.quantity_cum * 50.0, 1), "actual": round(self.ggbs_kg, 1), "variance": 0.0, "unit": "kg"})
 
+        operator_name = "Auto Batcher"
+        if self.created_by:
+            u = User.query.get(self.created_by)
+            if u:
+                operator_name = u.name
+            else:
+                operator_name = self.created_by
+
         return {
             "id": self.id,
             "batchNumber": self.batch_number,
@@ -583,7 +591,7 @@ class BatchSheet(TimestampMixin, db.Model):
             "grade": self.grade.code if self.grade else None,
             "quantity": self.quantity_cum,
             "batchTime": self.batched_at.isoformat(),
-            "operator": self.created_by or "Auto AJAX Batcher",
+            "operator": operator_name,
             "qcStatus": self.qc_status,
             "qcSignedBy": self.qc_signed_by,
             "qcSignedAt": self.qc_signed_at.isoformat() if self.qc_signed_at else None,

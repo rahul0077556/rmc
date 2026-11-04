@@ -289,10 +289,14 @@ function StorePage() {
     return new Set(outRefs).size;
   }, [transactions.data]);
 
-  // Negative Materials needing reconciliation
+  // Negative Materials needing reconciliation (excluding utility water)
   const negativeMaterials = useMemo(() => {
     if (!inventory.data) return [];
-    return inventory.data.filter((i: InventoryItem) => (i.currentStock < 0) || i.status === "NEEDS_RECONCILIATION");
+    return inventory.data.filter(
+      (i: InventoryItem) =>
+        (i.currentStock < 0 || i.status === "NEEDS_RECONCILIATION") &&
+        !i.material.toLowerCase().includes("water"),
+    );
   }, [inventory.data]);
 
   // TM Fleet Mileage & Fuel Metrics
