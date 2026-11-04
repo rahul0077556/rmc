@@ -22,7 +22,7 @@ production_bp = Blueprint("production", __name__, url_prefix="/api/v1")
 def get_production_queue():
     trips = (
         Trip.query
-        .filter(Trip.status.in_(["SENT_TO_PRODUCTION", "BATCHING", "LOADED", "QC_PENDING"]))
+        .filter(Trip.status.in_(["PLANNED", "SENT_TO_PRODUCTION", "BATCHING", "LOADED", "QC_PENDING"]))
         .order_by(Trip.planned_datetime.asc())
         .all()
     )
@@ -77,6 +77,14 @@ def start_batching(id):
     if not trip:
         return error_response(code="NOT_FOUND", message="Trip not found.", status_code=404)
 
+    # If trip already has a batch sheet generated, return it
+    if trip.batch_sheet:
+        return success_response(data={
+            "trip": trip.to_dict(),
+            "batchSheet": trip.batch_sheet.to_dict(),
+            "alreadyBatched": True
+        })
+
     grade = trip.po.grade
     if not grade or not grade.mix_design:
         return error_response(code="MIX_DESIGN_MISSING", message="Mix design missing.", status_code=400)
@@ -94,6 +102,8 @@ def start_batching(id):
 
     try:
         user_id = get_current_user_id()
+        if trip.status == "PLANNED":
+            StateMachine.transition_trip(trip, "SENT_TO_PRODUCTION", user_id=user_id)
         if trip.status == "SENT_TO_PRODUCTION":
             StateMachine.transition_trip(trip, "BATCHING", user_id=user_id)
 
@@ -476,6 +486,7 @@ def get_dpr_sheet():
         if trip_date == date_str or (not trip_date and t.created_at.strftime("%Y-%m-%d") == date_str):
             qty = t.delivered_quantity or t.quantity_cum or 0.0
             total_actual_cum += qty
+            batch_iso = t.batch_sheet.batched_at.isoformat() if (t.batch_sheet and t.batch_sheet.batched_at) else (t.dispatched_at.isoformat() if t.dispatched_at else (t.planned_datetime.isoformat() if t.planned_datetime else t.created_at.isoformat()))
             actual_trips.append({
                 "id": t.id,
                 "tripNumber": t.trip_number,
@@ -488,8 +499,9 @@ def get_dpr_sheet():
                 "driverName": t.driver.name if t.driver else "-",
                 "quantity": qty,
                 "status": t.status,
-                "dispatchedAt": t.dispatched_at.strftime("%H:%M") if t.dispatched_at else "-",
-                "deliveredAt": t.delivered_at.strftime("%H:%M") if t.delivered_at else "-"
+                "dispatchedAt": batch_iso,
+                "batchedAt": batch_iso,
+                "deliveredAt": t.delivered_at.isoformat() if t.delivered_at else None
             })
 
     # 3. Material Consumption on this day

@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, Factory, Layers, PackageCheck, Timer, Upload, Printer, Scale, FileText } from "lucide-react";
+import { AlertTriangle, Factory, Layers, PackageCheck, Timer, Upload, Printer, Scale, FileText, CheckCircle2 } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { KpiCard } from "@/components/app/kpi-card";
 import { ChartCard } from "@/components/app/chart-card";
@@ -56,8 +56,11 @@ function ProductionPage() {
   const start = useMutation({
     mutationFn: (id: string) => productionApi.startBatching(id, user?.name ?? "Production"),
     onSuccess: (res) => {
-      toast.success("Batching started");
-      setActive(res.data);
+      toast.success("Batching started in plant");
+      const updatedTrip = (res.data as any)?.trip || res.data;
+      if (updatedTrip) {
+        setActive(updatedTrip);
+      }
       void qc.invalidateQueries({ queryKey: ["production-queue"] });
     },
     onError: (err: any) => {
@@ -122,21 +125,25 @@ function ProductionPage() {
       align: "right",
       cell: (r) => (
         <div className="flex justify-end gap-1.5">
-          {r.status === "PLANNED" && !readOnly && (
+          {r.batchSheetId ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1 border-primary/40 text-primary hover:bg-primary/10 cursor-pointer text-xs"
+              onClick={() => void navigate({ to: "/batch-sheet/$id", params: { id: r.batchSheetId! } })}
+            >
+              <FileText className="size-3.5" />
+              Batch sheet
+            </Button>
+          ) : r.status === "PLANNED" && !readOnly ? (
             <Button size="sm" variant="outline" onClick={() => send.mutate(r.id)}>
               Accept
             </Button>
-          )}
-          {["SENT_TO_PRODUCTION", "BATCHING", "LOADED"].includes(r.status) && !readOnly && (
+          ) : ["SENT_TO_PRODUCTION", "BATCHING"].includes(r.status) && !readOnly ? (
             <Button size="sm" onClick={() => setActive(r)}>
-              Open
+              {r.status === "BATCHING" ? "Continue batch" : "Start batch"}
             </Button>
-          )}
-          {r.status === "QC_PENDING" && r.batchSheetId && (
-            <Button size="sm" variant="ghost" onClick={() => void navigate({ to: "/batch-sheet/$id", params: { id: r.batchSheetId! } })}>
-              Batch sheet
-            </Button>
-          )}
+          ) : null}
         </div>
       ),
     },
@@ -205,48 +212,74 @@ function ProductionPage() {
             </DialogDescription>
           </DialogHeader>
 
-          {materials.isLoading && <LoadingState rows={3} />}
-
-          {materials.data && (
+          {active?.batchSheetId ? (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-5 text-center space-y-2">
+              <CheckCircle2 className="size-8 text-emerald-500 mx-auto" />
+              <div className="text-sm font-semibold text-emerald-400">
+                Batch Sheet Generated
+              </div>
+              <p className="text-xs text-muted-foreground">
+                This trip has already completed plant batching. All materials were deducted from silo inventory.
+              </p>
+            </div>
+          ) : (
             <>
-              {shortfalls.length > 0 && (
-                <div className="flex items-start gap-2 rounded-xl border border-destructive/35 bg-destructive/10 p-3 text-sm text-destructive">
-                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                  <span>
-                    Batching blocked — insufficient {shortfalls[0]!.material} by {num(shortfalls[0]!.shortfall)}{" "}
-                    {shortfalls[0]!.unit}.
-                  </span>
+              {active?.status === "BATCHING" && (
+                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3.5 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <Factory className="size-4 text-amber-500 animate-pulse" />
+                    <span className="font-semibold text-foreground">
+                      Auto AJAX Batching in progress — Scale weighments active
+                    </span>
+                  </div>
+                  <span className="font-mono text-emerald-400 font-bold">Ready to Load</span>
                 </div>
               )}
 
-              <ChartCard title="Material check" description="Mix design requirement against plant stock" bodyClassName="p-0">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                      <th className="border-b border-border px-4 py-2 text-left">Material</th>
-                      <th className="border-b border-border px-4 py-2 text-right">Required</th>
-                      <th className="border-b border-border px-4 py-2 text-right">Available</th>
-                      <th className="border-b border-border px-4 py-2 text-center">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {materials.data.map((m) => (
-                      <tr key={m.material} className="border-b border-border/60 last:border-0">
-                        <td className="px-4 py-2">{m.material}</td>
-                        <td className="px-4 py-2 text-right tabular-nums">
-                          {num(m.required)} {m.unit}
-                        </td>
-                        <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
-                          {num(m.available)} {m.unit}
-                        </td>
-                        <td className="px-4 py-2 text-center">
-                          <StatusBadge status={m.sufficient ? "AVAILABLE" : "INSUFFICIENT"} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </ChartCard>
+              {materials.isLoading && <LoadingState rows={3} />}
+
+              {materials.data && (
+                <>
+                  {shortfalls.length > 0 && (
+                    <div className="flex items-start gap-2 rounded-xl border border-destructive/35 bg-destructive/10 p-3 text-sm text-destructive">
+                      <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                      <span>
+                        Batching blocked — insufficient {shortfalls[0]!.material} by {num(shortfalls[0]!.shortfall)}{" "}
+                        {shortfalls[0]!.unit}.
+                      </span>
+                    </div>
+                  )}
+
+                  <ChartCard title="Material check" description="Mix design requirement against plant stock" bodyClassName="p-0">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                          <th className="border-b border-border px-4 py-2 text-left">Material</th>
+                          <th className="border-b border-border px-4 py-2 text-right">Required</th>
+                          <th className="border-b border-border px-4 py-2 text-right">Available</th>
+                          <th className="border-b border-border px-4 py-2 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {materials.data.map((m) => (
+                          <tr key={m.material} className="border-b border-border/60 last:border-0">
+                            <td className="px-4 py-2">{m.material}</td>
+                            <td className="px-4 py-2 text-right tabular-nums">
+                              {num(m.required)} {m.unit}
+                            </td>
+                            <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
+                              {num(m.available)} {m.unit}
+                            </td>
+                            <td className="px-4 py-2 text-center">
+                              <StatusBadge status={m.sufficient ? "AVAILABLE" : "INSUFFICIENT"} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </ChartCard>
+                </>
+              )}
             </>
           )}
 
@@ -254,14 +287,30 @@ function ProductionPage() {
             <Button variant="outline" onClick={() => setActive(null)}>
               Close
             </Button>
-            {active?.status !== "BATCHING" && (
-              <Button disabled={shortfalls.length > 0 || !active || start.isPending} onClick={() => active && start.mutate(active.id)}>
-                {start.isPending ? "Starting batch..." : "Start batching"}
+            {active?.batchSheetId ? (
+              <Button
+                onClick={() => {
+                  const bId = active.batchSheetId!;
+                  setActive(null);
+                  void navigate({ to: "/batch-sheet/$id", params: { id: bId } });
+                }}
+              >
+                View Batch Sheet
               </Button>
-            )}
-            {active?.status === "BATCHING" && (
-              <Button onClick={() => active && confirm.mutate(active.id)} disabled={confirm.isPending}>
-                {confirm.isPending ? "Generating Sheet..." : "Confirm loaded quantity"}
+            ) : active?.status === "BATCHING" ? (
+              <Button
+                onClick={() => active && confirm.mutate(active.id)}
+                disabled={confirm.isPending}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                {confirm.isPending ? "Generating Sheet..." : "Confirm loaded quantity & Generate Sheet"}
+              </Button>
+            ) : (
+              <Button
+                disabled={shortfalls.length > 0 || !active || start.isPending}
+                onClick={() => active && start.mutate(active.id)}
+              >
+                {start.isPending ? "Starting batch..." : "Start batching"}
               </Button>
             )}
           </DialogFooter>

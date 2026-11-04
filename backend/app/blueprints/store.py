@@ -139,7 +139,7 @@ def list_weighbridge_tickets():
 @roles_required("store", "owner", "dispatcher", "production")
 def create_weighbridge_ticket():
     data = request.get_json() or {}
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now_str = datetime.now(timezone.utc).isoformat()
 
     # Generate sequential ticket number if not provided
     ticket_num = data.get("ticketNumber")

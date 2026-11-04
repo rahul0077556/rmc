@@ -393,6 +393,7 @@ class Trip(TimestampMixin, db.Model):
             "totalAmount": total_amount,
             "tmId": self.truck_id,
             "tmNumber": self.truck.tm_number if self.truck else None,
+            "tmCode": self.truck.tm_number if self.truck else None,
             "tmCapacity": self.truck.capacity_cum if self.truck else None,
             "driverId": self.driver_id,
             "driverName": self.driver.name if self.driver else None,

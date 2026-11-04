@@ -13,12 +13,38 @@ export const num = (value: number): string => new Intl.NumberFormat("en-IN").for
 
 export const cum = (value: number): string => `${num(Math.round(value * 10) / 10)} cum`;
 
-export const dt = (value?: string): string => (value ? format(parseISO(value), "dd MMM, HH:mm") : "—");
+export const dt = (value?: string): string => {
+  if (!value || value === "-" || value === "—") return "—";
+  try {
+    const parsed = parseISO(value);
+    if (isNaN(parsed.getTime())) return value;
+    return format(parsed, "dd MMM, HH:mm");
+  } catch {
+    return value || "—";
+  }
+};
 
-export const day = (value?: string): string =>
-  value ? format(value.length > 10 ? parseISO(value) : new Date(`${value}T00:00:00`), "dd MMM yyyy") : "—";
+export const day = (value?: string): string => {
+  if (!value || value === "-" || value === "—") return "—";
+  try {
+    const parsed = value.length > 10 ? parseISO(value) : new Date(`${value}T00:00:00`);
+    if (isNaN(parsed.getTime())) return value;
+    return format(parsed, "dd MMM yyyy");
+  } catch {
+    return value || "—";
+  }
+};
 
-export const timeOnly = (value?: string): string => (value ? format(parseISO(value), "HH:mm") : "—");
+export const timeOnly = (value?: string): string => {
+  if (!value || value === "-" || value === "—") return "—";
+  try {
+    const parsed = parseISO(value);
+    if (isNaN(parsed.getTime())) return value;
+    return format(parsed, "HH:mm");
+  } catch {
+    return value || "—";
+  }
+};
 
 export const titleCase = (value: string): string =>
   value
