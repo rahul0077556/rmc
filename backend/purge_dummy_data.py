@@ -29,7 +29,7 @@ from backend.app.models.models import (
     WeighbridgeTicket, StockTransaction, Material, Truck, Driver,
     DprRecord, ExpenseRecord, AttendanceRecord, PayrollRun, MaterialTest,
     AuditLog, NotificationLog, Sequence, User, TransitMixerPayload, TmTripLog,
-    Grade, MixDesign, Plant
+    Grade, MixDesign, Plant, WeighbridgeSettings
 )
 
 def execute_purge():
@@ -109,10 +109,71 @@ def execute_purge():
             mat.reorder_level = m_def["reorder_level"]
 
     # 9. Reset Trucks & Drivers to AVAILABLE
+    standard_trucks = [
+        {"tm_number": "MH40DC4288", "capacity_cum": 8.0},
+        {"tm_number": "MH40DC3964", "capacity_cum": 8.0},
+        {"tm_number": "MH-12-RN-1001", "capacity_cum": 8.0},
+        {"tm_number": "MH-12-RN-1002", "capacity_cum": 8.0},
+        {"tm_number": "MH-12-RN-1003", "capacity_cum": 8.0},
+        {"tm_number": "MH-12-RN-1004", "capacity_cum": 8.0},
+        {"tm_number": "MH-12-RN-1005", "capacity_cum": 8.0},
+    ]
+    for t_def in standard_trucks:
+        tr = Truck.query.filter_by(tm_number=t_def["tm_number"]).first()
+        if not tr:
+            tr = Truck(tm_number=t_def["tm_number"], capacity_cum=t_def["capacity_cum"], status="AVAILABLE")
+            db.session.add(tr)
+        else:
+            tr.status = "AVAILABLE"
+
     for truck in Truck.query.all():
         truck.status = "AVAILABLE"
+
+    standard_drivers = [
+        {"name": "VIKASH", "phone": "+91 98220 77889"},
+        {"name": "Sachin More", "phone": "+91 98220 11221"},
+        {"name": "Ganesh Kadam", "phone": "+91 98220 11222"},
+        {"name": "Ramesh Jadhav", "phone": "+91 98220 11223"},
+        {"name": "Vijay Pawar", "phone": "+91 98220 11224"},
+        {"name": "Sunil Patil", "phone": "+91 98220 11225"},
+    ]
+    for d_def in standard_drivers:
+        dr = Driver.query.filter_by(name=d_def["name"]).first()
+        if not dr:
+            dr = Driver(name=d_def["name"], phone=d_def["phone"], license_no=f"MH40-{d_def['name'][:3].upper()}-9988", status="AVAILABLE")
+            db.session.add(dr)
+        else:
+            dr.status = "AVAILABLE"
+
     for driver in Driver.query.all():
         driver.status = "AVAILABLE"
+
+    # Plant Profile & Weighbridge Settings
+    plant = Plant.query.first()
+    if not plant:
+        plant = Plant(
+            name="ROXXCON RMC NAGPUR",
+            address="Plot 18, MIDC Hingna Industrial Area, Nagpur, Maharashtra 440016",
+            gstin="27AAACR9988D1Z2",
+            phone="+91 712 288 9900",
+            email="dispatch@roxxcon.in"
+        )
+        db.session.add(plant)
+    else:
+        plant.name = "ROXXCON RMC NAGPUR"
+        plant.address = "Plot 18, MIDC Hingna Industrial Area, Nagpur, Maharashtra 440016"
+        plant.gstin = "27AAACR9988D1Z2"
+
+    wb_set = WeighbridgeSettings.query.first()
+    if not wb_set:
+        wb_set = WeighbridgeSettings(
+            plant_name="ROXXCON RMC NAGPUR",
+            weighbridge_name="Weighbridge #1",
+            operator_name="Ganesh S (Gate Weighbridge)"
+        )
+        db.session.add(wb_set)
+    else:
+        wb_set.plant_name = "ROXXCON RMC NAGPUR"
 
     # 10. Ensure Concrete Grades (M15 - M40) exist
     standard_grades = [

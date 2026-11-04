@@ -43,6 +43,7 @@ function ProductionPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [active, setActive] = useState<TripRow | null>(null);
+  const [selectedTripForUpload, setSelectedTripForUpload] = useState<TripRow | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [consumptionOpen, setConsumptionOpen] = useState(false);
 
@@ -124,7 +125,7 @@ function ProductionPage() {
       header: "Action",
       align: "right",
       cell: (r) => (
-        <div className="flex justify-end gap-1.5">
+        <div className="flex items-center justify-end gap-1.5 flex-wrap">
           {r.batchSheetId ? (
             <Button
               size="sm"
@@ -135,15 +136,35 @@ function ProductionPage() {
               <FileText className="size-3.5" />
               Batch sheet
             </Button>
-          ) : r.status === "PLANNED" && !readOnly ? (
-            <Button size="sm" variant="outline" onClick={() => send.mutate(r.id)}>
-              Accept
-            </Button>
-          ) : ["SENT_TO_PRODUCTION", "BATCHING"].includes(r.status) && !readOnly ? (
-            <Button size="sm" onClick={() => setActive(r)}>
-              {r.status === "BATCHING" ? "Continue batch" : "Start batch"}
-            </Button>
-          ) : null}
+          ) : (
+            <>
+              {r.status === "PLANNED" && !readOnly ? (
+                <Button size="sm" variant="outline" onClick={() => send.mutate(r.id)}>
+                  Accept
+                </Button>
+              ) : ["SENT_TO_PRODUCTION", "BATCHING"].includes(r.status) && !readOnly ? (
+                <Button size="sm" onClick={() => setActive(r)}>
+                  {r.status === "BATCHING" ? "Continue batch" : "Start batch"}
+                </Button>
+              ) : null}
+
+              {!readOnly && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1 border-amber-500/40 text-amber-500 hover:bg-amber-500/10 cursor-pointer text-xs font-medium"
+                  onClick={() => {
+                    setSelectedTripForUpload(r);
+                    setUploadOpen(true);
+                  }}
+                  title={`Upload printed plant batch sheet for ${r.tripNumber}`}
+                >
+                  <Upload className="size-3.5" />
+                  Upload Batch Sheet
+                </Button>
+              )}
+            </>
+          )}
         </div>
       ),
     },
@@ -168,7 +189,10 @@ function ProductionPage() {
             {!readOnly && (
               <Button
                 size="sm"
-                onClick={() => setUploadOpen(true)}
+                onClick={() => {
+                  setSelectedTripForUpload(null);
+                  setUploadOpen(true);
+                }}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold gap-1.5 cursor-pointer"
               >
                 <Upload className="size-3.5" />
@@ -286,36 +310,53 @@ function ProductionPage() {
             </>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="flex items-center justify-between sm:justify-between w-full">
             <Button variant="outline" onClick={() => setActive(null)}>
               Close
             </Button>
-            {active?.batchSheetId ? (
-              <Button
-                onClick={() => {
-                  const bId = active.batchSheetId!;
-                  setActive(null);
-                  void navigate({ to: "/batch-sheet/$id", params: { id: bId } });
-                }}
-              >
-                View Batch Sheet
-              </Button>
-            ) : active?.status === "BATCHING" ? (
-              <Button
-                onClick={() => active && confirm.mutate(active.id)}
-                disabled={confirm.isPending}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                {confirm.isPending ? "Generating Sheet..." : "Confirm loaded quantity & Generate Sheet"}
-              </Button>
-            ) : (
-              <Button
-                disabled={shortfalls.length > 0 || !active || start.isPending}
-                onClick={() => active && start.mutate(active.id)}
-              >
-                {start.isPending ? "Starting batch..." : "Start batching"}
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {!readOnly && !active?.batchSheetId && (
+                <Button
+                  variant="outline"
+                  className="gap-1.5 border-amber-500/40 text-amber-500 hover:bg-amber-500/10 cursor-pointer"
+                  onClick={() => {
+                    const currentTrip = active;
+                    setActive(null);
+                    setSelectedTripForUpload(currentTrip);
+                    setUploadOpen(true);
+                  }}
+                >
+                  <Upload className="size-4" />
+                  Upload Batch Sheet
+                </Button>
+              )}
+              {active?.batchSheetId ? (
+                <Button
+                  onClick={() => {
+                    const bId = active.batchSheetId!;
+                    setActive(null);
+                    void navigate({ to: "/batch-sheet/$id", params: { id: bId } });
+                  }}
+                >
+                  View Batch Sheet
+                </Button>
+              ) : active?.status === "BATCHING" ? (
+                <Button
+                  onClick={() => active && confirm.mutate(active.id)}
+                  disabled={confirm.isPending}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  {confirm.isPending ? "Generating Sheet..." : "Confirm loaded quantity & Generate Sheet"}
+                </Button>
+              ) : (
+                <Button
+                  disabled={!active || start.isPending}
+                  onClick={() => active && start.mutate(active.id)}
+                >
+                  {start.isPending ? "Starting batch..." : "Start batching"}
+                </Button>
+              )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -323,8 +364,15 @@ function ProductionPage() {
       {/* Upload SCADA Batch Sheet Modal */}
       <UploadBatchSheetDialog
         open={uploadOpen}
-        onOpenChange={setUploadOpen}
-        onSuccess={() => void qc.invalidateQueries({ queryKey: ["production-queue"] })}
+        onOpenChange={(open) => {
+          setUploadOpen(open);
+          if (!open) setSelectedTripForUpload(null);
+        }}
+        trip={selectedTripForUpload}
+        onSuccess={() => {
+          setSelectedTripForUpload(null);
+          void qc.invalidateQueries({ queryKey: ["production-queue"] });
+        }}
       />
 
       {/* Daily Consumption & Batch Print Modal */}

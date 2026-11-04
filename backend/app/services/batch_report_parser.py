@@ -334,7 +334,8 @@ try? handler.perform([request])
         # 4. Resolve Trip: check explicit tripId, or matching queued trip for this truck
         trip = None
         if data.get("tripId"):
-            trip = Trip.query.get(data.get("tripId"))
+            clean_tid = str(data.get("tripId")).strip()
+            trip = Trip.query.filter((Trip.id == clean_tid) | (Trip.trip_number == clean_tid)).first()
         
         if not trip and truck:
             trip = (

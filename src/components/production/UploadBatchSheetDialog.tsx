@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -29,11 +29,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { productionApi, type ScadaBatchDocketData } from "@/api/production";
+import type { TripRow } from "@/api/trips";
 
 interface UploadBatchSheetDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  trip?: TripRow | null;
 }
 
 const DOCKET_5812: ScadaBatchDocketData = {
@@ -98,12 +100,34 @@ const DEFAULT_DOCKET: ScadaBatchDocketData = {
   totalWeightKg: 12550.38,
 };
 
-export function UploadBatchSheetDialog({ open, onOpenChange, onSuccess }: UploadBatchSheetDialogProps) {
+export function UploadBatchSheetDialog({ open, onOpenChange, onSuccess, trip }: UploadBatchSheetDialogProps) {
   const qc = useQueryClient();
   const [form, setForm] = useState<ScadaBatchDocketData>({ ...DEFAULT_DOCKET });
   const [file, setFile] = useState<File | null>(null);
   const [isParsing, setIsParsing] = useState(false);
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      if (trip) {
+        setForm((prev) => ({
+          ...DEFAULT_DOCKET,
+          ...prev,
+          plantName: "ROXXCON RMC NAGPUR",
+          customerName: trip.customerName || prev.customerName,
+          siteName: trip.siteName || prev.siteName || "Site",
+          truckNumber: trip.tmCode || trip.tmNumber || prev.truckNumber,
+          driverName: trip.driverName || prev.driverName,
+          grade: trip.grade || prev.grade,
+          recipeName: trip.grade ? `M ${trip.grade.replace(/[^0-9]/g, "")} LIGTH` : prev.recipeName,
+          ticketQtyCum: trip.quantity || prev.ticketQtyCum,
+          tripId: trip.id,
+        }));
+      } else {
+        setForm({ ...DEFAULT_DOCKET, tripId: undefined });
+      }
+    }
+  }, [open, trip]);
 
   // Recalculate total weight dynamically when components change
   const calculatedTotalKg =
@@ -129,6 +153,11 @@ export function UploadBatchSheetDialog({ open, onOpenChange, onSuccess }: Upload
         setForm((prev) => ({
           ...prev,
           ...res.data,
+          ...(trip ? {
+            customerName: trip.customerName || res.data.customerName || prev.customerName,
+            siteName: trip.siteName || res.data.siteName || prev.siteName,
+            tripId: trip.id,
+          } : {}),
           date: res.data.date || prev.date,
         }));
         toast.success(
@@ -152,6 +181,7 @@ export function UploadBatchSheetDialog({ open, onOpenChange, onSuccess }: Upload
     mutationFn: (overridePayload?: any) => {
       const payload: any = {
         ...form,
+        tripId: trip?.id || form.tripId,
         totalWeightKg: calculatedTotalKg,
         ...(overridePayload || {}),
       };
@@ -194,8 +224,23 @@ export function UploadBatchSheetDialog({ open, onOpenChange, onSuccess }: Upload
   }
 
   function handleLoadSample() {
-    setForm({ ...DEFAULT_DOCKET });
-    toast.info("Loaded reference Roxxcon Docket #5703 data from plant report.");
+    if (trip) {
+      setForm((prev) => ({
+        ...DEFAULT_DOCKET,
+        customerName: trip.customerName || DEFAULT_DOCKET.customerName,
+        siteName: trip.siteName || DEFAULT_DOCKET.siteName,
+        truckNumber: trip.tmCode || trip.tmNumber || DEFAULT_DOCKET.truckNumber,
+        driverName: trip.driverName || DEFAULT_DOCKET.driverName,
+        grade: trip.grade || DEFAULT_DOCKET.grade,
+        recipeName: trip.grade ? `M ${trip.grade.replace(/[^0-9]/g, "")} LIGTH` : DEFAULT_DOCKET.recipeName,
+        ticketQtyCum: trip.quantity || DEFAULT_DOCKET.ticketQtyCum,
+        tripId: trip.id,
+      }));
+      toast.info(`Loaded reference Roxxcon Docket #5703 data linked to Trip ${trip.tripNumber}.`);
+    } else {
+      setForm({ ...DEFAULT_DOCKET, tripId: undefined });
+      toast.info("Loaded reference Roxxcon Docket #5703 data from plant report.");
+    }
   }
 
   return (
@@ -222,9 +267,20 @@ export function UploadBatchSheetDialog({ open, onOpenChange, onSuccess }: Upload
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setForm({ ...DOCKET_5812 });
+                  setForm({
+                    ...DOCKET_5812,
+                    ...(trip ? {
+                      customerName: trip.customerName || DOCKET_5812.customerName,
+                      siteName: trip.siteName || DOCKET_5812.siteName,
+                      truckNumber: trip.tmCode || trip.tmNumber || DOCKET_5812.truckNumber,
+                      driverName: trip.driverName || DOCKET_5812.driverName,
+                      grade: trip.grade || DOCKET_5812.grade,
+                      ticketQtyCum: trip.quantity || DOCKET_5812.ticketQtyCum,
+                      tripId: trip.id,
+                    } : {})
+                  });
                   setDuplicateError(null);
-                  toast.info("Loaded Roxxcon Docket #5812 (TM MH40DC4288, 5 cum M25 Light)");
+                  toast.info(trip ? `Loaded Docket #5812 linked to ${trip.tripNumber}` : "Loaded Roxxcon Docket #5812 (TM MH40DC4288, 5 cum M25 Light)");
                 }}
                 className="text-xs border-dashed gap-1.5"
               >
@@ -235,9 +291,20 @@ export function UploadBatchSheetDialog({ open, onOpenChange, onSuccess }: Upload
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setForm({ ...DEFAULT_DOCKET });
+                  setForm({
+                    ...DEFAULT_DOCKET,
+                    ...(trip ? {
+                      customerName: trip.customerName || DEFAULT_DOCKET.customerName,
+                      siteName: trip.siteName || DEFAULT_DOCKET.siteName,
+                      truckNumber: trip.tmCode || trip.tmNumber || DEFAULT_DOCKET.truckNumber,
+                      driverName: trip.driverName || DEFAULT_DOCKET.driverName,
+                      grade: trip.grade || DEFAULT_DOCKET.grade,
+                      ticketQtyCum: trip.quantity || DEFAULT_DOCKET.ticketQtyCum,
+                      tripId: trip.id,
+                    } : {})
+                  });
                   setDuplicateError(null);
-                  toast.info("Loaded Roxxcon Docket #5703 (TM MH40DC3964, 5 cum M25 Light)");
+                  toast.info(trip ? `Loaded Docket #5703 linked to ${trip.tripNumber}` : "Loaded Roxxcon Docket #5703 (TM MH40DC3964, 5 cum M25 Light)");
                 }}
                 className="text-xs border-dashed gap-1.5"
               >
@@ -247,6 +314,25 @@ export function UploadBatchSheetDialog({ open, onOpenChange, onSuccess }: Upload
             </div>
           </div>
         </DialogHeader>
+
+        {trip && (
+          <div className="rounded-xl border border-primary/40 bg-primary/10 px-4 py-2.5 flex items-center justify-between text-xs mt-1 mb-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-primary text-sm">{trip.tripNumber}</span>
+              <span className="text-muted-foreground">·</span>
+              <span>PO: <strong className="text-foreground">{trip.poNumber}</strong></span>
+              <span className="text-muted-foreground">·</span>
+              <span>Customer: <strong className="text-foreground">{trip.customerName}</strong></span>
+              <span className="text-muted-foreground">·</span>
+              <span>TM: <strong className="text-foreground">{trip.tmCode || trip.tmNumber}</strong></span>
+              <span className="text-muted-foreground">·</span>
+              <span>Qty: <strong className="text-foreground">{trip.quantity} m³</strong></span>
+            </div>
+            <span className="px-2.5 py-0.5 rounded-full bg-primary/20 text-primary font-semibold text-[11px] whitespace-nowrap">
+              Linked to Trip
+            </span>
+          </div>
+        )}
 
         <div className="space-y-4 pt-2">
           {duplicateError && (
