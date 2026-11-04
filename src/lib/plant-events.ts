@@ -30,9 +30,14 @@ class PlantEventStore {
   public async fetchRealEvents() {
     if (this.hasFetched) return;
     try {
+      const token =
+        (typeof window !== "undefined" &&
+          (localStorage.getItem("rmc.jwt_token") || localStorage.getItem("token"))) ||
+        "";
+      if (!token) return;
       const res = await fetch("/api/v1/notifications", {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+          Authorization: `Bearer ${token}`,
         },
       });
       if (res.ok) {

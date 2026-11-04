@@ -48,7 +48,7 @@ def list_trips():
 
 @trips_bp.route("", methods=["POST"])
 @jwt_required()
-@roles_required("dispatcher")
+@roles_required("dispatcher", "owner")
 def create_trip():
     data = request.get_json(silent=True) or {}
     po_id = data.get("poId")
@@ -159,7 +159,7 @@ def get_trip(id):
 
 @trips_bp.route("/<id>", methods=["PATCH"])
 @jwt_required()
-@roles_required("dispatcher")
+@roles_required("dispatcher", "owner")
 def assign_trip(id):
     trip = find_trip(id)
     if not trip:
@@ -190,7 +190,7 @@ def assign_trip(id):
 
 @trips_bp.route("/<id>/send-to-production", methods=["POST"])
 @jwt_required()
-@roles_required("dispatcher")
+@roles_required("dispatcher", "owner")
 def send_to_production(id):
     trip = find_trip(id)
     if not trip:
@@ -222,7 +222,7 @@ def send_to_production(id):
 
 @trips_bp.route("/<id>/release", methods=["POST"])
 @jwt_required()
-@roles_required("dispatcher")
+@roles_required("dispatcher", "owner")
 def release_trip(id):
     trip = find_trip(id)
     if not trip:
@@ -359,7 +359,7 @@ def mark_delivered(id):
 
 @trips_bp.route("/<id>/cancel", methods=["POST"])
 @jwt_required()
-@roles_required("dispatcher", "sales_manager")
+@roles_required("dispatcher", "sales_manager", "owner")
 def cancel_trip(id):
     trip = find_trip(id)
     if not trip:
@@ -391,7 +391,7 @@ def cancel_trip(id):
 
 @trips_bp.route("/<id>/replace", methods=["POST"])
 @jwt_required()
-@roles_required("dispatcher")
+@roles_required("dispatcher", "owner")
 def replace_trip(id):
     old_trip = find_trip(id)
     if not old_trip:

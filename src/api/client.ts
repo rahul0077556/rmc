@@ -23,7 +23,20 @@ export const apiClient = axios.create({
 // Request interceptor to attach JWT token
 apiClient.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
-    const token = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+    let token = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!token) {
+      token = window.localStorage.getItem("token");
+    }
+    if (!token) {
+      try {
+        const sess = JSON.parse(window.localStorage.getItem("rmc.session") || "{}");
+        if (sess && sess.token) {
+          token = sess.token;
+        }
+      } catch {
+        /* ignore parse error */
+      }
+    }
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -36,9 +49,13 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 && typeof window !== "undefined") {
-      // Token expired or invalid
-      window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-      window.localStorage.removeItem("rmc.session");
+      const isLoginUrl = error.config?.url?.includes("/auth/login");
+      // Only clear credentials if we sent an authorization header that was rejected as invalid/expired
+      if (!isLoginUrl && error.config?.headers?.Authorization) {
+        window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+        window.localStorage.removeItem("token");
+        window.localStorage.removeItem("rmc.session");
+      }
     }
     return Promise.reject(error);
   }

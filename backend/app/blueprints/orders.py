@@ -39,7 +39,7 @@ def list_orders():
 
 @orders_bp.route("", methods=["POST"])
 @jwt_required()
-@roles_required("sales", "sales_manager")
+@roles_required("sales", "sales_manager", "owner")
 def create_order():
     data = request.get_json(silent=True) or {}
     customer_id = data.get("customerId")
@@ -146,7 +146,7 @@ def get_order(id):
 
 @orders_bp.route("/<id>", methods=["PUT", "PATCH"])
 @jwt_required()
-@roles_required("sales", "sales_manager")
+@roles_required("sales", "sales_manager", "owner")
 def update_order(id):
     po = find_po(id)
     if not po:
@@ -203,7 +203,7 @@ def update_order(id):
 
 @orders_bp.route("/<id>", methods=["DELETE"])
 @jwt_required()
-@roles_required("sales", "sales_manager")
+@roles_required("sales", "sales_manager", "owner")
 def delete_order(id):
     po = PurchaseOrder.query.filter_by(id=id, is_deleted=False).first()
     if not po:
@@ -223,7 +223,7 @@ def delete_order(id):
 
 @orders_bp.route("/<id>/submit", methods=["POST"])
 @jwt_required()
-@roles_required("sales", "sales_manager")
+@roles_required("sales", "sales_manager", "owner")
 def submit_order(id):
     po = find_po(id)
     if not po:
@@ -238,7 +238,7 @@ def submit_order(id):
 
 @orders_bp.route("/<id>/approve", methods=["POST"])
 @jwt_required()
-@roles_required("sales_manager")
+@roles_required("sales_manager", "owner")
 def approve_order(id):
     po = find_po(id)
     if not po:
@@ -256,7 +256,7 @@ def approve_order(id):
 
 @orders_bp.route("/<id>/reject", methods=["POST"])
 @jwt_required()
-@roles_required("sales_manager")
+@roles_required("sales_manager", "owner")
 def reject_order(id):
     po = find_po(id)
     if not po:
@@ -274,7 +274,7 @@ def reject_order(id):
 
 @orders_bp.route("/<id>/cancel", methods=["POST"])
 @jwt_required()
-@roles_required("sales", "sales_manager", "dispatcher")
+@roles_required("sales", "sales_manager", "dispatcher", "owner")
 def cancel_order(id):
     po = find_po(id)
     if not po:

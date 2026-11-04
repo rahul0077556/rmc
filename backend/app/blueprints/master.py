@@ -28,7 +28,7 @@ def list_customers():
 
 @master_bp.route("/customers", methods=["POST"])
 @jwt_required()
-@roles_required("sales", "sales_manager")
+@roles_required("sales", "sales_manager", "owner")
 def create_customer():
     data = request.get_json() or {}
     name = data.get("name", "").strip()
@@ -109,7 +109,7 @@ def get_customer(id):
 
 @master_bp.route("/customers/<id>", methods=["PUT", "PATCH"])
 @jwt_required()
-@roles_required("sales", "sales_manager")
+@roles_required("sales", "sales_manager", "owner")
 def update_customer(id):
     cust = Customer.query.get(id)
     if not cust:
@@ -143,7 +143,7 @@ def list_sites():
 
 @master_bp.route("/sites", methods=["POST"])
 @jwt_required()
-@roles_required("sales", "sales_manager")
+@roles_required("sales", "sales_manager", "owner")
 def create_site():
     data = request.get_json() or {}
     customer_id = data.get("customerId")

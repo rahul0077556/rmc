@@ -1,3 +1,4 @@
+import axios from "axios";
 import { apiClient, respond, fail, TOKEN_STORAGE_KEY } from "./client";
 import { PLANT_NAME, customers } from "@/lib/mock-data";
 import type { ApiResponse, Role, User } from "@/types";
@@ -134,6 +135,7 @@ export const authApi = {
       const { token, user } = res.data.data;
       if (typeof window !== "undefined") {
         window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+        window.localStorage.setItem("token", token);
       }
       return {
         data: {
@@ -143,22 +145,34 @@ export const authApi = {
           role: user.role,
           customerId: user.customer_id,
           plant: user.plant || PLANT_NAME,
+          token,
         },
         message: "Signed in successfully",
       };
-    } catch {
-      // Graceful fallback for mock mode if backend server is not running
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err) && err.response) {
+        const msg = err.response.data?.error?.message || "Invalid email or password.";
+        return fail<User>(err.response.status, msg);
+      }
+      // Graceful fallback for mock mode ONLY if backend server is completely unreachable
       const account = DEMO_ACCOUNTS.find((a) => a.email === email.trim().toLowerCase());
       if (!account || password !== account.password) {
         return fail<User>(401, "Invalid email or password. Use a demo account below.");
       }
-      return respond(accountToUser(account), "Signed in (demo)");
+      const demoUser = accountToUser(account);
+      const mockToken = `mock-token-${demoUser.role}-${Date.now()}`;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(TOKEN_STORAGE_KEY, mockToken);
+        window.localStorage.setItem("token", mockToken);
+      }
+      return respond({ ...demoUser, token: mockToken }, "Signed in (demo)");
     }
   },
 
   async logout(): Promise<ApiResponse<null>> {
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+      window.localStorage.removeItem("token");
       window.localStorage.removeItem("rmc.session");
     }
     return respond(null, "Signed out");

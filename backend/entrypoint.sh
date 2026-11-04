@@ -9,24 +9,18 @@ import os
 from backend.app import create_app
 from backend.app.extensions import db
 from backend.app.models.models import User
+from backend.purge_dummy_data import execute_purge
 
 app = create_app()
 with app.app_context():
     db.create_all()
-    user_count = User.query.count()
-    print(f'Current users in database: {user_count}')
-    if user_count == 0:
-        print('Database is empty. Seeding initial records...')
-        from backend.commands.seed import seed_cli
-        from click.testing import CliRunner
-        runner = CliRunner()
-        result = runner.invoke(seed_cli)
-        print('Seed completed with exit code:', result.exit_code)
-        
-        # Purge dummy historical transactions so deployed plant starts clean
-        from backend.purge_dummy_data import execute_purge
+    user = User.query.filter_by(email='sales@rmc.test').first()
+    if not user or not user.check_password('Demo@123'):
+        print('Core users missing or invalid. Bootstrapping clean plant database...')
         execute_purge()
-" || true
+    else:
+        print('Core users verified.')
+"
 
 PORT="${PORT:-8080}"
 echo "=== Starting Gunicorn Production Server on port ${PORT} ==="

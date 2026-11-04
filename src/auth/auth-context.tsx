@@ -21,7 +21,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) setUser(JSON.parse(raw) as User);
+      const token =
+        window.localStorage.getItem("rmc.jwt_token") ||
+        window.localStorage.getItem("token");
+      if (raw) {
+        const parsed = JSON.parse(raw) as User;
+        if (!token && !parsed?.token) {
+          window.localStorage.removeItem(STORAGE_KEY);
+          setUser(null);
+        } else {
+          setUser(parsed);
+        }
+      }
     } catch {
       /* ignore corrupted session */
     }
@@ -32,6 +43,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await authApi.login(email, password);
     setUser(res.data);
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(res.data));
+    if (res.data.token) {
+      window.localStorage.setItem("rmc.jwt_token", res.data.token);
+      window.localStorage.setItem("token", res.data.token);
+    }
     return res.data;
   }, []);
 
@@ -39,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     window.localStorage.removeItem(STORAGE_KEY);
     window.localStorage.removeItem("rmc.jwt_token");
+    window.localStorage.removeItem("token");
     void authApi.logout();
   }, []);
 

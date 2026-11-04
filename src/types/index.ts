@@ -17,6 +17,7 @@ export interface User {
   role: Role;
   customerId?: string;
   plant: string;
+  token?: string;
 }
 
 export type Grade = "M15" | "M20" | "M25" | "M30" | "M35" | "M40";
