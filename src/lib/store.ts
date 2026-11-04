@@ -74,21 +74,21 @@ export function loadDb(): Db {
     }
   }
   return {
-    customers,
-    sites,
-    purchaseOrders,
-    trips,
-    batchSheets,
-    qcChecks,
-    cubeTests,
-    materialTests,
-    invoices,
-    payments,
-    transitMixers,
-    drivers,
-    materialStock,
-    auditLog,
-    notifications,
+    customers: [],
+    sites: [],
+    purchaseOrders: [],
+    trips: [],
+    batchSheets: [],
+    qcChecks: [],
+    cubeTests: [],
+    materialTests: [],
+    invoices: [],
+    payments: [],
+    transitMixers: [],
+    drivers: [],
+    materialStock: [],
+    auditLog: [],
+    notifications: [],
   };
 }
 

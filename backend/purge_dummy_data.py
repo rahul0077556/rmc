@@ -1,21 +1,26 @@
 """
-Purge all dummy transactional and operational records from the RMC SQLite/Postgres database.
+Purge all dummy and seed data from the RMC database for a clean start.
 Preserves:
-- User accounts (so all 10 role logins remain workable)
-- Plant settings and profile
-- Standard concrete grades & mix designs (IS 456 / IS 10262)
-- Material catalogue (resetting current stock to healthy batching quantities)
-- Trucks and Drivers (resetting status to AVAILABLE)
-- Weighbridge settings
-- Numbering sequences (resetting to 0 for PO, BS, CH, INV, WB)
+- All 10 User login accounts (with password Demo@123 so every portal is immediately accessible)
+- Plant settings and master profile
+- Concrete Grades (M15–M40) and standard IS 10262 mix designs
+- Standard Material catalogue (current stock reset to 0.0 so inventory is inwarded from scratch)
+- Trucks & Drivers (status reset to AVAILABLE)
+- Numbering sequences reset to start fresh at PO-2026-0001, TRIP-2026-0001, etc.
+Removes:
+- All Customers & Sites (users create fresh accounts via Sales Desk "Add New Customer")
+- All Purchase Orders & Trips
+- All Batch Sheets, Revisions & QC Tests
+- All Challans, Invoices & Payments
+- All Weighbridge Tickets, Stock Transactions, DPRs, TM Logs & Expense records
 """
 
 import sys
 import os
 
-# Add root directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from datetime import datetime, timezone
 from backend.app import create_app
 from backend.app.extensions import db
 from backend.app.models.models import (
@@ -23,46 +28,47 @@ from backend.app.models.models import (
     Challan, QcCheck, CubeSet, CubeTest, Invoice, InvoiceLine, Payment,
     WeighbridgeTicket, StockTransaction, Material, Truck, Driver,
     DprRecord, ExpenseRecord, AttendanceRecord, PayrollRun, MaterialTest,
-    AuditLog, NotificationLog, Sequence
+    AuditLog, NotificationLog, Sequence, User, TransitMixerPayload, TmTripLog,
+    Grade, MixDesign, Plant
 )
 
 def execute_purge():
-    print("Clearing transactional & operational dummy records...")
+    print("Clearing all transactional and demo records...")
 
-    # 1. QA & Lab
+    # 1. Billing & Payments
+    Payment.query.delete()
+    InvoiceLine.query.delete()
+    Invoice.query.delete()
+
+    # 2. QA & Lab
     CubeTest.query.delete()
     CubeSet.query.delete()
     QcCheck.query.delete()
     MaterialTest.query.delete()
 
-    # 2. Challans & Batch Sheets
+    # 3. Challans & Batch Sheets
     Challan.query.delete()
     BatchSheetRevision.query.delete()
     BatchSheet.query.delete()
-
-    # 3. Billing & Payments
-    InvoiceLine.query.delete()
-    Invoice.query.delete()
-    Payment.query.delete()
 
     # 4. Dispatch & Trips
     Trip.query.delete()
     PurchaseOrder.query.delete()
 
-    # 5. Customers & Sites check / re-seeding if empty
-    if Customer.query.count() == 0:
-        c1 = Customer(name="Kulkarni Mega Constructions", contact_person="Er. Aniket Kulkarni", phone="+91 98220 11223", email="purchase@kulkarniconstruct.in", gstin="27AAACK1234D1Z5", credit_days=30, credit_limit=5000000.0, address="Kulkarni Chambers, FC Road, Pune 411005")
-        c2 = Customer(name="Wagh Infra Projects Pvt Ltd", contact_person="Mr. Rahul Wagh", phone="+91 98900 44556", email="projects@waghinfra.com", gstin="27AABCW5678E1Z2", credit_days=45, credit_limit=7500000.0, address="Wagh Corporate Park, Baner, Pune 411045")
-        db.session.add_all([c1, c2])
-        db.session.flush()
+    # 5. Customers & Sites
+    # Unlink customer_id on Users to avoid FK constraints
+    for u in User.query.all():
+        u.customer_id = None
+    db.session.flush()
 
-        s1 = Site(customer_id=c1.id, name="Kulkarni Riverview Residences", address="Survey 48/2, DP Road, Kothrud, Pune 411038", contact_person="Sunil Shinde", contact_phone="+91 98220 99887", distance_km=14.5)
-        s2 = Site(customer_id=c2.id, name="Wagh Business Bay - Tower A", address="Plot 12, Balewadi High Street, Pune 411045", contact_person="Amit Patil", contact_phone="+91 98900 11223", distance_km=8.2)
-        db.session.add_all([s1, s2])
+    Site.query.delete()
+    Customer.query.delete()
 
-    # 6. Store & Weighbridge & HR Records
+    # 6. Store & Weighbridge, DPR, TM logs & HR Records
     WeighbridgeTicket.query.delete()
     StockTransaction.query.delete()
+    TransitMixerPayload.query.delete()
+    TmTripLog.query.delete()
     DprRecord.query.delete()
     ExpenseRecord.query.delete()
     AttendanceRecord.query.delete()
@@ -72,19 +78,35 @@ def execute_purge():
     AuditLog.query.delete()
     NotificationLog.query.delete()
 
-    # 8. Reset Material Stocks to healthy working quantities for batching
-    stock_defaults = {
-        "Cement (OPC 53)": 185000.0,
-        "River Sand (Zone II)": 320000.0,
-        "Aggregate 10mm": 260000.0,
-        "Aggregate 20mm": 380000.0,
-        "Fly Ash (Class F)": 95000.0,
-        "GGBS (Slag)": 110000.0,
-        "Water": 500000.0,
-        "Admixture (PCE)": 4200.0,
-    }
-    for mat in Material.query.all():
-        mat.current_stock = stock_defaults.get(mat.name, 100000.0)
+    # 8. Reset Material Stocks to 0.0 (Clean Inventory)
+    standard_materials = [
+        {"name": "Cement (OPC 53)", "unit": "kg", "reorder_level": 50000.0},
+        {"name": "River Sand (Zone II)", "unit": "kg", "reorder_level": 80000.0},
+        {"name": "Manufactured Sand (M-Sand)", "unit": "kg", "reorder_level": 50000.0},
+        {"name": "Aggregate 10mm", "unit": "kg", "reorder_level": 60000.0},
+        {"name": "Aggregate 20mm", "unit": "kg", "reorder_level": 90000.0},
+        {"name": "Fly Ash (Class F)", "unit": "kg", "reorder_level": 30000.0},
+        {"name": "GGBS (Slag)", "unit": "kg", "reorder_level": 35000.0},
+        {"name": "Water", "unit": "l", "reorder_level": 50000.0},
+        {"name": "Admixture (PCE)", "unit": "l", "reorder_level": 800.0},
+        {"name": "Diesel", "unit": "l", "reorder_level": 2000.0},
+    ]
+
+    existing_mats = {m.name: m for m in Material.query.all()}
+    for m_def in standard_materials:
+        mat = existing_mats.get(m_def["name"])
+        if not mat:
+            mat = Material(
+                name=m_def["name"],
+                unit=m_def["unit"],
+                current_stock=0.0,
+                reorder_level=m_def["reorder_level"]
+            )
+            db.session.add(mat)
+        else:
+            mat.current_stock = 0.0
+            mat.unit = m_def["unit"]
+            mat.reorder_level = m_def["reorder_level"]
 
     # 9. Reset Trucks & Drivers to AVAILABLE
     for truck in Truck.query.all():
@@ -92,12 +114,80 @@ def execute_purge():
     for driver in Driver.query.all():
         driver.status = "AVAILABLE"
 
-    # 10. Reset Document Numbering Sequences to 0
+    # 10. Ensure Concrete Grades (M15 - M40) exist
+    standard_grades = [
+        {"code": "M15", "strength": 15.0, "s_min": 100, "s_max": 140, "rate": 3950.0, "cement": 240, "sand": 780, "agg10": 460, "agg20": 700, "water": 175, "admix": 1.2},
+        {"code": "M20", "strength": 20.0, "s_min": 110, "s_max": 150, "rate": 4200.0, "cement": 280, "sand": 740, "agg10": 470, "agg20": 720, "water": 170, "admix": 1.5},
+        {"code": "M25", "strength": 25.0, "s_min": 120, "s_max": 160, "rate": 4500.0, "cement": 330, "sand": 710, "agg10": 480, "agg20": 730, "water": 165, "admix": 1.8},
+        {"code": "M30", "strength": 30.0, "s_min": 120, "s_max": 160, "rate": 4850.0, "cement": 370, "sand": 680, "agg10": 490, "agg20": 740, "water": 160, "admix": 2.2},
+        {"code": "M35", "strength": 35.0, "s_min": 130, "s_max": 170, "rate": 5250.0, "cement": 410, "sand": 650, "agg10": 500, "agg20": 750, "water": 155, "admix": 2.5},
+        {"code": "M40", "strength": 40.0, "s_min": 130, "s_max": 170, "rate": 5700.0, "cement": 450, "sand": 620, "agg10": 510, "agg20": 760, "water": 150, "admix": 2.8}
+    ]
+    for g_info in standard_grades:
+        grade = Grade.query.filter_by(code=g_info["code"]).first()
+        if not grade:
+            grade = Grade(
+                code=g_info["code"],
+                characteristic_strength_mpa=g_info["strength"],
+                slump_min_mm=g_info["s_min"],
+                slump_max_mm=g_info["s_max"],
+                default_rate=g_info["rate"]
+            )
+            db.session.add(grade)
+            db.session.flush()
+
+        if not grade.mix_design:
+            mix = MixDesign(
+                grade_id=grade.id,
+                cement_kg=g_info["cement"],
+                sand_kg=g_info["sand"],
+                aggregate_10mm_kg=g_info["agg10"],
+                aggregate_20mm_kg=g_info["agg20"],
+                water_l=g_info["water"],
+                admixture_l=g_info["admix"]
+            )
+            db.session.add(mix)
+
+    # 11. Ensure Core Portal User Accounts Exist (Password: Demo@123)
+    core_users = [
+        {"name": "Vikramaditya Singhania", "email": "owner@rmc.test", "role": "owner", "mgr": False},
+        {"name": "Ananya Sharma", "email": "sales@rmc.test", "role": "sales", "mgr": False},
+        {"name": "Devendra Kulkarni", "email": "salesmanager@rmc.test", "role": "sales_manager", "mgr": True},
+        {"name": "Mahesh Deshpande", "email": "dispatcher@rmc.test", "role": "dispatcher", "mgr": False},
+        {"name": "Siddharth Joshi", "email": "production@rmc.test", "role": "production", "mgr": False},
+        {"name": "Dr. Pradeep Sawant", "email": "qa@rmc.test", "role": "qa", "mgr": False},
+        {"name": "Rajesh Gupta", "email": "store@rmc.test", "role": "store", "mgr": False},
+        {"name": "Priya Nair", "email": "account@rmc.test", "role": "account", "mgr": False},
+        {"name": "Santosh Shinde", "email": "supervisor@rmc.test", "role": "supervisor", "mgr": False},
+        {"name": "Customer Portal User", "email": "customer1@rmc.test", "role": "customer", "mgr": False},
+    ]
+
+    for u_info in core_users:
+        user = User.query.filter_by(email=u_info["email"]).first()
+        if not user:
+            user = User(
+                name=u_info["name"],
+                email=u_info["email"],
+                phone="+91 98000 12345",
+                role=u_info["role"],
+                is_manager=u_info["mgr"],
+                is_active=True
+            )
+            user.set_password("Demo@123")
+            db.session.add(user)
+        else:
+            user.role = u_info["role"]
+            user.is_manager = u_info["mgr"]
+            user.customer_id = None
+            user.is_active = True
+            user.set_password("Demo@123")
+
+    # 12. Reset Document Sequences to 0
     Sequence.query.delete()
 
     db.session.commit()
-    print("✓ All dummy data successfully purged.")
-    print("✓ Database is clean, structured, and ready for fresh manual test data.")
+    print("✓ All seed, dummy, and operational data successfully purged.")
+    print("✓ Database is completely clean and ready to create everything from scratch across all logins.")
 
 def purge_dummy_data():
     app = create_app()

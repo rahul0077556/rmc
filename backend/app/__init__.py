@@ -91,8 +91,9 @@ def create_app(config_class=None):
     def health():
         return jsonify({"status": "healthy", "service": "rmc-backend", "version": "1.0.0"})
 
-    # Register CLI seed command
-    from backend.commands.seed import seed_cli
+    # Register CLI commands
+    from backend.commands.seed import seed_cli, purge_cli
     app.cli.add_command(seed_cli, name="seed")
+    app.cli.add_command(purge_cli, name="purge")
 
     return app

@@ -22,6 +22,13 @@ def seed_cli():
     now = datetime.now(timezone.utc)
     today = now.date()
 
+@click.command("purge")
+@with_appcontext
+def purge_cli():
+    """Purge all dummy and seed data for clean operational start."""
+    from backend.purge_dummy_data import execute_purge
+    execute_purge()
+
     # 1. PLANT
     plant = Plant(
         name="Sai ReadyMix Concrete Plant - Pune",
