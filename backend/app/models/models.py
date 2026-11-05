@@ -598,7 +598,7 @@ class BatchSheet(TimestampMixin, db.Model):
             "quantity": self.quantity_cum,
             "batchTime": self.batched_at.isoformat(),
             "operator": operator_name,
-            "qcStatus": self.qc_status,
+            "qcStatus": self.qc_status, 
             "qcSignedBy": self.qc_signed_by,
             "qcSignedAt": self.qc_signed_at.isoformat() if self.qc_signed_at else None,
             "plantName": self.plant_name or "ROXXCON RMC NAGPUR",

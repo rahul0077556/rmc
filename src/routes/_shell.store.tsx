@@ -33,7 +33,6 @@ import { KpiCard } from "@/components/app/kpi-card";
 import { DataTable, type Column } from "@/components/app/data-table";
 import { StatusBadge } from "@/components/app/status-badge";
 import { LoadingState, ErrorState } from "@/components/app/states";
-import { MaterialFlowDiagram } from "@/components/common/MaterialFlowDiagram";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -780,7 +779,7 @@ function StorePage() {
 
       {/* Main Tab Navigation */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 max-w-6xl h-auto p-1 gap-1">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 max-w-6xl h-auto p-1 gap-1">
           <TabsTrigger value="inventory" className="flex items-center gap-1.5 text-xs py-2 cursor-pointer font-medium">
             <PackageSearch className="size-3.5 text-primary" />
             Materials & Silos
@@ -792,10 +791,6 @@ function StorePage() {
           <TabsTrigger value="consumption" className="flex items-center gap-1.5 text-xs py-2 cursor-pointer font-medium">
             <ArrowUpRight className="size-3.5 text-rose-500" />
             Batching Deductions ({consumptionLogs.length})
-          </TabsTrigger>
-          <TabsTrigger value="material-flow" className="flex items-center gap-1.5 text-xs py-2 cursor-pointer font-medium">
-            <GitFork className="size-3.5 text-cyan-400" />
-            Flow & Waste
           </TabsTrigger>
           <TabsTrigger value="dpr" className="flex items-center gap-1.5 text-xs py-2 cursor-pointer font-medium">
             <Layers className="size-3.5 text-indigo-400" />
@@ -891,12 +886,7 @@ function StorePage() {
           />
         </TabsContent>
 
-        {/* TAB 4: MATERIAL FLOW & WASTE */}
-        <TabsContent value="material-flow" className="mt-4">
-          <MaterialFlowDiagram />
-        </TabsContent>
-
-        {/* TAB 5: DPR REPORTS (CONNECTED WITH PO, TRIPS & CONSUMPTION) */}
+        {/* TAB 4: DPR REPORTS (CONNECTED WITH PO, TRIPS & CONSUMPTION) */}
         <TabsContent value="dpr" className="mt-4 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card border border-border p-4 rounded-xl">
             <div className="space-y-1">

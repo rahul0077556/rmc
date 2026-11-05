@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, ClipboardList, Clock, Flame, FlaskConical, PackageCheck, ShieldAlert, Sparkles, Truck, Zap, Tv, CalendarDays, Printer, RefreshCw } from "lucide-react";
+import { CheckCircle2, ClipboardList, Clock, Flame, FlaskConical, PackageCheck, ShieldAlert, Sparkles, Truck, Zap, CalendarDays, Printer, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { CapacityCalendar } from "@/components/common/CapacityCalendar";
 import { ReassignVehicleDialog } from "@/components/dispatch/ReassignVehicleDialog";
@@ -394,15 +394,6 @@ function DispatcherPage() {
             >
               <CalendarDays className="size-4" />
               <span>{showCapacity ? "Hide Capacity" : "14-Day Capacity"}</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void navigate({ to: "/tv" })}
-              className="gap-2 border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary font-medium"
-            >
-              <Tv className="size-4 text-primary animate-pulse" />
-              <span>Control Room TV Mode</span>
             </Button>
           </div>
         }

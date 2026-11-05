@@ -254,3 +254,4 @@ export function AddMaterialDialog({ open, onOpenChange, onMaterialCreated }: Add
     </Dialog>
   );
 }
+

@@ -249,7 +249,7 @@ export async function processChatbotQuery(
     };
   }
 
-  // 3H. Control Room TV Mode (Owner & Dispatcher)
+  // 3H. Dispatch Operations & Telemetry Board
   if (
     query.includes("tv mode") ||
     query.includes("control room tv") ||
@@ -259,18 +259,15 @@ export async function processChatbotQuery(
     query.includes("wall screen")
   ) {
     return {
-      text: `### 📺 Control Room TV Mode (High-Contrast Plant Wallboard)\n\nA purpose-built full-screen view designed for wall TVs and large screens in the plant dispatcher office and control cabin:\n\n* **Auto-Rotating Slide Deck (every 12 seconds):**\n  1. **Schedule & Concrete Clock:** Active PO batches, transit countdown rings, and urgency badges.\n  2. **Silo & Tank Telemetry:** Cement, Fly Ash, GGBS silo levels (MT), aggregate bin capacities, water and chemical retarder tank levels.\n  3. **Transit Mixer Fleet Matrix:** Real-time distribution across Yard, Batching, QC Bay, In-Transit, Site Pouring, and Washout.\n* **Wall-Optimized Features:**\n  * Pure OLED high-contrast dark theme legible from 20+ feet away.\n  * Live digital wall clock (\`HH:mm:ss\`) with current plant ambient temperature.\n  * Slide controls: Pause auto-rotation, manual slide selector, and 1-tap browser fullscreen mode (\`F11\`).\n\n*Access via the **"Wall TV"** button in the top navigation or navigate directly to \`/tv\`.*`,
+      text: `### 🚛 Dispatch Operations & Live Fleet Board\n\nOperational telemetry is accessible directly from the Dispatcher Desk:\n\n* **Active Fleet Tracking:** Real-time distribution across Yard, Batching, QC Bay, In-Transit, Site Pouring, and Return.\n* **Mixer Scheduling:** Live PO trips, batch completion status, and delivery challan issuance.\n* **Operational Simplicity:** Fast, straightforward tabular views without heavy static wallboards.`,
       actions: [
-        { label: "📺 Launch Control Room TV Mode", to: "/tv" },
-        { label: "🚛 Dispatcher Board", to: "/dispatcher" },
+        { label: "🚛 Open Dispatcher Board", to: "/dispatcher" },
         { label: "👑 Owner Overview", to: "/owner" },
       ],
       followUps: [
-        "How long do slides stay before rotating?",
-        "What is the Concrete Clock?",
-        "Can I pause TV rotation on Silo levels?",
+        "How do I schedule a trip?",
+        "Where can I see PO delivery status?",
       ],
-      source: "live-telemetry",
     };
   }
 

@@ -8,7 +8,6 @@ import { KpiCard } from "@/components/app/kpi-card";
 import { DataTable, type Column } from "@/components/app/data-table";
 import { StatusBadge } from "@/components/app/status-badge";
 import { LoadingState, ErrorState } from "@/components/app/states";
-import { MixOptimizationMap } from "@/components/common/MixOptimizationMap";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -216,16 +215,8 @@ function QaPage() {
         <TabsList>
           <TabsTrigger value="queue">Inspection queue</TabsTrigger>
           <TabsTrigger value="cubes">Cube testing</TabsTrigger>
-          <TabsTrigger value="optimization" className="flex items-center gap-1.5 font-semibold text-indigo-600 dark:text-indigo-400">
-            <Sparkles className="size-3.5" />
-            Mix Optimization Map
-          </TabsTrigger>
           <TabsTrigger value="materials">Material testing</TabsTrigger>
         </TabsList>
-
-        <TabsContent value="optimization" className="mt-4">
-          <MixOptimizationMap />
-        </TabsContent>
 
         <TabsContent value="queue" className="mt-4">
           <DataTable

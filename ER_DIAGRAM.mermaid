@@ -1,0 +1,631 @@
+erDiagram
+    %% ============================================================
+    %% 1. SALES & COMMERCIAL DOMAIN
+    %% ============================================================
+    customers ||--o{ sites : "has_sites"
+    customers ||--o{ users : "has_portal_users"
+    customers ||--o{ purchase_orders : "places_order"
+    customers ||--o{ invoices : "billed_to"
+    sites ||--o{ purchase_orders : "pour_destination"
+
+    %% ============================================================
+    %% 2. CONCRETE FORMULATION & MIX DESIGN
+    %% ============================================================
+    grades ||--o{ mix_designs : "formulated_in"
+    grades ||--o{ purchase_orders : "ordered_grade"
+    grades ||--o{ batch_sheets : "batched_for"
+    mix_designs ||--o{ purchase_orders : "selected_mix"
+
+    %% ============================================================
+    %% 3. USERS, AUDIT & NOTIFICATIONS
+    %% ============================================================
+    users ||--o{ purchase_orders : "approved_by"
+    users ||--o{ audit_log : "action_performed_by"
+    purchase_orders ||--o{ notification_log : "po_notifications"
+    trips ||--o{ notification_log : "trip_sms_whatsapp"
+
+    %% ============================================================
+    %% 4. DISPATCH PLANNING & FLEET LOGISTICS
+    %% ============================================================
+    trucks ||--o{ trips : "assigned_tm"
+    drivers ||--o{ trucks : "default_driver_for"
+    drivers ||--o{ trips : "drives_trip"
+    trips ||--o| trips : "replaces_broken_down_trip"
+    purchase_orders ||--o{ trips : "scheduled_into"
+
+    %% ============================================================
+    %% 5. PRODUCTION SCADA BATCHING & REVISIONS
+    %% ============================================================
+    trips ||--o| batch_sheets : "batched_into"
+    batch_sheets ||--o{ batch_sheet_revisions : "audit_revisions"
+
+    %% ============================================================
+    %% 6. QUALITY ASSURANCE & LAB TESTING (CUBES)
+    %% ============================================================
+    trips ||--o| qc_checks : "slump_tested_at_bay"
+    batch_sheets ||--o{ qc_checks : "batch_verified"
+    trips ||--o{ cube_sets : "molded_from_trip"
+    batch_sheets ||--o{ cube_sets : "molded_from_batch"
+    cube_sets ||--o{ cube_tests : "crushed_at_days"
+
+    %% ============================================================
+    %% 7. DELIVERY CHALLANS, INVOICING & PAYMENTS
+    %% ============================================================
+    trips ||--o| challans : "released_under_challan"
+    purchase_orders ||--o{ invoices : "invoiced_under"
+    invoices ||--o{ invoice_lines : "itemized_into"
+    trips ||--o{ invoice_lines : "trip_charge"
+    invoices ||--o{ payments : "reconciled_via"
+
+    %% ============================================================
+    %% 8. STORE INVENTORY & MATERIAL CONSUMPTION LEDGER
+    %% ============================================================
+    materials ||--o{ stock_transactions : "ledger_entry"
+
+    %% ============================================================
+    %% ENTITY DEFINITIONS & COLUMNS
+    %% ============================================================
+
+    customers {
+        string id PK
+        string name
+        string contact_person
+        string phone
+        string email
+        string gstin
+        text address
+        int credit_days
+        float credit_limit
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    sites {
+        string id PK
+        string customer_id FK
+        string name
+        text address
+        string contact_person
+        string phone
+        text accessibility_notes
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    users {
+        string id PK
+        string name
+        string email UK
+        string phone
+        string password_hash
+        string role
+        boolean is_manager
+        string customer_id FK
+        boolean is_active
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    plant {
+        string id PK
+        string name
+        text address
+        string gstin
+        string phone
+        string email
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    grades {
+        string id PK
+        string code UK
+        float characteristic_strength_mpa
+        int slump_min_mm
+        int slump_max_mm
+        float default_rate
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    mix_designs {
+        string id PK
+        string grade_id FK
+        string name
+        string description
+        boolean is_default
+        float cement_kg
+        float sand_kg
+        float aggregate_10mm_kg
+        float aggregate_20mm_kg
+        float water_l
+        float admixture_l
+        float flyash_kg
+        float m_sand_kg
+        float ggbs_kg
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    purchase_orders {
+        string id PK
+        string po_number UK
+        string customer_id FK
+        string site_id FK
+        string grade_id FK
+        string mix_design_id FK
+        float quantity_cum
+        float rate_per_cum
+        datetime delivery_datetime
+        string purpose
+        boolean pump_required
+        string pump_ownership
+        string pump_type
+        int pipeline_length
+        int workers_required
+        int payment_terms_days
+        string ubitech_ref
+        string status
+        int slump_required_mm
+        text rate_reason
+        string approved_by FK
+        datetime approved_at
+        text approval_remarks
+        text cancel_reason
+        text rejection_reason
+        datetime submitted_at
+        text notes
+        boolean is_deleted
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    trucks {
+        string id PK
+        string tm_number UK
+        int capacity_cum
+        string status
+        string default_driver_id FK
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    drivers {
+        string id PK
+        string name
+        string phone
+        string license_no
+        string status
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    trips {
+        string id PK
+        string trip_number UK
+        string po_id FK
+        string truck_id FK
+        string driver_id FK
+        int sequence
+        float quantity_cum
+        datetime planned_datetime
+        string status
+        datetime dispatched_at
+        datetime delivered_at
+        float delivered_quantity
+        string receiver_name
+        string replaced_trip_id FK
+        text notes
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    batch_sheets {
+        string id PK
+        string batch_number UK
+        string trip_id FK
+        string grade_id FK
+        float quantity_cum
+        float cement_kg
+        float sand_kg
+        float agg_10_kg
+        float agg_20_kg
+        float water_l
+        float admixture_l
+        string docket_number
+        string recipe_name
+        float flyash_kg
+        float ggbs_kg
+        float m_sand_kg
+        float wc_ratio
+        float total_weight_kg
+        string plant_name
+        json plant_set_weights
+        json actual_weights_json
+        json raw_docket_data
+        string file_hash
+        boolean is_voided
+        text void_reason
+        datetime voided_at
+        string voided_by
+        datetime batched_at
+        string qc_status
+        string qc_signed_by
+        datetime qc_signed_at
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    batch_sheet_revisions {
+        string id PK
+        string batch_sheet_id FK
+        int revision_number
+        float cement_kg
+        float sand_kg
+        float agg_10_kg
+        float agg_20_kg
+        float water_l
+        float admixture_l
+        text reason
+        string revised_by
+        datetime revised_at
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    qc_checks {
+        string id PK
+        string trip_id FK
+        string batch_sheet_id FK
+        boolean physical_inspection_ok
+        int slump_mm
+        boolean bleeding_ok
+        boolean wrong_mix_ok
+        string admixture_type
+        float admixture_qty
+        string decision
+        string reject_action
+        text remarks
+        string checked_by
+        datetime checked_at
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    cube_sets {
+        string id PK
+        string batch_sheet_id FK
+        string trip_id FK
+        date cast_date
+        int cube_count
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    cube_tests {
+        string id PK
+        string cube_set_id FK
+        int age_days
+        date due_date
+        date tested_on
+        float strength_mpa
+        string result
+        string tested_by
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    material_tests {
+        string id PK
+        string material
+        string test_name
+        string result
+        date tested_on
+        text remarks
+        string tested_by
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    challans {
+        string id PK
+        string challan_number UK
+        string trip_id FK
+        datetime issued_at
+        int printed_copies
+        string released_by
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    invoices {
+        string id PK
+        string invoice_number UK
+        string po_id FK
+        string customer_id FK
+        date issue_date
+        date due_date
+        float subtotal
+        float gst_percent
+        float total
+        string status
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    invoice_lines {
+        string id PK
+        string invoice_id FK
+        string trip_id FK
+        float quantity
+        float rate
+        float amount
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    payments {
+        string id PK
+        string invoice_id FK
+        float amount
+        date paid_on
+        string mode
+        string reference
+        string recorded_by
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    materials {
+        string id PK
+        string name UK
+        string unit
+        float current_stock
+        float reorder_level
+        float density
+        boolean is_tracked
+        boolean is_active
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    stock_transactions {
+        string id PK
+        string material_id FK
+        string type
+        float quantity
+        string reference
+        text note
+        boolean is_reversal
+        string reversed_transaction_id
+        text reversal_reason
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    weighbridge_tickets {
+        string id PK
+        string ticket_number UK
+        string type
+        string vehicle_number
+        string material
+        string supplier_or_customer
+        float gross_weight
+        float tare_weight
+        float net_weight
+        string gross_time
+        string tare_time
+        string status
+        float variance
+        float challan_weight
+        float received_rs
+        string wb_name
+        string driver_name
+        string watchman_name
+        string gate_pass_no
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    weighbridge_settings {
+        string id PK
+        string plant_name
+        string vendor_software_name
+        string vendor_company_name
+        string customer_care
+        string wb_name
+        string com_port
+        boolean auto_capture
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    transit_mixer_payloads {
+        string id PK
+        int s_no
+        string vehicle_no UK
+        string vehicle_type
+        string make
+        string location
+        string vehicle_tyre_details
+        string overload_pass
+        float installed_handi_capacity_cum
+        float rto_gvw_kg
+        float tare_weight_kg
+        float weight_of_water_kg
+        float new_tare_weight_kg
+        float actual_weight_for_loading_kg
+        float payload_capacity_rc_gvw_cum
+        float supply_payload_capacity_overload_pass_cum
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    tm_trip_logs {
+        string id PK
+        string date
+        string driver_name
+        string truck_number
+        float truck_capacity_cum
+        float start_km
+        float end_km
+        float running_km
+        float handi_start_hr
+        float handi_closing_hr
+        float handi_running_hr
+        float extra_handi_hr
+        float opening_diesel_l
+        float issued_diesel_l
+        float closing_diesel_l
+        float actual_diesel_consumed_l
+        float km_per_liter
+        int trips_count
+        float concrete_volume_cum
+        string remarks
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    dpr_records {
+        string id PK
+        string date UK
+        int total_batches
+        float total_cum
+        float cement_consumed_mt
+        float fly_ash_consumed_mt
+        float ggbs_consumed_mt
+        float sand_consumed_mt
+        float aggregate_consumed_mt
+        float water_consumed_kl
+        float admixture_consumed_kg
+        float diesel_consumed_ltr
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    expense_records {
+        string id PK
+        string category
+        string vendor
+        string bill_no
+        string date
+        float amount
+        string status
+        text description
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    attendance_records {
+        string id PK
+        string type
+        string name
+        string designation_or_vehicle
+        string shift
+        int trips_or_tasks
+        string status
+        string sync_source
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    employees {
+        string id PK
+        string emp_code UK
+        string name
+        string department
+        string role
+        string join_date
+        string status
+        float base_salary
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    payroll_runs {
+        string id PK
+        string payroll_code UK
+        string period
+        int total_employees
+        float total_amount
+        string status
+        datetime processed_date
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    plant_mappings {
+        string id PK
+        string mapping_type
+        string raw_name UK
+        string target_id
+        string target_name
+        string unit
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    sequences {
+        string name PK
+        int year PK
+        int last_value
+    }
+
+    notification_log {
+        string id PK
+        string channel
+        string recipient
+        string template
+        text payload
+        string status
+        datetime sent_at
+        string related_trip_id FK
+        string related_po_id FK
+        datetime created_at
+        datetime updated_at
+        string created_by
+    }
+
+    audit_log {
+        string id PK
+        string user_id FK
+        string action
+        string entity
+        string entity_id
+        text before_data
+        text after_data
+        datetime created_at
+    }
+
