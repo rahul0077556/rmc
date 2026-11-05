@@ -8,6 +8,15 @@ interface AuthState {
   user: User | null;
   ready: boolean;
   login: (email: string, password: string) => Promise<User>;
+  registerOrganization: (payload: {
+    organization_name: string;
+    name: string;
+    email: string;
+    password: string;
+    phone?: string;
+    city?: string;
+    role?: string;
+  }) => Promise<User>;
   logout: () => void;
   hasRole: (roles: Role[]) => boolean;
 }
@@ -50,6 +59,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return res.data;
   }, []);
 
+  const registerOrganization = useCallback(async (payload: {
+    organization_name: string;
+    name: string;
+    email: string;
+    password: string;
+    phone?: string;
+    city?: string;
+    role?: string;
+  }) => {
+    const res = await authApi.registerOrganization(payload);
+    setUser(res.data);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(res.data));
+    if (res.data.token) {
+      window.localStorage.setItem("rmc.jwt_token", res.data.token);
+      window.localStorage.setItem("token", res.data.token);
+    }
+    return res.data;
+  }, []);
+
   const logout = useCallback(() => {
     setUser(null);
     window.localStorage.removeItem(STORAGE_KEY);
@@ -63,10 +91,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       ready,
       login,
+      registerOrganization,
       logout,
       hasRole: (roles: Role[]) => (user ? roles.includes(user.role) : false),
     }),
-    [user, ready, login, logout],
+    [user, ready, login, registerOrganization, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -169,6 +169,43 @@ export const authApi = {
     }
   },
 
+  async registerOrganization(payload: {
+    organization_name: string;
+    name: string;
+    email: string;
+    password: string;
+    phone?: string;
+    city?: string;
+    role?: string;
+  }): Promise<ApiResponse<User>> {
+    try {
+      const res = await apiClient.post("/auth/register-organization", payload);
+      const { token, user } = res.data.data;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+        window.localStorage.setItem("token", token);
+      }
+      return {
+        data: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          customerId: user.customer_id,
+          plant: user.plant || payload.organization_name,
+          token,
+        },
+        message: "Organization registered successfully",
+      };
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err) && err.response) {
+        const msg = err.response.data?.error?.message || "Failed to register organization.";
+        return fail<User>(err.response.status, msg);
+      }
+      return fail<User>(500, "Server connection error during registration.");
+    }
+  },
+
   async logout(): Promise<ApiResponse<null>> {
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(TOKEN_STORAGE_KEY);
