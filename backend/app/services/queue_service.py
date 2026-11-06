@@ -1,18 +1,28 @@
 from datetime import datetime, timezone, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from backend.app.models.models import (
     PurchaseOrder, Trip, BatchSheet, QcCheck, Invoice, Material, Customer, Truck, Driver
 )
 
 class QueueService:
     @staticmethod
-    def get_queue_for_role(role: str) -> List[Dict[str, Any]]:
+    def _plant_filter(model, plant_id: Optional[str] = None):
+        if not plant_id or not hasattr(model, "plant_id"):
+            return None
+        return (model.plant_id == plant_id) | (model.plant_id.is_(None))
+
+    @classmethod
+    def get_queue_for_role(cls, role: str, plant_id: Optional[str] = None) -> List[Dict[str, Any]]:
         items = []
         now = datetime.now(timezone.utc)
 
         # 1. SALES MANAGER: Pending PO Approvals
         if role in ["sales_manager", "owner"]:
-            pending_pos = PurchaseOrder.query.filter_by(status="SUBMITTED", is_deleted=False).all()
+            q = PurchaseOrder.query.filter(PurchaseOrder.status == "SUBMITTED", PurchaseOrder.is_deleted == False)
+            pf = cls._plant_filter(PurchaseOrder, plant_id)
+            if pf is not None:
+                q = q.filter(pf)
+            pending_pos = q.all()
             for po in pending_pos:
                 items.append({
                     "id": f"po-appr-{po.id}",
@@ -38,7 +48,11 @@ class QueueService:
 
         # 2. SALES OFFICER: Draft POs
         if role in ["sales", "owner"]:
-            draft_pos = PurchaseOrder.query.filter_by(status="DRAFT", is_deleted=False).all()
+            q = PurchaseOrder.query.filter(PurchaseOrder.status == "DRAFT", PurchaseOrder.is_deleted == False)
+            pf = cls._plant_filter(PurchaseOrder, plant_id)
+            if pf is not None:
+                q = q.filter(pf)
+            draft_pos = q.all()
             for po in draft_pos:
                 items.append({
                     "id": f"po-draft-{po.id}",
@@ -63,10 +77,14 @@ class QueueService:
         # 3. DISPATCHER: Unplanned POs and Trips waiting for Challan Release
         if role in ["dispatcher", "owner"]:
             # A. Approved POs needing trip planning
-            approved_pos = PurchaseOrder.query.filter(
+            q_po = PurchaseOrder.query.filter(
                 PurchaseOrder.status.in_(["APPROVED", "IN_PROGRESS"]),
                 PurchaseOrder.is_deleted == False
-            ).all()
+            )
+            pf_po = cls._plant_filter(PurchaseOrder, plant_id)
+            if pf_po is not None:
+                q_po = q_po.filter(pf_po)
+            approved_pos = q_po.all()
             for po in approved_pos:
                 if po.balance_quantity > 0:
                     items.append({
@@ -91,7 +109,11 @@ class QueueService:
                     })
 
             # B. QC Approved Trips awaiting Challan Release
-            qc_approved_trips = Trip.query.filter_by(status="QC_APPROVED").all()
+            q_qc = Trip.query.filter(Trip.status == "QC_APPROVED")
+            pf_trip = cls._plant_filter(Trip, plant_id)
+            if pf_trip is not None:
+                q_qc = q_qc.filter(pf_trip)
+            qc_approved_trips = q_qc.all()
             for trip in qc_approved_trips:
                 items.append({
                     "id": f"disp-rel-{trip.id}",
@@ -116,7 +138,11 @@ class QueueService:
 
         # 4. PRODUCTION: Trips sent to plant waiting to be batched
         if role in ["production", "owner"]:
-            queued_trips = Trip.query.filter_by(status="SENT_TO_PRODUCTION").order_by(Trip.sequence.asc()).all()
+            q_sent = Trip.query.filter(Trip.status == "SENT_TO_PRODUCTION")
+            pf_trip = cls._plant_filter(Trip, plant_id)
+            if pf_trip is not None:
+                q_sent = q_sent.filter(pf_trip)
+            queued_trips = q_sent.order_by(Trip.sequence.asc()).all()
             for trip in queued_trips:
                 items.append({
                     "id": f"prod-batch-{trip.id}",
@@ -139,7 +165,10 @@ class QueueService:
                     "status": "pending"
                 })
 
-            batching_trips = Trip.query.filter_by(status="BATCHING").all()
+            q_batch = Trip.query.filter(Trip.status == "BATCHING")
+            if pf_trip is not None:
+                q_batch = q_batch.filter(pf_trip)
+            batching_trips = q_batch.all()
             for trip in batching_trips:
                 items.append({
                     "id": f"prod-active-{trip.id}",
@@ -163,7 +192,11 @@ class QueueService:
 
         # 5. QA / QC: Slump testing & QC approval
         if role in ["qa", "owner"]:
-            qc_pending_trips = Trip.query.filter(Trip.status.in_(["LOADED", "QC_PENDING"])).all()
+            q_qa = Trip.query.filter(Trip.status.in_(["LOADED", "QC_PENDING"]))
+            pf_trip = cls._plant_filter(Trip, plant_id)
+            if pf_trip is not None:
+                q_qa = q_qa.filter(pf_trip)
+            qc_pending_trips = q_qa.all()
             for trip in qc_pending_trips:
                 items.append({
                     "id": f"qa-check-{trip.id}",
@@ -188,7 +221,11 @@ class QueueService:
 
         # 6. SITE SUPERVISOR: In-transit trucks arriving at site
         if role in ["supervisor", "owner"]:
-            in_transit_trips = Trip.query.filter_by(status="IN_TRANSIT").all()
+            q_trans = Trip.query.filter(Trip.status == "IN_TRANSIT")
+            pf_trip = cls._plant_filter(Trip, plant_id)
+            if pf_trip is not None:
+                q_trans = q_trans.filter(pf_trip)
+            in_transit_trips = q_trans.all()
             for trip in in_transit_trips:
                 items.append({
                     "id": f"sup-transit-{trip.id}",
@@ -213,7 +250,11 @@ class QueueService:
 
         # 7. ACCOUNT: Outstanding Invoices & Payment Collections
         if role in ["account", "owner"]:
-            invoices = Invoice.query.filter(Invoice.status.in_(["ISSUED", "PARTIALLY_PAID"])).all()
+            q_inv = Invoice.query.filter(Invoice.status.in_(["ISSUED", "PARTIALLY_PAID"]))
+            pf_inv = cls._plant_filter(Invoice, plant_id)
+            if pf_inv is not None:
+                q_inv = q_inv.filter(pf_inv)
+            invoices = q_inv.all()
             due_invoices = [inv for inv in invoices if inv.outstanding_amount > 0.01]
             for inv in due_invoices:
                 items.append({
@@ -239,7 +280,11 @@ class QueueService:
 
         # 8. STORE: Materials needing Reorder
         if role in ["store", "production", "owner"]:
-            materials = Material.query.all()
+            q_mat = Material.query.filter(Material.is_active == True)
+            pf_mat = cls._plant_filter(Material, plant_id)
+            if pf_mat is not None:
+                q_mat = q_mat.filter(pf_mat)
+            materials = q_mat.all()
             for mat in materials:
                 if mat.current_stock <= mat.reorder_level:
                     items.append({
@@ -263,3 +308,33 @@ class QueueService:
                     })
 
         return items
+
+    @classmethod
+    def get_queue_summary(cls, plant_id: Optional[str] = None) -> Dict[str, Any]:
+        all_owner_items = cls.get_queue_for_role("owner", plant_id=plant_id)
+        counts = {
+            "sales": 0,
+            "sales_manager": 0,
+            "dispatcher": 0,
+            "production": 0,
+            "qa": 0,
+            "supervisor": 0,
+            "store": 0,
+            "account": 0,
+            "owner": len(all_owner_items),
+            "customer": 0
+        }
+        urgent_count = 0
+        for item in all_owner_items:
+            r = item.get("role")
+            if r in counts:
+                counts[r] += 1
+            if item.get("urgency") == "urgent":
+                urgent_count += 1
+
+        return {
+            "counts": counts,
+            "urgentCount": urgent_count,
+            "pendingCount": len(all_owner_items),
+            "doneCount": 0
+        }

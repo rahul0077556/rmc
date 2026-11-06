@@ -167,7 +167,7 @@ function CreateOrderPage() {
   }
 
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-6 pb-28">
       <PageHeader title="Create Purchase Order" subtitle="Capture order, delivery, pump and payment details" />
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -467,7 +467,7 @@ function CreateOrderPage() {
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 px-4 py-3 backdrop-blur lg:left-[250px]">
-        <div className="flex flex-wrap justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2 pr-44 sm:pr-48">
           <Button variant="ghost" onClick={() => void navigate({ to: "/sales/orders" })}>
             Cancel
           </Button>

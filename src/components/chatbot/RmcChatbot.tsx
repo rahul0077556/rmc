@@ -92,19 +92,29 @@ export function RmcChatbot() {
     }
   };
 
-  const [isCompact, setIsCompact] = useState(false);
+  const [isCompact, setIsCompact] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("rmc.copilot.compact") === "true";
+  });
+
+  const toggleCompact = (val: boolean) => {
+    setIsCompact(val);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("rmc.copilot.compact", String(val));
+    }
+  };
 
   return (
     <>
-      {/* Floating Launcher Trigger: z-40 so it stays underneath modal dialogs (z-50) */}
+      {/* Floating Launcher Trigger: z-30 so it stays underneath modal dialogs (z-50) and fixed bars (z-40) */}
       {!isOpen && (
-        <div className="fixed bottom-4 right-4 z-40 flex items-center gap-1.5 print:hidden">
+        <div className="fixed bottom-4 right-4 z-30 flex items-center gap-1.5 print:hidden">
           {isCompact ? (
             <button
               onClick={() => toggle(user?.role)}
-              title="Open Sai RMC Copilot"
+              title="Open Sai RMC Copilot (Click to open, double click or right-click to expand button)"
               aria-label="Open Sai RMC Plant Copilot"
-              className="flex size-11 items-center justify-center rounded-full bg-gradient-to-tr from-primary to-blue-600 text-white shadow-lg shadow-primary/30 transition-all hover:scale-110 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-primary"
+              className="flex size-11 items-center justify-center rounded-full bg-gradient-to-tr from-primary to-blue-600 text-white shadow-lg shadow-primary/30 transition-all hover:scale-110 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
             >
               <Bot className="size-5 text-white" />
               <span className="absolute -top-1 -right-1 flex size-3">
@@ -117,7 +127,7 @@ export function RmcChatbot() {
               <button
                 onClick={() => toggle(user?.role)}
                 aria-label="Open Sai RMC Plant Copilot"
-                className="group relative flex h-11 items-center gap-2 rounded-full bg-gradient-to-r from-primary via-blue-600 to-indigo-600 px-3.5 py-1.5 text-white shadow-lg shadow-primary/25 transition-all duration-300 hover:scale-[1.03] hover:shadow-xl hover:shadow-primary/35 focus:outline-none focus:ring-2 focus:ring-primary"
+                className="group relative flex h-11 items-center gap-2 rounded-full bg-gradient-to-r from-primary via-blue-600 to-indigo-600 px-3.5 py-1.5 text-white shadow-lg shadow-primary/25 transition-all duration-300 hover:scale-[1.03] hover:shadow-xl hover:shadow-primary/35 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
               >
                 {/* Animated Pulse Dot */}
                 <span className="relative flex h-2.5 w-2.5">
@@ -140,10 +150,10 @@ export function RmcChatbot() {
 
               <button
                 type="button"
-                onClick={() => setIsCompact(true)}
-                title="Minimize Copilot button"
+                onClick={() => toggleCompact(true)}
+                title="Minimize Copilot button to round icon"
                 aria-label="Minimize Copilot launcher"
-                className="flex size-7 items-center justify-center rounded-full bg-card/80 border border-border/70 text-muted-foreground hover:text-foreground hover:bg-muted transition-all shadow-xs"
+                className="flex size-7 items-center justify-center rounded-full bg-card/90 border border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted transition-all shadow-xs cursor-pointer"
               >
                 <Minimize2 className="size-3" />
               </button>

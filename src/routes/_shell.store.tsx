@@ -27,6 +27,8 @@ import {
   Search,
   Scale,
   ExternalLink,
+  Loader2,
+  Sparkles,
 } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { KpiCard } from "@/components/app/kpi-card";
@@ -221,6 +223,21 @@ function StorePage() {
       void qc.invalidateQueries({ queryKey: ["stock-transactions"] });
     },
     onError: () => toast.error("Failed to record inward material entry. Please check values."),
+  });
+
+  // Mutation: Quick Auto-Reconcile Deficits
+  const reconcileMutation = useMutation({
+    mutationFn: () => storeApi.reconcileDeficits(),
+    onSuccess: (res) => {
+      toast.success(res.message || "All material deficits reconciled with inward gate delivery consignments!");
+      void qc.invalidateQueries({ queryKey: ["inventory"] });
+      void qc.invalidateQueries({ queryKey: ["weighbridge"] });
+      void qc.invalidateQueries({ queryKey: ["stock-transactions"] });
+      void qc.invalidateQueries({ queryKey: ["reports"] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Failed to auto-reconcile deficits.");
+    },
   });
 
   function resetInwardForm() {
@@ -737,15 +754,31 @@ function StorePage() {
               </p>
             </div>
           </div>
-          <Button
-            size="sm"
-            variant="destructive"
-            className="font-semibold cursor-pointer shrink-0 shadow-md"
-            onClick={() => handleOpenInwardFor(negativeMaterials[0].material, negativeMaterials[0].siloName || "Silo")}
-          >
-            <Plus className="mr-1.5 size-4" />
-            Reconcile Inward Consignment
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            <Button
+              size="sm"
+              variant="default"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold cursor-pointer shadow-md text-xs"
+              onClick={() => reconcileMutation.mutate()}
+              disabled={reconcileMutation.isPending}
+            >
+              {reconcileMutation.isPending ? (
+                <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="mr-1.5 size-3.5 text-amber-300" />
+              )}
+              Auto-Inward Bulk Consignments ({negativeMaterials.length})
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              className="font-semibold cursor-pointer shrink-0 shadow-md text-xs"
+              onClick={() => handleOpenInwardFor(negativeMaterials[0].material, negativeMaterials[0].siloName || "Silo")}
+            >
+              <Plus className="mr-1.5 size-3.5" />
+              Reconcile Manually
+            </Button>
+          </div>
         </div>
       )}
 

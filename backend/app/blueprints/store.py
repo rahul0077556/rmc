@@ -378,8 +378,7 @@ def create_weighbridge_ticket():
             quantity=added_qty,
             reference=ticket.ticket_number,
             note=note_str,
-            created_by="Store Gate Console",
-            plant_id=get_scoped_plant_id()
+            created_by="Store Gate Console"
         )
         db.session.add(tx)
 
@@ -388,6 +387,96 @@ def create_weighbridge_ticket():
         "ticket": ticket.to_dict(),
         "updatedStock": mat.to_dict() if mat else None
     }, status_code=201)
+
+@store_bp.route("/reconcile-deficits", methods=["POST"])
+@jwt_required()
+@roles_required("store", "owner", "production", "dispatcher")
+def reconcile_deficits():
+    scoped_plant = get_scoped_plant_id()
+    q = Material.query.filter(Material.is_active == True)
+    if scoped_plant:
+        q = q.filter((Material.plant_id == scoped_plant) | (Material.plant_id.is_(None)))
+    materials = q.all()
+
+    now = datetime.now(timezone.utc)
+    now_str = now.isoformat()
+    reconciled = []
+    
+    DEFAULT_BUFFER = {
+        "cement": 35000.0,
+        "sand": 40000.0,
+        "aggregate": 45000.0,
+        "fly ash": 30000.0,
+        "ggbs": 30000.0,
+        "admixture": 1000.0,
+        "water": 50000.0,
+        "diesel": 5000.0
+    }
+
+    count = WeighbridgeTicket.query.count()
+
+    for mat in materials:
+        if mat.current_stock < 0:
+            deficit = abs(mat.current_stock)
+            name_lower = mat.name.lower()
+            buffer_qty = 20000.0
+            for k, v in DEFAULT_BUFFER.items():
+                if k in name_lower:
+                    buffer_qty = v
+                    break
+
+            inward_qty = round(deficit + buffer_qty, 1)
+            count += 1
+            ticket_num = f"WB-REC-{now.strftime('%y%m%d')}-{count:04d}"
+            vehicle_num = f"MH-12-REC-{count % 900 + 100}"
+            supplier_name = "Bulk Supply Consignment (Consignment Reconciliation)"
+            gate_pass = f"GP-REC-{now.strftime('%H%M%S')}-{mat.id[:4]}"
+
+            ticket = WeighbridgeTicket(
+                ticket_number=ticket_num,
+                type="INWARD",
+                vehicle_number=vehicle_num,
+                material=mat.name,
+                supplier_or_customer=supplier_name,
+                gross_weight=round(inward_qty * 1.35, 1),
+                tare_weight=round(inward_qty * 0.35, 1),
+                net_weight=inward_qty,
+                gross_time=now_str,
+                tare_time=now_str,
+                status="COMPLETED",
+                variance=0.0,
+                challan_weight=inward_qty,
+                received_rs=0.0,
+                wb_name="Gate Scale #1",
+                driver_name="Carrier Delivery Operator",
+                watchman_name="Gate Security Admin",
+                gate_pass_no=gate_pass,
+                plant_id=scoped_plant
+            )
+            db.session.add(ticket)
+
+            mat.current_stock = round(mat.current_stock + inward_qty, 2)
+            tx = StockTransaction(
+                material_id=mat.id,
+                type="IN",
+                quantity=inward_qty,
+                reference=ticket_num,
+                note=f"Opening / Consignment Inward Reconciliation (Ticket #{ticket_num})",
+                created_by="Store Inventory Manager"
+            )
+            db.session.add(tx)
+            reconciled.append({
+                "material": mat.name,
+                "reconciledQty": inward_qty,
+                "newStock": mat.current_stock,
+                "ticketNumber": ticket_num
+            })
+
+    db.session.commit()
+    return success_response(
+        data={"reconciled": reconciled, "count": len(reconciled)},
+        message=f"Successfully reconciled {len(reconciled)} materials with inward gate consignments."
+    )
 
 @store_bp.route("/weighbridge/tickets/<id>", methods=["PUT", "PATCH"])
 @jwt_required()

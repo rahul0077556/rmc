@@ -58,6 +58,29 @@ export const QUEUE_CATALOG: Record<Role, QueueItem[]> = {
   customer: [],
 };
 
+export function useQueueSummary() {
+  return useQuery({
+    queryKey: ["queue-summary"],
+    queryFn: async () => {
+      try {
+        const res = await request<{
+          counts: Record<Role, number>;
+          urgentCount: number;
+          pendingCount: number;
+          doneCount: number;
+        }>({
+          url: "/queue/summary",
+          method: "GET",
+        });
+        return res.data || null;
+      } catch {
+        return null;
+      }
+    },
+    refetchInterval: 3000,
+  });
+}
+
 /**
  * Hook to manage live role queue connected directly to operational backend
  */

@@ -274,3 +274,4 @@ export function PlantConfigDialog({ open, onOpenChange }: PlantConfigDialogProps
     </Dialog>
   );
 }
+

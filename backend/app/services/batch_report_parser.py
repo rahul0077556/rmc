@@ -482,7 +482,11 @@ try? handler.perform([request])
             if k not in actual_dict:
                 actual_dict[k] = v
 
-        materials_map = {m.name.lower(): m for m in Material.query.all()}
+        plant_id = getattr(trip, "plant_id", None) or (trip.po.plant_id if (trip and trip.po) else None)
+        q_mat = Material.query
+        if plant_id:
+            q_mat = q_mat.filter((Material.plant_id == plant_id) | (Material.plant_id.is_(None)))
+        materials_map = {m.name.lower(): m for m in q_mat.all()}
         stock_txs = []
 
         for mat_name, qty_val in actual_dict.items():
@@ -509,7 +513,8 @@ try? handler.perform([request])
                     current_stock=0.0,
                     reorder_level=1000.0,
                     is_tracked=not is_water_item,
-                    is_active=True
+                    is_active=True,
+                    plant_id=plant_id
                 )
                 db.session.add(mat)
                 db.session.flush()

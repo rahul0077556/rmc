@@ -315,7 +315,7 @@ function ProductLandingPage() {
               <span className="text-base sm:text-lg font-black tracking-tight text-white uppercase whitespace-nowrap">
                 MixFlow <span className="text-emerald-400">OS</span>
               </span>
-              <span className="hidden md:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 whitespace-nowrap">
+              <span className="hidden 2xl:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 whitespace-nowrap">
                 <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 Enterprise RMC Cloud
               </span>
@@ -323,7 +323,7 @@ function ProductLandingPage() {
           </Link>
 
           {/* Desktop Navigation Links */}
-          <nav className="hidden lg:flex items-center gap-6 xl:gap-7 text-xs font-medium text-slate-300">
+          <nav className="hidden xl:flex items-center gap-5 2xl:gap-7 text-xs font-medium text-slate-300">
             <button
               type="button"
               onClick={() => scrollToSection("solutions")}
@@ -391,7 +391,7 @@ function ProductLandingPage() {
             <Button
               variant="ghost"
               size="icon"
-              className="lg:hidden text-slate-300 hover:text-white hover:bg-white/10 size-8.5 rounded-xl border border-white/10 cursor-pointer"
+              className="xl:hidden text-slate-300 hover:text-white hover:bg-white/10 size-8.5 rounded-xl border border-white/10 cursor-pointer"
               onClick={() => setMobileNavOpen((o) => !o)}
               aria-label="Toggle navigation menu"
             >
@@ -402,7 +402,7 @@ function ProductLandingPage() {
 
         {/* Mobile Navigation Dropdown Drawer */}
         {mobileNavOpen && (
-          <div className="lg:hidden border-t border-white/[0.08] bg-[#0c1018]/98 backdrop-blur-2xl px-4 py-4 space-y-4 shadow-2xl">
+          <div className="xl:hidden border-t border-white/[0.08] bg-[#0c1018]/98 backdrop-blur-2xl px-4 py-4 space-y-4 shadow-2xl">
             <div className="grid grid-cols-2 gap-2 pb-3 border-b border-white/[0.08]">
               <button
                 type="button"

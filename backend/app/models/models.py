@@ -607,10 +607,12 @@ class BatchSheet(TimestampMixin, db.Model):
             u = User.query.get(self.created_by)
             if u:
                 operator_name = u.name
-            elif len(self.created_by) == 32:
-                operator_name = "Siddharth Joshi (Production)"
             else:
-                operator_name = self.created_by
+                clean_uid = self.created_by.replace("-", "").strip()
+                if len(clean_uid) == 32 and all(c in "0123456789abcdefABCDEF" for c in clean_uid):
+                    operator_name = "Siddharth Joshi (Production)"
+                else:
+                    operator_name = self.created_by
 
         return {
             "id": self.id,

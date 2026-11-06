@@ -24,7 +24,7 @@ import {
   HardHat,
 } from "lucide-react";
 import { useAuth } from "@/auth/auth-context";
-import { useRoleQueue, QUEUE_CATALOG, type QueueItem, type QueueUrgency } from "@/lib/queue-data";
+import { useRoleQueue, useQueueSummary, type QueueItem, type QueueUrgency } from "@/lib/queue-data";
 import { ROLE_LABEL } from "@/lib/nav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -124,7 +124,11 @@ function MyQueuePage() {
   const [activeTab, setActiveTab] = useState<"all" | "urgent" | "completed">("all");
   const [search, setSearch] = useState("");
 
+  const summaryQuery = useQueueSummary();
   const { items, pendingCount, urgentCount, completedCount, toggleComplete } = useRoleQueue(effectiveRole);
+
+  const displayUrgent = isOwner && summaryQuery.data ? summaryQuery.data.urgentCount : urgentCount;
+  const displayPending = isOwner && summaryQuery.data ? summaryQuery.data.pendingCount : pendingCount;
 
   const filteredItems = items.filter((item) => {
     if (activeTab === "urgent" && (item.urgency !== "urgent" || item.status === "completed")) return false;
@@ -149,6 +153,18 @@ function MyQueuePage() {
   const roleStyles = ROLE_COLORS[effectiveRole] || ROLE_COLORS.dispatcher;
   const RoleIcon = ROLE_ICONS[effectiveRole] || Truck;
 
+  const OWNER_DEPARTMENT_TABS: { role: Role; label: string }[] = [
+    { role: "owner", label: "All Departments" },
+    { role: "sales_manager", label: "Sales Manager" },
+    { role: "sales", label: "Sales Desk" },
+    { role: "dispatcher", label: "Dispatcher" },
+    { role: "production", label: "Production" },
+    { role: "qa", label: "QA / QC" },
+    { role: "supervisor", label: "Site Supervisor" },
+    { role: "store", label: "Store Manager" },
+    { role: "account", label: "Accountant" },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -164,7 +180,7 @@ function MyQueuePage() {
               className={cn("gap-1.5 font-semibold text-xs py-0.5 px-2.5", roleStyles.bg, roleStyles.text, roleStyles.border)}
             >
               <RoleIcon className="size-3.5" />
-              {ROLE_LABEL[effectiveRole]} Desk
+              {effectiveRole === "owner" ? "Executive Command" : `${ROLE_LABEL[effectiveRole]} Desk`}
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground">
@@ -177,13 +193,13 @@ function MyQueuePage() {
           <div className="flex items-center gap-2 rounded-xl border border-border/80 bg-card/80 px-3.5 py-2 shadow-xs">
             <span className="flex size-2 rounded-full bg-rose-500 animate-pulse" />
             <span className="text-xs font-medium text-muted-foreground">Urgent:</span>
-            <span className="text-sm font-bold text-rose-500 tabular-nums">{urgentCount}</span>
+            <span className="text-sm font-bold text-rose-500 tabular-nums">{displayUrgent}</span>
           </div>
 
           <div className="flex items-center gap-2 rounded-xl border border-border/80 bg-card/80 px-3.5 py-2 shadow-xs">
             <span className="flex size-2 rounded-full bg-amber-400" />
             <span className="text-xs font-medium text-muted-foreground">Pending:</span>
-            <span className="text-sm font-bold text-foreground tabular-nums">{pendingCount}</span>
+            <span className="text-sm font-bold text-foreground tabular-nums">{displayPending}</span>
           </div>
 
           <div className="flex items-center gap-2 rounded-xl border border-border/80 bg-card/80 px-3.5 py-2 shadow-xs">
@@ -205,11 +221,15 @@ function MyQueuePage() {
           </div>
 
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-            {(Object.keys(QUEUE_CATALOG) as Role[]).map((r) => {
+            {OWNER_DEPARTMENT_TABS.map((dept) => {
+              const r = dept.role;
               const isSelected = selectedRole === r;
               const Icon = ROLE_ICONS[r] || Truck;
               const colors = ROLE_COLORS[r];
-              const count = QUEUE_CATALOG[r]?.length || 0;
+              const count =
+                r === "owner"
+                  ? summaryQuery.data?.pendingCount ?? pendingCount
+                  : summaryQuery.data?.counts?.[r] ?? 0;
 
               return (
                 <button
@@ -224,10 +244,10 @@ function MyQueuePage() {
                   )}
                 >
                   <Icon className="size-3.5" />
-                  <span>{ROLE_LABEL[r]}</span>
+                  <span>{dept.label}</span>
                   <span
                     className={cn(
-                      "flex size-5 items-center justify-center rounded-full text-[10px] font-bold tabular-nums",
+                      "flex min-w-[20px] h-5 px-1.5 items-center justify-center rounded-full text-[10px] font-bold tabular-nums",
                       isSelected ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
                     )}
                   >

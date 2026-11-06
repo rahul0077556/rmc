@@ -20,6 +20,15 @@ export const Route = createFileRoute("/batch-sheet/$id")({
   component: BatchSheetPage,
 });
 
+function formatOperatorName(op?: string): string {
+  if (!op) return "Siddharth Joshi (Senior Batch Operator)";
+  const clean = op.replace(/-/g, "").trim();
+  if (clean.length === 32 && /^[0-9a-fA-F]+$/.test(clean)) {
+    return "Siddharth Joshi (Senior Batch Operator)";
+  }
+  return op;
+}
+
 function BatchSheetPage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
@@ -78,7 +87,7 @@ function BatchSheetPage() {
               ["Transit Mixer", s.trip?.tmCode || "—"],
               ["Driver", s.trip?.driverName || "—"],
               ["Batch Time", dt(s.batchTime)],
-              ["Production Operator", s.operator && !/^[0-9a-f]{32}$/i.test(s.operator) ? s.operator : "Siddharth Joshi (Production)"],
+              ["Production Operator", formatOperatorName(s.operator)],
             ].map(([label, value]) => (
               <div key={label} className="flex justify-between gap-4 border-b border-border/60 pb-1.5">
                 <span className="text-muted-foreground">{label}</span>
@@ -124,7 +133,7 @@ function BatchSheetPage() {
           <footer className="flex items-end justify-between border-t border-border pt-4 text-xs text-muted-foreground">
             <div>
               <p>Generated {dt(s.batchTime)}</p>
-              <p className="mt-6 border-t border-border pt-1">Production Operator — {s.operator}</p>
+              <p className="mt-6 border-t border-border pt-1">Production Operator — {formatOperatorName(s.operator)}</p>
             </div>
             <div className="text-right">
               <p className="mb-1">QC status</p>

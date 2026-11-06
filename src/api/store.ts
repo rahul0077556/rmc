@@ -188,6 +188,13 @@ export const storeApi = {
     });
   },
 
+  reconcileDeficits: async (): Promise<ApiResponse<{ reconciled: any[]; count: number }>> => {
+    return request<{ reconciled: any[]; count: number }>({
+      url: "/store/reconcile-deficits",
+      method: "POST",
+    });
+  },
+
   updateStock: async (materialId: string, addedStock: number): Promise<ApiResponse<InventoryItem>> => {
     try {
       const res = await request<InventoryItem>({
