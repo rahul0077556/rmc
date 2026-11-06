@@ -3,19 +3,42 @@ from flask import Blueprint, request
 from flask_jwt_extended import jwt_required
 from backend.app.extensions import db
 from backend.app.models.models import (
-    PurchaseOrder, Trip, Invoice, Customer, Truck, Driver, QcCheck
+    PurchaseOrder, Trip, Invoice, Customer, Truck, Driver, QcCheck, Plant
 )
 from backend.app.utils.responses import success_response
-from backend.app.utils.decorators import roles_required
+from backend.app.utils.decorators import roles_required, get_scoped_plant_id
 
 dashboard_bp = Blueprint("dashboard", __name__, url_prefix="/api/v1/dashboard")
+
+def get_plant_filter(model):
+    if not hasattr(model, "plant_id"):
+        return None
+    scoped_plant = get_scoped_plant_id()
+    if scoped_plant:
+        from backend.app.models.models import Plant
+        roxxcon = Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first()
+        if roxxcon and scoped_plant == roxxcon.id:
+            return (model.plant_id == scoped_plant) | (model.plant_id.is_(None))
+        else:
+            return model.plant_id == scoped_plant
+    return None
 
 @dashboard_bp.route("/owner-summary", methods=["GET"])
 @jwt_required()
 @roles_required()
 def get_owner_summary():
-    orders = PurchaseOrder.query.filter_by(is_deleted=False).all()
-    invoices = Invoice.query.all()
+    pf_po = get_plant_filter(PurchaseOrder)
+    pf_inv = get_plant_filter(Invoice)
+
+    orders_q = PurchaseOrder.query.filter_by(is_deleted=False)
+    if pf_po is not None:
+        orders_q = orders_q.filter(pf_po)
+    orders = orders_q.all()
+
+    invoices_q = Invoice.query
+    if pf_inv is not None:
+        invoices_q = invoices_q.filter(pf_inv)
+    invoices = invoices_q.all()
 
     total_orders = len(orders)
     pending_orders = len([o for o in orders if o.status in ["DRAFT", "SUBMITTED", "APPROVED", "IN_PROGRESS"]])
@@ -37,11 +60,12 @@ def get_owner_summary():
 def get_orders_per_date():
     days = int(request.args.get("days", 30))
     start_date = datetime.now(timezone.utc) - timedelta(days=days)
-    orders = (
-        PurchaseOrder.query
-        .filter(PurchaseOrder.created_at >= start_date, PurchaseOrder.is_deleted == False)
-        .all()
-    )
+    
+    pf = get_plant_filter(PurchaseOrder)
+    orders_q = PurchaseOrder.query.filter(PurchaseOrder.created_at >= start_date, PurchaseOrder.is_deleted == False)
+    if pf is not None:
+        orders_q = orders_q.filter(pf)
+    orders = orders_q.all()
 
     by_date = {}
     for i in range(days + 1):
@@ -55,7 +79,7 @@ def get_orders_per_date():
             by_date[dt]["quantity"] += o.quantity_cum
 
     chart_data = sorted(list(by_date.values()), key=lambda x: x["date"])
-    return success_response(data=chart_data)
+    return success_response(data={ "chart": chart_data, "data": chart_data } if isinstance(chart_data, list) else chart_data)
 
 @dashboard_bp.route("/daily-schedule", methods=["GET"])
 @jwt_required()
@@ -70,7 +94,11 @@ def get_daily_schedule():
     else:
         target_date = datetime.now(timezone.utc).date()
 
-    trips = Trip.query.all()
+    pf = get_plant_filter(Trip)
+    trips_q = Trip.query
+    if pf is not None:
+        trips_q = trips_q.filter(pf)
+    trips = trips_q.all()
     
     # Filter for selected date
     selected_date_trips = [t for t in trips if t.planned_datetime.date() == target_date]
@@ -93,14 +121,25 @@ def get_daily_schedule():
 @jwt_required()
 @roles_required()
 def get_payment_status():
-    invoices = Invoice.query.all()
+    pf_inv = get_plant_filter(Invoice)
+    pf_cust = get_plant_filter(Customer)
+
+    inv_q = Invoice.query
+    if pf_inv is not None:
+        inv_q = inv_q.filter(pf_inv)
+    invoices = inv_q.all()
+
     total_invoiced = sum(inv.total for inv in invoices)
     total_received = sum(inv.paid_amount for inv in invoices)
     total_outstanding = sum(inv.outstanding_amount for inv in invoices)
     total_overdue = sum(inv.outstanding_amount for inv in invoices if inv.is_overdue)
 
     # Per-customer breakdown
-    customers = Customer.query.all()
+    cust_q = Customer.query
+    if pf_cust is not None:
+        cust_q = cust_q.filter(pf_cust)
+    customers = cust_q.all()
+
     cust_breakdown = []
     for c in customers:
         c_invoices = [inv for inv in invoices if inv.customer_id == c.id]
@@ -132,18 +171,24 @@ def get_payment_status():
 @jwt_required()
 @roles_required()
 def get_percentages():
-    orders = PurchaseOrder.query.filter_by(is_deleted=False).all()
-    trips = Trip.query.all()
-    invoices = Invoice.query.all()
-    trucks = Truck.query.all()
-    qc_checks = QcCheck.query.all()
+    pf_po = get_plant_filter(PurchaseOrder)
+    pf_tr = get_plant_filter(Trip)
+    pf_inv = get_plant_filter(Invoice)
+    pf_tm = get_plant_filter(Truck)
+    pf_qc = get_plant_filter(QcCheck)
+
+    orders = PurchaseOrder.query.filter_by(is_deleted=False).filter(pf_po).all() if pf_po is not None else PurchaseOrder.query.filter_by(is_deleted=False).all()
+    trips = Trip.query.filter(pf_tr).all() if pf_tr is not None else Trip.query.all()
+    invoices = Invoice.query.filter(pf_inv).all() if pf_inv is not None else Invoice.query.all()
+    trucks = Truck.query.filter(pf_tm).all() if pf_tm is not None else Truck.query.all()
+    qc_checks = QcCheck.query.filter(pf_qc).all() if pf_qc is not None else QcCheck.query.all()
 
     # 1. % PO Quantity Delivered
     total_ordered_qty = sum(o.quantity_cum for o in orders) or 1.0
     total_deliv_qty = sum(o.delivered_quantity for o in orders)
     po_qty_delivered_pct = round((total_deliv_qty / total_ordered_qty) * 100, 1)
 
-    # 2. % Trips on time (dispatched within 30 min of planned or delivered)
+    # 2. % Trips on time
     dispatched_trips = [t for t in trips if t.status in ["DISPATCHED", "IN_TRANSIT", "DELIVERED"]]
     on_time = 0
     for t in dispatched_trips:
@@ -163,7 +208,7 @@ def get_percentages():
     paid_inv_count = len([inv for inv in invoices if inv.status == "PAID"])
     invoices_paid_pct = round((paid_inv_count / total_inv_count) * 100, 1)
 
-    # 5. % TM Utilization (non-maintenance and currently assigned/loaded/in transit)
+    # 5. % TM Utilization
     active_trucks = [t for t in trucks if t.status in ["ASSIGNED", "LOADED", "IN_TRANSIT"]]
     available_trucks = [t for t in trucks if t.status != "MAINTENANCE"]
     tm_utilization_pct = round((len(active_trucks) / max(len(available_trucks), 1)) * 100, 1)
@@ -186,10 +231,12 @@ def get_percentages():
 @jwt_required()
 @roles_required()
 def get_truck_availability():
-    trucks = Truck.query.all()
-    drivers = Driver.query.all()
+    pf_tm = get_plant_filter(Truck)
+    pf_dr = get_plant_filter(Driver)
 
-    # Group by capacities: 5, 7, 8, 9, 10 cum
+    trucks = Truck.query.filter(pf_tm).all() if pf_tm is not None else Truck.query.all()
+    drivers = Driver.query.filter(pf_dr).all() if pf_dr is not None else Driver.query.all()
+
     capacities = [5, 7, 8, 9, 10]
     by_capacity = {}
     for cap in capacities:

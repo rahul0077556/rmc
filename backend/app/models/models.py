@@ -22,9 +22,11 @@ class User(TimestampMixin, db.Model):
     role = db.Column(db.String(30), nullable=False, index=True)  # owner, customer, sales, dispatcher, production, qa
     is_manager = db.Column(db.Boolean, default=False, nullable=False)
     customer_id = db.Column(db.String(36), db.ForeignKey("customers.id"), nullable=True, index=True)
+    plant_id = db.Column(db.String(36), db.ForeignKey("plant.id"), nullable=True, index=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
 
     customer = db.relationship("Customer", backref="users", lazy=True)
+    plant_rel = db.relationship("Plant", foreign_keys=[plant_id], lazy=True)
 
     def set_password(self, password: str):
         self.password_hash = generate_password_hash(password)
@@ -33,8 +35,17 @@ class User(TimestampMixin, db.Model):
         return check_password_hash(self.password_hash, password)
 
     def to_dict(self):
-        plant_obj = Plant.query.first()
-        plant_name = plant_obj.name if plant_obj else "ROXXCON RMC NAGPUR"
+        plant_name = "ROXXCON RMC NAGPUR"
+        if self.plant_rel:
+            plant_name = self.plant_rel.name
+        elif self.plant_id:
+            p = Plant.query.get(self.plant_id)
+            if p:
+                plant_name = p.name
+        else:
+            p = Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first() or Plant.query.first()
+            if p:
+                plant_name = p.name
         return {
             "id": self.id,
             "name": self.name,
@@ -45,7 +56,8 @@ class User(TimestampMixin, db.Model):
             "customer_id": self.customer_id,
             "customer_name": self.customer.name if self.customer else None,
             "is_active": self.is_active,
-            "plant": plant_name
+            "plant": plant_name,
+            "plant_id": self.plant_id
         }
 
 # --- PLANT ---
@@ -57,6 +69,9 @@ class Plant(TimestampMixin, db.Model):
     gstin = db.Column(db.String(30), nullable=False)
     phone = db.Column(db.String(30), nullable=True)
     email = db.Column(db.String(100), nullable=True)
+    city = db.Column(db.String(100), nullable=True, default="Nagpur")
+    capacity = db.Column(db.String(50), nullable=True, default="60 cum/hr")
+    scada_type = db.Column(db.String(50), nullable=True, default="CRB-75")
 
     def to_dict(self):
         return {
@@ -65,7 +80,10 @@ class Plant(TimestampMixin, db.Model):
             "address": self.address,
             "gstin": self.gstin,
             "phone": self.phone,
-            "email": self.email
+            "email": self.email,
+            "city": self.city or "Nagpur",
+            "capacity": self.capacity or "60 cum/hr",
+            "scadaType": self.scada_type or "CRB-75"
         }
 
 # --- CUSTOMER & SITE ---
@@ -80,6 +98,7 @@ class Customer(TimestampMixin, db.Model):
     address = db.Column(db.Text, nullable=False)
     credit_days = db.Column(db.Integer, default=30, nullable=False)
     credit_limit = db.Column(db.Float, default=0.0, nullable=False)
+    plant_id = db.Column(db.String(36), db.ForeignKey("plant.id"), nullable=True, index=True)
 
     sites = db.relationship("Site", backref="customer", cascade="all, delete-orphan", lazy=True)
     orders = db.relationship("PurchaseOrder", backref="customer", lazy=True)
@@ -196,13 +215,14 @@ class MixDesign(TimestampMixin, db.Model):
 class Material(TimestampMixin, db.Model):
     __tablename__ = "materials"
     
-    name = db.Column(db.String(100), unique=True, nullable=False)
+    name = db.Column(db.String(100), nullable=False)
     unit = db.Column(db.String(20), nullable=False)  # kg, l
     current_stock = db.Column(db.Float, default=0.0, nullable=False)
     reorder_level = db.Column(db.Float, default=0.0, nullable=False)
     density = db.Column(db.Float, default=1.0, nullable=False)  # kg/l density for volume-weight conversion (admixture ~1.15)
     is_tracked = db.Column(db.Boolean, default=True, nullable=False)  # False for consumption-only items like Water
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    plant_id = db.Column(db.String(36), db.ForeignKey("plant.id"), nullable=True, index=True)
 
     transactions = db.relationship("StockTransaction", backref="material", lazy=True)
 
@@ -251,10 +271,11 @@ class StockTransaction(TimestampMixin, db.Model):
 class Truck(TimestampMixin, db.Model):
     __tablename__ = "trucks"
     
-    tm_number = db.Column(db.String(30), unique=True, nullable=False, index=True)
+    tm_number = db.Column(db.String(30), nullable=False, index=True)
     capacity_cum = db.Column(db.Integer, nullable=False)  # 5, 7, 8, 9, 10
     status = db.Column(db.String(30), default="AVAILABLE", nullable=False, index=True)  # AVAILABLE, ASSIGNED, LOADED, IN_TRANSIT, MAINTENANCE
     default_driver_id = db.Column(db.String(36), db.ForeignKey("drivers.id"), nullable=True)
+    plant_id = db.Column(db.String(36), db.ForeignKey("plant.id"), nullable=True, index=True)
 
     default_driver = db.relationship("Driver", foreign_keys=[default_driver_id], lazy=True)
 
@@ -275,6 +296,7 @@ class Driver(TimestampMixin, db.Model):
     phone = db.Column(db.String(30), nullable=False)
     license_no = db.Column(db.String(50), nullable=False)
     status = db.Column(db.String(30), default="AVAILABLE", nullable=False, index=True)  # AVAILABLE, ASSIGNED, UNAVAILABLE
+    plant_id = db.Column(db.String(36), db.ForeignKey("plant.id"), nullable=True, index=True)
 
     def to_dict(self):
         return {
@@ -297,6 +319,7 @@ class PurchaseOrder(TimestampMixin, db.Model):
     rate_per_cum = db.Column(db.Float, nullable=False)
     delivery_datetime = db.Column(db.DateTime, nullable=False, index=True)
     purpose = db.Column(db.String(50), nullable=False)  # Slab, Column, Beam, Footing, Other
+    plant_id = db.Column(db.String(36), db.ForeignKey("plant.id"), nullable=True, index=True)
     
     # Pump specifications
     pump_required = db.Column(db.Boolean, default=False, nullable=False)
@@ -411,6 +434,7 @@ class Trip(TimestampMixin, db.Model):
     quantity_cum = db.Column(db.Float, nullable=False)
     planned_datetime = db.Column(db.DateTime, nullable=False, index=True)
     status = db.Column(db.String(30), default="PLANNED", nullable=False, index=True)
+    plant_id = db.Column(db.String(36), db.ForeignKey("plant.id"), nullable=True, index=True)
     
     dispatched_at = db.Column(db.DateTime, nullable=True)
     delivered_at = db.Column(db.DateTime, nullable=True)
@@ -680,6 +704,7 @@ class QcCheck(TimestampMixin, db.Model):
     remarks = db.Column(db.Text, nullable=True)
     checked_by = db.Column(db.String(100), nullable=False)
     checked_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    plant_id = db.Column(db.String(36), db.ForeignKey("plant.id"), nullable=True, index=True)
 
     batch_sheet = db.relationship("BatchSheet", lazy=True)
 
@@ -802,6 +827,7 @@ class Invoice(TimestampMixin, db.Model):
     gst_percent = db.Column(db.Float, default=18.0, nullable=False)
     total = db.Column(db.Float, nullable=False)
     status = db.Column(db.String(30), default="DRAFT", nullable=False, index=True)  # DRAFT, ISSUED, PARTIALLY_PAID, PAID, CANCELLED
+    plant_id = db.Column(db.String(36), db.ForeignKey("plant.id"), nullable=True, index=True)
 
     po = db.relationship("PurchaseOrder", lazy=True)
     customer = db.relationship("Customer", lazy=True)
@@ -849,6 +875,7 @@ class Invoice(TimestampMixin, db.Model):
             "isOverdue": self.is_overdue,
             "tripCount": trip_count,
             "totalQuantity": total_qty,
+            "plantId": self.plant_id,
             "lines": [l.to_dict() for l in self.lines],
             "payments": [p.to_dict() for p in self.payments]
         }
@@ -973,6 +1000,7 @@ class WeighbridgeTicket(TimestampMixin, db.Model):
     driver_name = db.Column(db.String(100), nullable=True)
     watchman_name = db.Column(db.String(100), nullable=True)
     gate_pass_no = db.Column(db.String(50), nullable=True)
+    plant_id = db.Column(db.String(36), db.ForeignKey("plant.id"), nullable=True, index=True)
 
     def to_dict(self):
         return {
@@ -995,6 +1023,7 @@ class WeighbridgeTicket(TimestampMixin, db.Model):
             "driverName": self.driver_name or "",
             "watchmanName": self.watchman_name or "",
             "gatePassNo": self.gate_pass_no or "",
+            "plantId": self.plant_id,
             "createdAt": self.created_at.isoformat()
         }
 
@@ -1169,7 +1198,8 @@ class AttendanceRecord(TimestampMixin, db.Model):
 class WeighbridgeSettings(TimestampMixin, db.Model):
     __tablename__ = "weighbridge_settings"
 
-    plant_name = db.Column(db.String(150), default="Sai ReadyMix Concrete - Hinjewadi", nullable=False)
+    plant_id = db.Column(db.String(36), db.ForeignKey("plant.id"), nullable=True, index=True)
+    plant_name = db.Column(db.String(150), default="ROXXCON RMC NAGPUR", nullable=False)
     vendor_software_name = db.Column(db.String(100), default="Sai Weigh Pro v4.2", nullable=False)
     vendor_company_name = db.Column(db.String(150), default="Sai Scales & Automation Pvt Ltd", nullable=False)
     customer_care = db.Column(db.String(50), default="+91 20 6789 0100", nullable=False)
@@ -1179,6 +1209,7 @@ class WeighbridgeSettings(TimestampMixin, db.Model):
 
     def to_dict(self):
         return {
+            "plantId": self.plant_id,
             "plantName": self.plant_name,
             "vendorSoftwareName": self.vendor_software_name,
             "vendorCompanyName": self.vendor_company_name,

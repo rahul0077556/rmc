@@ -8,7 +8,7 @@ from backend.app.services.state_machine import StateMachine, StateMachineError
 from backend.app.services.erp_service import ErpService
 from backend.app.services.pdf_service import PdfService
 from backend.app.utils.responses import success_response, error_response
-from backend.app.utils.decorators import roles_required, get_scoped_customer_id, get_current_user_id
+from backend.app.utils.decorators import roles_required, get_scoped_customer_id, get_current_user_id, get_scoped_plant_id
 
 orders_bp = Blueprint("orders", __name__, url_prefix="/api/v1/purchase-orders")
 
@@ -17,7 +17,16 @@ orders_bp = Blueprint("orders", __name__, url_prefix="/api/v1/purchase-orders")
 @roles_required()
 def list_orders():
     scoped_cust = get_scoped_customer_id()
+    scoped_plant = get_scoped_plant_id()
     query = PurchaseOrder.query.filter_by(is_deleted=False)
+
+    if scoped_plant:
+        from backend.app.models.models import Plant
+        roxxcon = Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first()
+        if roxxcon and scoped_plant == roxxcon.id:
+            query = query.filter((PurchaseOrder.plant_id == scoped_plant) | (PurchaseOrder.plant_id.is_(None)))
+        else:
+            query = query.filter(PurchaseOrder.plant_id == scoped_plant)
 
     if scoped_cust:
         query = query.filter_by(customer_id=scoped_cust)
@@ -117,7 +126,8 @@ def create_order():
         ubitech_ref=erp_res.get("ubitech_ref"),
         notes=notes,
         status="DRAFT",
-        created_by=user_id
+        created_by=user_id,
+        plant_id=get_scoped_plant_id()
     )
 
     db.session.add(po)

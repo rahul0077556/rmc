@@ -29,6 +29,7 @@ import { cum, inr, inrCompact, num } from "@/lib/format";
 import { PLANT_NAME } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { ConcreteClock } from "@/components/common/ConcreteClock";
+import { useAuth } from "@/auth/auth-context";
 
 export const Route = createFileRoute("/_shell/owner")({
   head: () => ({
@@ -53,6 +54,7 @@ const DONUT_COLORS = ["var(--warning)", "var(--info)", "var(--success)", "var(--
 type ScheduleRow = OwnerDashboard["dailySchedule"][number];
 
 function OwnerDashboardPage() {
+  const { user } = useAuth();
   const [days, setDays] = useState(30);
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["owner-dashboard", days],
@@ -83,7 +85,7 @@ function OwnerDashboardPage() {
     <div className="space-y-6">
       <PageHeader
         title="Plant Overview"
-        subtitle={`${PLANT_NAME} · read-only owner view`}
+        subtitle={`${user?.plant || PLANT_NAME} · Live Executive Overview`}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex rounded-lg border border-border bg-surface-raised p-0.5">

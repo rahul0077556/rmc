@@ -10,7 +10,7 @@ from backend.app.services.state_machine import StateMachine, StateMachineError
 from backend.app.services.notification_service import NotificationService
 from backend.app.services.pdf_service import PdfService
 from backend.app.utils.responses import success_response, error_response
-from backend.app.utils.decorators import roles_required, get_scoped_customer_id, get_current_user_id
+from backend.app.utils.decorators import roles_required, get_scoped_customer_id, get_current_user_id, get_scoped_plant_id
 
 trips_bp = Blueprint("trips", __name__, url_prefix="/api/v1/trips")
 
@@ -30,7 +30,16 @@ def find_trip(id_or_num):
 @roles_required()
 def list_trips():
     scoped_cust = get_scoped_customer_id()
+    scoped_plant = get_scoped_plant_id()
     query = Trip.query
+
+    if scoped_plant:
+        from backend.app.models.models import Plant
+        roxxcon = Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first()
+        if roxxcon and scoped_plant == roxxcon.id:
+            query = query.filter((Trip.plant_id == scoped_plant) | (Trip.plant_id.is_(None)))
+        else:
+            query = query.filter(Trip.plant_id == scoped_plant)
 
     if scoped_cust:
         query = query.join(PurchaseOrder).filter(PurchaseOrder.customer_id == scoped_cust)
@@ -132,7 +141,8 @@ def create_trip():
         planned_datetime=planned_dt,
         status="PLANNED",
         notes=notes,
-        created_by=user_id
+        created_by=user_id,
+        plant_id=get_scoped_plant_id() or po.plant_id
     )
 
     if truck:

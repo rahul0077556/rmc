@@ -9,7 +9,7 @@ from backend.app.models.models import (
     Plant, User
 )
 from backend.app.utils.responses import success_response, error_response
-from backend.app.utils.decorators import roles_required, get_current_user_id
+from backend.app.utils.decorators import roles_required, get_current_user_id, get_scoped_plant_id
 
 store_bp = Blueprint("store", __name__, url_prefix="/api/v1/store")
 
@@ -18,7 +18,16 @@ store_bp = Blueprint("store", __name__, url_prefix="/api/v1/store")
 @jwt_required()
 @roles_required()
 def get_inventory():
-    materials = Material.query.order_by(Material.name.asc()).all()
+    scoped_plant = get_scoped_plant_id()
+    query = Material.query
+    if scoped_plant:
+        roxxcon = Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first()
+        if roxxcon and scoped_plant == roxxcon.id:
+            query = query.filter((Material.plant_id == scoped_plant) | (Material.plant_id.is_(None)))
+        else:
+            query = query.filter(Material.plant_id == scoped_plant)
+
+    materials = query.order_by(Material.name.asc()).all()
     items = []
     for m in materials:
         cat = "CEMENT"
@@ -100,13 +109,22 @@ def list_stock_transactions():
 @jwt_required()
 @roles_required()
 def list_materials():
-    materials = Material.query.order_by(Material.name.asc()).all()
+    scoped_plant = get_scoped_plant_id()
+    query = Material.query
+    if scoped_plant:
+        roxxcon = Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first()
+        if roxxcon and scoped_plant == roxxcon.id:
+            query = query.filter((Material.plant_id == scoped_plant) | (Material.plant_id.is_(None)))
+        else:
+            query = query.filter(Material.plant_id == scoped_plant)
+    materials = query.order_by(Material.name.asc()).all()
     return success_response(data=[m.to_dict() for m in materials])
 
 @store_bp.route("/materials", methods=["POST"])
 @jwt_required()
 @roles_required("store", "owner", "production", "dispatcher")
 def create_material():
+    scoped_plant = get_scoped_plant_id()
     data = request.get_json() or {}
     name = (data.get("name") or "").strip()
     unit = (data.get("unit") or "kg").strip()
@@ -120,8 +138,11 @@ def create_material():
     if not name:
         return error_response(code="VALIDATION_ERROR", message="Material name is required.", status_code=400)
 
-    # Check for existing material (case-insensitive)
-    existing = Material.query.filter(Material.name.ilike(name)).first()
+    # Check for existing material within plant
+    q = Material.query.filter(Material.name.ilike(name))
+    if scoped_plant:
+        q = q.filter((Material.plant_id == scoped_plant) | (Material.plant_id.is_(None)))
+    existing = q.first()
     if existing:
         if not existing.is_active:
             existing.is_active = True
@@ -144,7 +165,8 @@ def create_material():
         reorder_level=reorder_level,
         density=density,
         is_tracked=is_tracked,
-        is_active=True
+        is_active=True,
+        plant_id=scoped_plant
     )
     db.session.add(new_mat)
     db.session.flush()
@@ -226,7 +248,15 @@ def adjust_inventory():
 @jwt_required()
 @roles_required()
 def list_weighbridge_tickets():
-    tickets = WeighbridgeTicket.query.order_by(WeighbridgeTicket.created_at.desc()).all()
+    scoped_plant = get_scoped_plant_id()
+    query = WeighbridgeTicket.query
+    if scoped_plant:
+        roxxcon = Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first()
+        if roxxcon and scoped_plant == roxxcon.id:
+            query = query.filter((WeighbridgeTicket.plant_id == scoped_plant) | (WeighbridgeTicket.plant_id.is_(None)))
+        else:
+            query = query.filter(WeighbridgeTicket.plant_id == scoped_plant)
+    tickets = query.order_by(WeighbridgeTicket.created_at.desc()).all()
     return success_response(data=[t.to_dict() for t in tickets])
 
 @store_bp.route("/weighbridge/tickets", methods=["POST"])
@@ -325,7 +355,8 @@ def create_weighbridge_ticket():
         wb_name=data.get("wbName", "Gate Scale #1"),
         driver_name=data.get("driverName", "Inward Driver"),
         watchman_name=data.get("watchmanName", "Ganesh S (Gate Security)"),
-        gate_pass_no=gate_pass
+        gate_pass_no=gate_pass,
+        plant_id=get_scoped_plant_id()
     )
     db.session.add(ticket)
 
@@ -347,7 +378,8 @@ def create_weighbridge_ticket():
             quantity=added_qty,
             reference=ticket.ticket_number,
             note=note_str,
-            created_by="Store Gate Console"
+            created_by="Store Gate Console",
+            plant_id=get_scoped_plant_id()
         )
         db.session.add(tx)
 
@@ -542,9 +574,14 @@ def log_attendance():
 @jwt_required()
 @roles_required()
 def get_settings():
-    settings = WeighbridgeSettings.query.first()
+    scoped_plant = get_scoped_plant_id()
+    settings = None
+    if scoped_plant:
+        settings = WeighbridgeSettings.query.filter_by(plant_id=scoped_plant).first()
     if not settings:
-        settings = WeighbridgeSettings()
+        settings = WeighbridgeSettings.query.first()
+    if not settings:
+        settings = WeighbridgeSettings(plant_id=scoped_plant)
         db.session.add(settings)
         db.session.commit()
     return success_response(data=settings.to_dict())
@@ -553,17 +590,21 @@ def get_settings():
 @jwt_required()
 @roles_required("store", "owner")
 def update_settings():
-    settings = WeighbridgeSettings.query.first()
+    scoped_plant = get_scoped_plant_id()
+    settings = None
+    if scoped_plant:
+        settings = WeighbridgeSettings.query.filter_by(plant_id=scoped_plant).first()
     if not settings:
-        settings = WeighbridgeSettings()
+        settings = WeighbridgeSettings(plant_id=scoped_plant)
         db.session.add(settings)
 
     data = request.get_json() or {}
-    if "plantName" in data:
-        settings.plant_name = data["plantName"]
-        plant = Plant.query.first()
-        if plant:
-            plant.name = data["plantName"]
+    if "plantName" in data and data["plantName"].strip():
+        settings.plant_name = data["plantName"].strip()
+        if scoped_plant:
+            plant = Plant.query.get(scoped_plant)
+            if plant:
+                plant.name = data["plantName"].strip()
     if "vendorSoftwareName" in data: settings.vendor_software_name = data["vendorSoftwareName"]
     if "vendorCompanyName" in data: settings.vendor_company_name = data["vendorCompanyName"]
     if "customerCare" in data: settings.customer_care = data["customerCare"]

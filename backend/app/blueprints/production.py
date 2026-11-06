@@ -12,7 +12,8 @@ from backend.app.services.state_machine import StateMachine, StateMachineError
 from backend.app.services.pdf_service import PdfService
 from backend.app.services.batch_report_parser import BatchReportParserService
 from backend.app.utils.responses import success_response, error_response
-from backend.app.utils.decorators import roles_required, get_current_user_id
+from backend.app.utils.decorators import roles_required, get_current_user_id, get_scoped_plant_id
+from backend.app.models.models import Plant
 
 production_bp = Blueprint("production", __name__, url_prefix="/api/v1")
 
@@ -20,12 +21,15 @@ production_bp = Blueprint("production", __name__, url_prefix="/api/v1")
 @jwt_required()
 @roles_required("production", "dispatcher", "qa")
 def get_production_queue():
-    trips = (
-        Trip.query
-        .filter(Trip.status.in_(["PLANNED", "SENT_TO_PRODUCTION", "BATCHING", "LOADED", "QC_PENDING"]))
-        .order_by(Trip.planned_datetime.asc())
-        .all()
-    )
+    scoped_plant = get_scoped_plant_id()
+    query = Trip.query.filter(Trip.status.in_(["PLANNED", "SENT_TO_PRODUCTION", "BATCHING", "LOADED", "QC_PENDING"]))
+    if scoped_plant:
+        roxxcon = Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first()
+        if roxxcon and scoped_plant == roxxcon.id:
+            query = query.filter((Trip.plant_id == scoped_plant) | (Trip.plant_id.is_(None)))
+        else:
+            query = query.filter(Trip.plant_id == scoped_plant)
+    trips = query.order_by(Trip.planned_datetime.asc()).all()
     return success_response(data=[t.to_dict() for t in trips])
 
 @production_bp.route("/production/trips/<id>/check-materials", methods=["POST"])
@@ -538,7 +542,15 @@ def get_dpr_sheet():
             })
 
     # 2. Actual Batched & Dispatched Trips on that date
-    all_trips = Trip.query.order_by(Trip.planned_datetime.desc()).all()
+    scoped_plant = get_scoped_plant_id()
+    trip_q = Trip.query
+    if scoped_plant:
+        roxxcon = Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first()
+        if roxxcon and scoped_plant == roxxcon.id:
+            trip_q = trip_q.filter((Trip.plant_id == scoped_plant) | (Trip.plant_id.is_(None)))
+        else:
+            trip_q = trip_q.filter(Trip.plant_id == scoped_plant)
+    all_trips = trip_q.order_by(Trip.planned_datetime.desc()).all()
     actual_trips = []
     total_actual_cum = 0.0
 
@@ -648,14 +660,29 @@ def get_mpr_sheet():
         month_str = datetime.now().strftime("%Y-%m")
 
     # 1. Monthly PO Targets vs Cumulative Batched
-    all_pos = PurchaseOrder.query.all()
+    scoped_plant = get_scoped_plant_id()
+    po_q = PurchaseOrder.query
+    trip_q = Trip.query
+    mat_q = Material.query
+    if scoped_plant:
+        roxxcon = Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first()
+        if roxxcon and scoped_plant == roxxcon.id:
+            po_q = po_q.filter((PurchaseOrder.plant_id == scoped_plant) | (PurchaseOrder.plant_id.is_(None)))
+            trip_q = trip_q.filter((Trip.plant_id == scoped_plant) | (Trip.plant_id.is_(None)))
+            mat_q = mat_q.filter((Material.plant_id == scoped_plant) | (Material.plant_id.is_(None)))
+        else:
+            po_q = po_q.filter(PurchaseOrder.plant_id == scoped_plant)
+            trip_q = trip_q.filter(Trip.plant_id == scoped_plant)
+            mat_q = mat_q.filter(Material.plant_id == scoped_plant)
+
+    all_pos = po_q.all()
     monthly_pos = [
         p for p in all_pos
         if (p.delivery_datetime and p.delivery_datetime.strftime("%Y-%m") == month_str) or (p.created_at and p.created_at.strftime("%Y-%m") == month_str)
     ]
     target_cum = sum(p.quantity_cum for p in monthly_pos)
 
-    all_trips = Trip.query.all()
+    all_trips = trip_q.all()
     monthly_trips = [
         t for t in all_trips
         if (t.planned_datetime and t.planned_datetime.strftime("%Y-%m") == month_str) or (t.created_at and t.created_at.strftime("%Y-%m") == month_str)
@@ -663,7 +690,7 @@ def get_mpr_sheet():
     achieved_cum = sum(t.delivered_quantity or t.quantity_cum or 0.0 for t in monthly_trips)
 
     # 2. Material Inward & Consumption from real StockTransaction ledger
-    materials = Material.query.order_by(Material.name.asc()).all()
+    materials = mat_q.order_by(Material.name.asc()).all()
     material_rows = []
 
     for m in materials:

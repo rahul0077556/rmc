@@ -9,7 +9,8 @@ from backend.app.services.sequence_service import get_next_sequence
 from backend.app.services.state_machine import StateMachine, StateMachineError
 from backend.app.services.pdf_service import PdfService
 from backend.app.utils.responses import success_response, error_response
-from backend.app.utils.decorators import roles_required, get_scoped_customer_id, get_current_user_id
+from backend.app.utils.decorators import roles_required, get_scoped_customer_id, get_current_user_id, get_scoped_plant_id
+from backend.app.models.models import Plant
 
 billing_bp = Blueprint("billing", __name__, url_prefix="/api/v1/invoices")
 
@@ -18,7 +19,15 @@ billing_bp = Blueprint("billing", __name__, url_prefix="/api/v1/invoices")
 @roles_required()
 def list_invoices():
     scoped_cust = get_scoped_customer_id()
+    scoped_plant = get_scoped_plant_id()
     query = Invoice.query
+
+    if scoped_plant:
+        roxxcon = Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first()
+        if roxxcon and scoped_plant == roxxcon.id:
+            query = query.filter((Invoice.plant_id == scoped_plant) | (Invoice.plant_id.is_(None)))
+        else:
+            query = query.filter(Invoice.plant_id == scoped_plant)
 
     if scoped_cust:
         query = query.filter_by(customer_id=scoped_cust)

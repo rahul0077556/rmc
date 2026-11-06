@@ -40,7 +40,8 @@ class BillingService:
                 gst_percent=18.0,
                 total=0.0,
                 status="ISSUED",
-                created_by=user_id
+                created_by=user_id,
+                plant_id=po.plant_id
             )
             db.session.add(invoice)
             db.session.flush()

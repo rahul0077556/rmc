@@ -164,12 +164,34 @@ function SecureAuthPage() {
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
 
   // Selected client organization
+  const [organizations, setOrganizations] = useState(KNOWN_ORGANIZATIONS);
   const [selectedOrg, setSelectedOrg] = useState(KNOWN_ORGANIZATIONS[0]!);
   const [selectedSubLogin, setSelectedSubLogin] = useState(SUB_LOGIN_ROLES[0]!);
 
+  // Fetch real organizations from backend
+  useEffect(() => {
+    fetch("/api/v1/auth/organizations")
+      .then((r) => r.json())
+      .then((res) => {
+        if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+          const list = res.data.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            city: p.city || "India",
+            status: "Active Plant Workspace",
+          }));
+          setOrganizations(list);
+          if (!list.find((o: any) => o.id === selectedOrg.id)) {
+            setSelectedOrg(list[0]);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Login form state
   const [email, setEmail] = useState(SUB_LOGIN_ROLES[0]!.email);
-  const [password, setPassword] = useState("");
+  const [password, setPassword] = useState(DEMO_PASSWORD);
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -207,7 +229,7 @@ function SecureAuthPage() {
   function handleSubLoginSelect(sub: (typeof SUB_LOGIN_ROLES)[0]) {
     setSelectedSubLogin(sub);
     setEmail(sub.email);
-    setPassword("");
+    setPassword(DEMO_PASSWORD);
     setError(null);
   }
 
@@ -390,7 +412,7 @@ function SecureAuthPage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
-                    {KNOWN_ORGANIZATIONS.map((org) => {
+                    {organizations.map((org) => {
                       const isOrgSelected = selectedOrg.id === org.id;
                       return (
                         <button
@@ -419,11 +441,11 @@ function SecureAuthPage() {
                       <Cpu className="size-3.5 text-cyan-400" />
                       <span>Authorized Department Sub-Login</span>
                     </Label>
-                    <span className="text-[10px] text-slate-400 font-mono">10 Roles</span>
+                    <span className="text-[10px] text-slate-400 font-mono">10 Roles · 1-Click Access</span>
                   </div>
 
-                  {/* Scrollable Sub-Login Badges */}
-                  <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+                  {/* Open, Fully Visible Responsive Grid of All 10 Roles */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[320px] overflow-y-auto pr-1">
                     {SUB_LOGIN_ROLES.map((sub) => {
                       const isSubSelected = selectedSubLogin.id === sub.id;
                       const Icon = sub.icon;
@@ -433,18 +455,22 @@ function SecureAuthPage() {
                           type="button"
                           onClick={() => handleSubLoginSelect(sub)}
                           className={cn(
-                            "flex items-center gap-2 px-3 py-2 rounded-xl border shrink-0 transition-all cursor-pointer text-left",
+                            "flex items-center gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer text-left",
                             isSubSelected
-                              ? "border-emerald-500/50 bg-emerald-500/10 text-white ring-1 ring-emerald-500/30"
-                              : "border-white/[0.08] bg-black/40 text-slate-400 hover:border-white/20 hover:text-slate-200"
+                              ? "border-emerald-500/60 bg-emerald-500/15 text-white ring-1 ring-emerald-500/40 shadow-sm"
+                              : "border-white/[0.08] bg-black/40 text-slate-400 hover:border-white/20 hover:text-slate-200 hover:bg-white/[0.02]"
                           )}
                         >
-                          <span className={cn("flex size-6 items-center justify-center rounded-lg border", sub.color)}>
+                          <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-lg border", sub.color)}>
                             <Icon className="size-3.5" />
                           </span>
-                          <div>
-                            <span className="text-xs font-bold block whitespace-nowrap">{sub.title}</span>
-                            <span className="text-[10px] text-slate-400 block whitespace-nowrap">{sub.sub}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-xs font-bold truncate text-white">{sub.title}</span>
+                              {isSubSelected && <span className="size-1.5 rounded-full bg-emerald-400 shrink-0" />}
+                            </div>
+                            <span className="text-[10px] text-slate-400 block truncate">{sub.sub}</span>
+                            <span className="text-[10px] text-emerald-400/80 font-mono block truncate">{sub.email}</span>
                           </div>
                         </button>
                       );
@@ -497,14 +523,26 @@ function SecureAuthPage() {
                       <Label htmlFor="login-password" className="text-xs font-medium text-slate-300">
                         Secure Password
                       </Label>
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
-                      >
-                        {showPassword ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
-                        <span>{showPassword ? "Hide" : "Show"}</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPassword(DEMO_PASSWORD);
+                            toast.info("Filled Demo@123 password");
+                          }}
+                          className="text-[10px] text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/20 font-mono cursor-pointer transition-colors"
+                        >
+                          Fill Demo@123
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                        >
+                          {showPassword ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
+                          <span>{showPassword ? "Hide" : "Show"}</span>
+                        </button>
+                      </div>
                     </div>
                     <div className="relative">
                       <Lock className="absolute left-3 top-2.5 size-4 text-slate-500" />

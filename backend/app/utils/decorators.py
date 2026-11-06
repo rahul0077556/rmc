@@ -70,3 +70,27 @@ def get_scoped_customer_id():
     if claims.get("role") == "customer":
         return claims.get("customer_id")
     return None
+
+def get_scoped_plant_id():
+    """
+    Returns plant_id for the authenticated user, or default demo plant ID.
+    """
+    try:
+        verify_jwt_in_request()
+        claims = get_jwt()
+        plant_id = claims.get("plant_id")
+        if plant_id:
+            return plant_id
+        
+        user_id = get_jwt_identity()
+        if user_id:
+            from backend.app.models.models import User
+            user = User.query.get(user_id)
+            if user and user.plant_id:
+                return user.plant_id
+    except Exception:
+        pass
+    
+    from backend.app.models.models import Plant
+    p = Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first() or Plant.query.first()
+    return p.id if p else None

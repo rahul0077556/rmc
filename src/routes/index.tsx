@@ -34,6 +34,8 @@ import {
   Crown,
   Database,
   Lock,
+  Menu,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -272,6 +274,7 @@ const PRICING_PLANS = [
 
 function ProductLandingPage() {
   const [activeSolutionTab, setActiveSolutionTab] = useState(0);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const navigate = useNavigate();
 
   function scrollToSection(id: string) {
@@ -301,64 +304,64 @@ function ProductLandingPage() {
       {/* ============================================================ */}
       {/* TOP NAVIGATION BAR                                           */}
       {/* ============================================================ */}
-      <header className="sticky top-0 z-40 w-full border-b border-white/[0.08] bg-[#07090e]/85 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <header className="sticky top-0 z-40 w-full border-b border-white/[0.08] bg-[#07090e]/90 backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
           {/* Product Brand Logo */}
-          <Link to="/" className="flex items-center gap-3 group">
+          <Link to="/" className="flex items-center gap-2.5 sm:gap-3 group shrink-0">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-black font-black shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform">
               <Boxes className="size-5" />
             </span>
             <div className="flex items-center gap-2">
-              <span className="text-base sm:text-lg font-black tracking-tight text-white uppercase">
+              <span className="text-base sm:text-lg font-black tracking-tight text-white uppercase whitespace-nowrap">
                 MixFlow <span className="text-emerald-400">OS</span>
               </span>
-              <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span className="hidden md:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 whitespace-nowrap">
                 <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 Enterprise RMC Cloud
               </span>
             </div>
           </Link>
 
-          {/* Navigation Links */}
-          <nav className="hidden lg:flex items-center gap-7 text-xs font-medium text-slate-300">
+          {/* Desktop Navigation Links */}
+          <nav className="hidden lg:flex items-center gap-6 xl:gap-7 text-xs font-medium text-slate-300">
             <button
               type="button"
               onClick={() => scrollToSection("solutions")}
-              className="hover:text-emerald-400 transition-colors cursor-pointer"
+              className="hover:text-emerald-400 transition-colors cursor-pointer whitespace-nowrap"
             >
               Platform Solutions
             </button>
             <button
               type="button"
               onClick={() => scrollToSection("architecture")}
-              className="hover:text-emerald-400 transition-colors cursor-pointer"
+              className="hover:text-emerald-400 transition-colors cursor-pointer whitespace-nowrap"
             >
               SCADA Architecture
             </button>
             <button
               type="button"
               onClick={() => scrollToSection("multi-tenant")}
-              className="hover:text-emerald-400 transition-colors cursor-pointer"
+              className="hover:text-emerald-400 transition-colors cursor-pointer whitespace-nowrap"
             >
               Multi-Plant Tenancy
             </button>
             <button
               type="button"
               onClick={() => scrollToSection("workflows")}
-              className="hover:text-emerald-400 transition-colors cursor-pointer"
+              className="hover:text-emerald-400 transition-colors cursor-pointer whitespace-nowrap"
             >
               Workflow Pipeline
             </button>
             <button
               type="button"
               onClick={() => scrollToSection("pricing")}
-              className="hover:text-emerald-400 transition-colors cursor-pointer"
+              className="hover:text-emerald-400 transition-colors cursor-pointer whitespace-nowrap"
             >
               Pricing & ROI
             </button>
             <Link
               to="/reports"
-              className="hover:text-emerald-400 transition-colors flex items-center gap-1 text-slate-400"
+              className="hover:text-emerald-400 transition-colors flex items-center gap-1 text-slate-400 whitespace-nowrap"
             >
               <FileSpreadsheet className="size-3 text-emerald-400" />
               <span>13 Reports</span>
@@ -366,24 +369,122 @@ function ProductLandingPage() {
           </nav>
 
           {/* Action CTAs */}
-          <div className="flex items-center gap-3">
-            <ThemeSwitcher />
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <ThemeSwitcher className="border-white/10 bg-white/[0.04] text-slate-300 py-1" />
             <Link
               to="/login"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white px-3.5 py-2 rounded-xl border border-white/10 hover:border-white/20 transition-all cursor-pointer bg-white/[0.02]"
+              className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white px-3 py-1.5 rounded-xl border border-white/10 hover:border-white/20 transition-all cursor-pointer bg-white/[0.02] whitespace-nowrap"
             >
               <Lock className="size-3 text-emerald-400" />
               <span>Client Sign In</span>
             </Link>
             <Link
               to="/login"
-              className="bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs h-9 px-4 rounded-xl shadow-lg shadow-emerald-500/25 transition-all hover:shadow-emerald-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer inline-flex items-center gap-1.5"
+              className="bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs h-8.5 sm:h-9 px-3 sm:px-4 rounded-xl shadow-lg shadow-emerald-500/25 transition-all hover:shadow-emerald-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
             >
-              <span>Explore Platform</span>
+              <span>Explore</span>
+              <span className="hidden sm:inline">Platform</span>
               <ArrowRight className="size-3.5" />
             </Link>
+
+            {/* Mobile Hamburger Menu Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden text-slate-300 hover:text-white hover:bg-white/10 size-8.5 rounded-xl border border-white/10 cursor-pointer"
+              onClick={() => setMobileNavOpen((o) => !o)}
+              aria-label="Toggle navigation menu"
+            >
+              {mobileNavOpen ? <X className="size-5 text-emerald-400" /> : <Menu className="size-5" />}
+            </Button>
           </div>
         </div>
+
+        {/* Mobile Navigation Dropdown Drawer */}
+        {mobileNavOpen && (
+          <div className="lg:hidden border-t border-white/[0.08] bg-[#0c1018]/98 backdrop-blur-2xl px-4 py-4 space-y-4 shadow-2xl">
+            <div className="grid grid-cols-2 gap-2 pb-3 border-b border-white/[0.08]">
+              <button
+                type="button"
+                onClick={() => {
+                  scrollToSection("solutions");
+                  setMobileNavOpen(false);
+                }}
+                className="text-left text-xs font-medium text-slate-300 hover:text-emerald-400 p-2.5 rounded-lg hover:bg-white/[0.04] transition-colors"
+              >
+                Platform Solutions
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  scrollToSection("architecture");
+                  setMobileNavOpen(false);
+                }}
+                className="text-left text-xs font-medium text-slate-300 hover:text-emerald-400 p-2.5 rounded-lg hover:bg-white/[0.04] transition-colors"
+              >
+                SCADA Architecture
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  scrollToSection("multi-tenant");
+                  setMobileNavOpen(false);
+                }}
+                className="text-left text-xs font-medium text-slate-300 hover:text-emerald-400 p-2.5 rounded-lg hover:bg-white/[0.04] transition-colors"
+              >
+                Multi-Plant Tenancy
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  scrollToSection("workflows");
+                  setMobileNavOpen(false);
+                }}
+                className="text-left text-xs font-medium text-slate-300 hover:text-emerald-400 p-2.5 rounded-lg hover:bg-white/[0.04] transition-colors"
+              >
+                Workflow Pipeline
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  scrollToSection("pricing");
+                  setMobileNavOpen(false);
+                }}
+                className="text-left text-xs font-medium text-slate-300 hover:text-emerald-400 p-2.5 rounded-lg hover:bg-white/[0.04] transition-colors"
+              >
+                Pricing & ROI
+              </button>
+              <Link
+                to="/reports"
+                onClick={() => setMobileNavOpen(false)}
+                className="text-left text-xs font-medium text-slate-300 hover:text-emerald-400 p-2.5 rounded-lg hover:bg-white/[0.04] transition-colors flex items-center gap-1.5"
+              >
+                <FileSpreadsheet className="size-3 text-emerald-400" />
+                <span>13 Live Reports</span>
+              </Link>
+            </div>
+
+            <div className="flex flex-col gap-2.5 pt-1">
+              <Link
+                to="/login"
+                onClick={() => setMobileNavOpen(false)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-white/10 bg-white/[0.03] text-xs font-bold text-white hover:bg-white/[0.06] transition-colors"
+              >
+                <Lock className="size-3.5 text-emerald-400" />
+                <span>Client Organization Sign In</span>
+              </Link>
+              <Link
+                to="/login"
+                search={{ mode: "signup" }}
+                onClick={() => setMobileNavOpen(false)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-500 text-black text-xs font-black shadow-lg shadow-emerald-500/25 hover:bg-emerald-400 transition-colors"
+              >
+                <span>Onboard New Plant Client</span>
+                <ArrowRight className="size-3.5" />
+              </Link>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* ============================================================ */}

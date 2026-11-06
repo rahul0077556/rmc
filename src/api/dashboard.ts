@@ -114,50 +114,51 @@ export const dashboardApi = {
         maintCount += cap.maintenance || 0;
       }
     }
+    const hasTruckData = Boolean(truckData?.byCapacity && truckData.byCapacity.length > 0);
     const truckUtilisation = [
-      { status: "Available", count: availCount || 7 },
-      { status: "Assigned", count: assignedCount || 3 },
-      { status: "In Transit", count: inTransitCount || 1 },
-      { status: "Maintenance", count: maintCount || 1 },
+      { status: "Available", count: hasTruckData ? availCount : 0 },
+      { status: "Assigned", count: hasTruckData ? assignedCount : 0 },
+      { status: "In Transit", count: hasTruckData ? inTransitCount : 0 },
+      { status: "Maintenance", count: hasTruckData ? maintCount : 0 },
     ];
 
     // Performance metrics
     const performance = [
-      { label: "PO Quantity Delivered", value: percs.poQuantityDelivered || 85 },
-      { label: "Trips On Time", value: percs.tripsOnTime || 92 },
-      { label: "QC Approval Rate", value: percs.qcApprovalRate || 98 },
-      { label: "TM Rejection Rate", value: percs.tmRejections || 2 },
-      { label: "Invoices Paid", value: percs.invoicesPaid || 65 },
-      { label: "TM Utilization", value: percs.tmUtilization || 78 },
-      { label: "Orders Pending", value: percs.orderPending || 23 },
+      { label: "PO Quantity Delivered", value: percs.poQuantityDelivered ?? 0 },
+      { label: "Trips On Time", value: percs.tripsOnTime ?? 0 },
+      { label: "QC Approval Rate", value: percs.qcApprovalRate ?? 0 },
+      { label: "TM Rejection Rate", value: percs.tmRejections ?? 0 },
+      { label: "Invoices Paid", value: percs.invoicesPaid ?? 0 },
+      { label: "TM Utilization", value: percs.tmUtilization ?? 0 },
+      { label: "Orders Pending", value: percs.orderPending ?? 0 },
     ];
 
     return {
       data: {
         totalOrders: {
-          value: s.totalOrders || allOrders.length,
+          value: s.totalOrders ?? allOrders.length,
           change: 8.5,
-          spark: spark(orderCounts.length ? orderCounts.slice(-7) : [4, 5, 6, 5, 7, 8, 8]),
+          spark: spark(orderCounts.length ? orderCounts.slice(-7) : [0, 0, 0, 0, 0, 0, 0]),
         },
         pendingOrders: {
-          value: s.pendingOrders || statusCounts["Pending"],
+          value: s.pendingOrders ?? statusCounts["Pending"],
           change: -2.1,
-          spark: spark([4, 6, 3, 5, 4, 6, s.pendingOrders || 3]),
+          spark: spark([0, 0, 0, 0, 0, 0, s.pendingOrders ?? 0]),
         },
         deliveredOrders: {
-          value: s.deliveredOrders || statusCounts["Delivered"],
+          value: s.deliveredOrders ?? statusCounts["Delivered"],
           change: 12.0,
-          spark: spark([3, 5, 6, 7, 6, 8, s.deliveredOrders || 10]),
+          spark: spark([0, 0, 0, 0, 0, 0, s.deliveredOrders ?? 0]),
         },
         quantityDelivered: {
-          value: s.totalQuantityDelivered || 0,
+          value: s.totalQuantityDelivered ?? 0,
           change: 14.2,
-          spark: spark(orderQtys.length ? orderQtys.slice(-7) : [20, 35, 40, 50, 45, 60, 55]),
+          spark: spark(orderQtys.length ? orderQtys.slice(-7) : [0, 0, 0, 0, 0, 0, 0]),
         },
         outstandingPayments: {
-          value: s.outstandingPayments || payments.outstanding,
+          value: s.outstandingPayments ?? payments.outstanding,
           change: -5.4,
-          spark: spark([4, 6, 5, 8, 7, 9, 7]),
+          spark: spark([0, 0, 0, 0, 0, 0, 0]),
         },
         ordersPerDate,
         statusDistribution,

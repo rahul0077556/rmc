@@ -78,35 +78,64 @@ def execute_purge():
     AuditLog.query.delete()
     NotificationLog.query.delete()
 
+    # Plant Profile & Weighbridge Settings
+    plant = Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first() or Plant.query.first()
+    if not plant:
+        plant = Plant(
+            id="87328a36b4cc42f5a75f6d81ce5542ba",
+            name="ROXXCON RMC NAGPUR",
+            address="Plot 18, MIDC Hingna Industrial Area, Nagpur, Maharashtra 440016",
+            gstin="27AAACR9988D1Z2",
+            phone="+91 712 288 9900",
+            email="dispatch@roxxcon.in",
+            city="Nagpur, Maharashtra",
+            capacity="60 cum/hr",
+            scada_type="CRB-75"
+        )
+        db.session.add(plant)
+        db.session.flush()
+    else:
+        plant.name = "ROXXCON RMC NAGPUR"
+        plant.address = "Plot 18, MIDC Hingna Industrial Area, Nagpur, Maharashtra 440016"
+        plant.gstin = "27AAACR9988D1Z2"
+        if not plant.city:
+            plant.city = "Nagpur, Maharashtra"
+        if not plant.capacity:
+            plant.capacity = "60 cum/hr"
+        if not plant.scada_type:
+            plant.scada_type = "CRB-75"
+
     # 8. Reset Material Stocks to 0.0 (Clean Inventory)
     standard_materials = [
-        {"name": "Cement (OPC 53)", "unit": "kg", "reorder_level": 50000.0},
-        {"name": "River Sand (Zone II)", "unit": "kg", "reorder_level": 80000.0},
-        {"name": "Manufactured Sand (M-Sand)", "unit": "kg", "reorder_level": 50000.0},
-        {"name": "Aggregate 10mm", "unit": "kg", "reorder_level": 60000.0},
-        {"name": "Aggregate 20mm", "unit": "kg", "reorder_level": 90000.0},
-        {"name": "Fly Ash (Class F)", "unit": "kg", "reorder_level": 30000.0},
-        {"name": "GGBS (Slag)", "unit": "kg", "reorder_level": 35000.0},
-        {"name": "Water", "unit": "l", "reorder_level": 50000.0},
-        {"name": "Admixture (PCE)", "unit": "l", "reorder_level": 800.0},
-        {"name": "Diesel", "unit": "l", "reorder_level": 2000.0},
+        {"name": "Cement (OPC 53)", "unit": "kg", "reorder_level": 50000.0, "density": 3.15},
+        {"name": "River Sand (Zone II)", "unit": "kg", "reorder_level": 80000.0, "density": 2.65},
+        {"name": "Manufactured Sand (M-Sand)", "unit": "kg", "reorder_level": 50000.0, "density": 2.60},
+        {"name": "Aggregate 10mm", "unit": "kg", "reorder_level": 60000.0, "density": 2.70},
+        {"name": "Aggregate 20mm", "unit": "kg", "reorder_level": 90000.0, "density": 2.70},
+        {"name": "Fly Ash (Class F)", "unit": "kg", "reorder_level": 30000.0, "density": 2.20},
+        {"name": "GGBS (Slag)", "unit": "kg", "reorder_level": 35000.0, "density": 2.90},
+        {"name": "Water", "unit": "l", "reorder_level": 50000.0, "density": 1.0},
+        {"name": "Admixture (PCE)", "unit": "l", "reorder_level": 800.0, "density": 1.08},
+        {"name": "Diesel", "unit": "l", "reorder_level": 2000.0, "density": 0.85},
     ]
 
-    existing_mats = {m.name: m for m in Material.query.all()}
     for m_def in standard_materials:
-        mat = existing_mats.get(m_def["name"])
+        mat = Material.query.filter_by(name=m_def["name"], plant_id=plant.id).first()
         if not mat:
             mat = Material(
                 name=m_def["name"],
                 unit=m_def["unit"],
                 current_stock=0.0,
-                reorder_level=m_def["reorder_level"]
+                reorder_level=m_def["reorder_level"],
+                density=m_def.get("density", 1.0),
+                plant_id=plant.id
             )
             db.session.add(mat)
         else:
             mat.current_stock = 0.0
             mat.unit = m_def["unit"]
             mat.reorder_level = m_def["reorder_level"]
+            mat.plant_id = plant.id
 
     # 9. Reset Trucks & Drivers to AVAILABLE
     standard_trucks = [
@@ -121,13 +150,11 @@ def execute_purge():
     for t_def in standard_trucks:
         tr = Truck.query.filter_by(tm_number=t_def["tm_number"]).first()
         if not tr:
-            tr = Truck(tm_number=t_def["tm_number"], capacity_cum=t_def["capacity_cum"], status="AVAILABLE")
+            tr = Truck(tm_number=t_def["tm_number"], capacity_cum=t_def["capacity_cum"], status="AVAILABLE", plant_id=plant.id)
             db.session.add(tr)
         else:
             tr.status = "AVAILABLE"
-
-    for truck in Truck.query.all():
-        truck.status = "AVAILABLE"
+            tr.plant_id = plant.id
 
     standard_drivers = [
         {"name": "VIKASH", "phone": "+91 98220 77889"},
@@ -140,33 +167,16 @@ def execute_purge():
     for d_def in standard_drivers:
         dr = Driver.query.filter_by(name=d_def["name"]).first()
         if not dr:
-            dr = Driver(name=d_def["name"], phone=d_def["phone"], license_no=f"MH40-{d_def['name'][:3].upper()}-9988", status="AVAILABLE")
+            dr = Driver(name=d_def["name"], phone=d_def["phone"], license_no=f"MH40-{d_def['name'][:3].upper()}-9988", status="AVAILABLE", plant_id=plant.id)
             db.session.add(dr)
         else:
             dr.status = "AVAILABLE"
+            dr.plant_id = plant.id
 
-    for driver in Driver.query.all():
-        driver.status = "AVAILABLE"
-
-    # Plant Profile & Weighbridge Settings
-    plant = Plant.query.first()
-    if not plant:
-        plant = Plant(
-            name="ROXXCON RMC NAGPUR",
-            address="Plot 18, MIDC Hingna Industrial Area, Nagpur, Maharashtra 440016",
-            gstin="27AAACR9988D1Z2",
-            phone="+91 712 288 9900",
-            email="dispatch@roxxcon.in"
-        )
-        db.session.add(plant)
-    else:
-        plant.name = "ROXXCON RMC NAGPUR"
-        plant.address = "Plot 18, MIDC Hingna Industrial Area, Nagpur, Maharashtra 440016"
-        plant.gstin = "27AAACR9988D1Z2"
-
-    wb_set = WeighbridgeSettings.query.first()
+    wb_set = WeighbridgeSettings.query.filter_by(plant_id=plant.id).first() or WeighbridgeSettings.query.first()
     if not wb_set:
         wb_set = WeighbridgeSettings(
+            plant_id=plant.id,
             plant_name="ROXXCON RMC NAGPUR",
             wb_name="WB-01 (Inward/Outward Pitless 60T)",
             vendor_software_name="RMC Weigh Pro",
@@ -175,6 +185,7 @@ def execute_purge():
         )
         db.session.add(wb_set)
     else:
+        wb_set.plant_id = plant.id
         wb_set.plant_name = "ROXXCON RMC NAGPUR"
         wb_set.wb_name = "WB-01 (Inward/Outward Pitless 60T)"
 

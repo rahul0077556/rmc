@@ -9,7 +9,8 @@ from backend.app.models.models import (
 from backend.app.services.sequence_service import get_next_sequence
 from backend.app.services.state_machine import StateMachine, StateMachineError
 from backend.app.utils.responses import success_response, error_response
-from backend.app.utils.decorators import roles_required, get_current_user_id
+from backend.app.utils.decorators import roles_required, get_current_user_id, get_scoped_plant_id
+from backend.app.models.models import Plant
 
 qa_bp = Blueprint("qa", __name__, url_prefix="/api/v1/qa")
 
@@ -17,12 +18,15 @@ qa_bp = Blueprint("qa", __name__, url_prefix="/api/v1/qa")
 @jwt_required()
 @roles_required("qa", "dispatcher")
 def get_qa_queue():
-    trips = (
-        Trip.query
-        .filter(Trip.status.in_(["QC_PENDING", "CORRECTING", "QC_REJECTED"]))
-        .order_by(Trip.planned_datetime.asc())
-        .all()
-    )
+    scoped_plant = get_scoped_plant_id()
+    query = Trip.query.filter(Trip.status.in_(["QC_PENDING", "CORRECTING", "QC_REJECTED"]))
+    if scoped_plant:
+        roxxcon = Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first()
+        if roxxcon and scoped_plant == roxxcon.id:
+            query = query.filter((Trip.plant_id == scoped_plant) | (Trip.plant_id.is_(None)))
+        else:
+            query = query.filter(Trip.plant_id == scoped_plant)
+    trips = query.order_by(Trip.planned_datetime.asc()).all()
     return success_response(data=[t.to_dict() for t in trips])
 
 @qa_bp.route("/checks", methods=["POST"])
@@ -154,7 +158,16 @@ def submit_qc_check():
 @jwt_required()
 @roles_required()
 def list_cube_sets():
-    sets = CubeSet.query.order_by(CubeSet.cast_date.desc()).all()
+    scoped_plant = get_scoped_plant_id()
+    query = CubeSet.query
+    if scoped_plant:
+        query = query.join(Trip, CubeSet.trip_id == Trip.id)
+        roxxcon = Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first()
+        if roxxcon and scoped_plant == roxxcon.id:
+            query = query.filter((Trip.plant_id == scoped_plant) | (Trip.plant_id.is_(None)))
+        else:
+            query = query.filter(Trip.plant_id == scoped_plant)
+    sets = query.order_by(CubeSet.cast_date.desc()).all()
     return success_response(data=[s.to_dict() for s in sets])
 
 @qa_bp.route("/cube-sets", methods=["POST"])

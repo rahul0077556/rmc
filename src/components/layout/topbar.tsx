@@ -20,11 +20,13 @@ import { dt } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ThemeSwitcher } from "@/components/app/ThemeSwitcher";
 import { chatbotStore } from "@/lib/chatbot-store";
+import { PlantConfigDialog } from "@/components/app/PlantConfigDialog";
 
 export function Topbar({ onMenu }: { onMenu: () => void }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [plantConfigOpen, setPlantConfigOpen] = useState(false);
 
   const [readIds, setReadIds] = useState<Set<string>>(() => {
     if (typeof window !== "undefined") {
@@ -104,10 +106,15 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
         <CommandSearch />
       </div>
 
-      <div className="hidden items-center gap-2 rounded-lg border border-border bg-surface-raised px-2.5 py-1.5 text-xs text-muted-foreground md:flex">
+      <button
+        type="button"
+        onClick={() => setPlantConfigOpen(true)}
+        className="hidden items-center gap-2 rounded-lg border border-border bg-surface-raised px-2.5 py-1.5 text-xs text-muted-foreground md:flex hover:border-primary/50 hover:text-foreground cursor-pointer transition-colors"
+        title="Configure Plant Organization Details & Parameters"
+      >
         <Building2 className="size-3.5 text-primary" />
-        <span className="max-w-[190px] truncate">{user.plant}</span>
-      </div>
+        <span className="max-w-[190px] truncate font-medium">{user.plant}</span>
+      </button>
 
       <ThemeSwitcher className="hidden sm:flex" />
 
@@ -215,6 +222,9 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
             <p className="text-xs font-normal text-muted-foreground">{user.email}</p>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => setPlantConfigOpen(true)}>
+            <Building2 className="size-4" /> Plant Configuration
+          </DropdownMenuItem>
           <DropdownMenuItem>
             <UserRound className="size-4" /> Profile
           </DropdownMenuItem>
@@ -228,6 +238,9 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {/* Dedicated Plant Details & Configuration Modal */}
+      <PlantConfigDialog open={plantConfigOpen} onOpenChange={setPlantConfigOpen} />
     </header>
   );
 }

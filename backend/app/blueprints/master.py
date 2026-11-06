@@ -2,12 +2,50 @@ from flask import Blueprint, request
 from flask_jwt_extended import jwt_required
 from backend.app.extensions import db
 from backend.app.models.models import (
-    Customer, Site, Grade, MixDesign, Material, StockTransaction, Truck, Driver
+    Customer, Site, Grade, MixDesign, Material, StockTransaction, Truck, Driver, Plant
 )
 from backend.app.utils.responses import success_response, error_response
-from backend.app.utils.decorators import roles_required, get_scoped_customer_id, get_current_user_id
+from backend.app.utils.decorators import roles_required, get_scoped_customer_id, get_current_user_id, get_scoped_plant_id
 
 master_bp = Blueprint("master", __name__, url_prefix="/api/v1")
+
+# --- PLANT CONFIGURATION ---
+@master_bp.route("/plant", methods=["GET"])
+@jwt_required()
+def get_plant():
+    scoped_plant = get_scoped_plant_id()
+    p = Plant.query.get(scoped_plant) if scoped_plant else Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first() or Plant.query.first()
+    if not p:
+        return error_response(code="NOT_FOUND", message="Plant not found", status_code=404)
+    return success_response(data=p.to_dict())
+
+@master_bp.route("/plant", methods=["PUT"])
+@jwt_required()
+@roles_required("owner", "sales_manager")
+def update_plant():
+    scoped_plant = get_scoped_plant_id()
+    p = Plant.query.get(scoped_plant) if scoped_plant else Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first() or Plant.query.first()
+    if not p:
+        return error_response(code="NOT_FOUND", message="Plant not found", status_code=404)
+    data = request.get_json() or {}
+    if "name" in data and data["name"].strip():
+        p.name = data["name"].strip()
+    if "address" in data:
+        p.address = data["address"].strip()
+    if "city" in data:
+        p.city = data["city"].strip()
+    if "gstin" in data:
+        p.gstin = data["gstin"].strip()
+    if "phone" in data:
+        p.phone = data["phone"].strip()
+    if "email" in data:
+        p.email = data["email"].strip()
+    if "capacity" in data:
+        p.capacity = data["capacity"].strip()
+    if "scadaType" in data or "scada_type" in data:
+        p.scada_type = data.get("scadaType") or data.get("scada_type")
+    db.session.commit()
+    return success_response(data=p.to_dict(), message="Plant configuration updated.")
 
 # --- CUSTOMERS ---
 @master_bp.route("/customers", methods=["GET"])
@@ -15,7 +53,16 @@ master_bp = Blueprint("master", __name__, url_prefix="/api/v1")
 @roles_required()
 def list_customers():
     scoped_cust = get_scoped_customer_id()
+    scoped_plant = get_scoped_plant_id()
     query = Customer.query
+
+    if scoped_plant:
+        roxxcon = Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first()
+        if roxxcon and scoped_plant == roxxcon.id:
+            query = query.filter((Customer.plant_id == scoped_plant) | (Customer.plant_id.is_(None)))
+        else:
+            query = query.filter(Customer.plant_id == scoped_plant)
+
     if scoped_cust:
         query = query.filter_by(id=scoped_cust)
     
@@ -56,7 +103,8 @@ def create_customer():
         address=address or f"Pune, Maharashtra",
         credit_days=credit_days,
         credit_limit=credit_limit,
-        created_by=user_id
+        created_by=user_id,
+        plant_id=get_scoped_plant_id()
     )
     db.session.add(cust)
     db.session.flush()
@@ -191,7 +239,15 @@ def get_mix_design(grade_id):
 @jwt_required()
 @roles_required()
 def list_materials():
-    materials = Material.query.all()
+    scoped_plant = get_scoped_plant_id()
+    query = Material.query.filter_by(is_active=True)
+    if scoped_plant:
+        roxxcon = Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first()
+        if roxxcon and scoped_plant == roxxcon.id:
+            query = query.filter((Material.plant_id == scoped_plant) | (Material.plant_id.is_(None)))
+        else:
+            query = query.filter(Material.plant_id == scoped_plant)
+    materials = query.all()
     return success_response(data=[m.to_dict() for m in materials])
 
 @master_bp.route("/materials/adjust", methods=["POST"])
@@ -222,7 +278,8 @@ def adjust_stock():
         quantity=quantity,
         note=note,
         reference="Manual Adjustment",
-        created_by=user_id
+        created_by=user_id,
+        plant_id=get_scoped_plant_id()
     )
     db.session.add(tx)
     db.session.commit()
@@ -233,14 +290,30 @@ def adjust_stock():
 @jwt_required()
 @roles_required()
 def list_trucks():
-    trucks = Truck.query.all()
+    scoped_plant = get_scoped_plant_id()
+    query = Truck.query
+    if scoped_plant:
+        roxxcon = Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first()
+        if roxxcon and scoped_plant == roxxcon.id:
+            query = query.filter((Truck.plant_id == scoped_plant) | (Truck.plant_id.is_(None)))
+        else:
+            query = query.filter(Truck.plant_id == scoped_plant)
+    trucks = query.all()
     return success_response(data=[t.to_dict() for t in trucks])
 
 @master_bp.route("/drivers", methods=["GET"])
 @jwt_required()
 @roles_required()
 def list_drivers():
-    drivers = Driver.query.all()
+    scoped_plant = get_scoped_plant_id()
+    query = Driver.query
+    if scoped_plant:
+        roxxcon = Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first()
+        if roxxcon and scoped_plant == roxxcon.id:
+            query = query.filter((Driver.plant_id == scoped_plant) | (Driver.plant_id.is_(None)))
+        else:
+            query = query.filter(Driver.plant_id == scoped_plant)
+    drivers = query.all()
     return success_response(data=[d.to_dict() for d in drivers])
 
 # --- SYSTEM PURGE / CLEAN SEED ---
