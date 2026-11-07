@@ -27,10 +27,10 @@ export function ThemeSwitcher({ className }: { className?: string }) {
   }
 
   return (
-    <div className={cn("flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-xs", className)}>
-      <Palette className="size-3.5 text-muted-foreground mr-1" />
-      <span className="text-[11px] font-medium text-muted-foreground hidden sm:inline mr-1">Theme:</span>
-      <div className="flex items-center gap-1">
+    <div className={cn("inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-surface/90 backdrop-blur-sm px-2.5 py-1 text-xs shadow-xs", className)}>
+      <Palette className="size-3.5 text-muted-foreground mr-0.5 shrink-0" />
+      <span className="text-[11px] font-medium text-muted-foreground hidden sm:inline mr-0.5">Theme:</span>
+      <div className="flex items-center gap-1.5">
         {THEMES.map((t) => {
           const isSelected = theme === t.id;
           return (
@@ -38,13 +38,16 @@ export function ThemeSwitcher({ className }: { className?: string }) {
               key={t.id}
               onClick={() => selectTheme(t.id)}
               title={t.label}
+              type="button"
               className={cn(
-                "relative flex size-5 items-center justify-center rounded-full transition-transform hover:scale-110",
+                "relative flex size-4.5 items-center justify-center rounded-full transition-all duration-150 cursor-pointer",
                 t.dotColor,
-                isSelected ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : "opacity-70 hover:opacity-100"
+                isSelected
+                  ? "scale-105 ring-2 ring-white/90 shadow-sm"
+                  : "opacity-60 hover:opacity-100 hover:scale-105"
               )}
             >
-              {isSelected && <Check className="size-3 text-slate-950 stroke-[3]" />}
+              {isSelected && <Check className="size-2.5 text-slate-950 stroke-[3]" />}
             </button>
           );
         })}

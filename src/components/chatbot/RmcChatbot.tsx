@@ -106,59 +106,21 @@ export function RmcChatbot() {
 
   return (
     <>
-      {/* Floating Launcher Trigger: z-30 so it stays underneath modal dialogs (z-50) and fixed bars (z-40) */}
+      {/* Floating Launcher Trigger: compact 44px FAB at z-30 so it stays underneath modal dialogs (z-50) and never obstructs footer action buttons */}
       {!isOpen && (
-        <div className="fixed bottom-4 right-4 z-30 flex items-center gap-1.5 print:hidden">
-          {isCompact ? (
-            <button
-              onClick={() => toggle(user?.role)}
-              title="Open Sai RMC Copilot (Click to open, double click or right-click to expand button)"
-              aria-label="Open Sai RMC Plant Copilot"
-              className="flex size-11 items-center justify-center rounded-full bg-gradient-to-tr from-primary to-blue-600 text-white shadow-lg shadow-primary/30 transition-all hover:scale-110 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
-            >
-              <Bot className="size-5 text-white" />
-              <span className="absolute -top-1 -right-1 flex size-3">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex size-3 rounded-full bg-emerald-400 border-2 border-background" />
-              </span>
-            </button>
-          ) : (
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => toggle(user?.role)}
-                aria-label="Open Sai RMC Plant Copilot"
-                className="group relative flex h-11 items-center gap-2 rounded-full bg-gradient-to-r from-primary via-blue-600 to-indigo-600 px-3.5 py-1.5 text-white shadow-lg shadow-primary/25 transition-all duration-300 hover:scale-[1.03] hover:shadow-xl hover:shadow-primary/35 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
-              >
-                {/* Animated Pulse Dot */}
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                </span>
-
-                <div className="flex items-center gap-2">
-                  <div className="flex size-7 items-center justify-center rounded-full bg-white/20 backdrop-blur-xs">
-                    <Bot className="size-3.5 text-white" />
-                  </div>
-                  <div className="flex flex-col text-left">
-                    <span className="text-xs font-semibold leading-none tracking-tight">RMC Copilot</span>
-                    <span className="text-[10px] text-white/80 leading-tight">Ask AI</span>
-                  </div>
-                </div>
-
-                <Sparkles className="size-3 text-amber-300 animate-pulse ml-0.5" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => toggleCompact(true)}
-                title="Minimize Copilot button to round icon"
-                aria-label="Minimize Copilot launcher"
-                className="flex size-7 items-center justify-center rounded-full bg-card/90 border border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted transition-all shadow-xs cursor-pointer"
-              >
-                <Minimize2 className="size-3" />
-              </button>
-            </div>
-          )}
+        <div className="fixed bottom-5 right-5 z-30 flex items-center print:hidden">
+          <button
+            onClick={() => toggle(user?.role)}
+            title="Open Sai RMC Copilot (AI Online)"
+            aria-label="Open Sai RMC Plant Copilot"
+            className="group relative flex size-11 items-center justify-center rounded-full bg-gradient-to-tr from-primary via-blue-600 to-indigo-600 text-white shadow-xl shadow-primary/30 transition-all duration-300 hover:scale-110 hover:shadow-primary/50 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+          >
+            <Bot className="size-5 text-white transition-transform duration-300 group-hover:scale-110" />
+            <span className="absolute -top-0.5 -right-0.5 flex size-3">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex size-3 rounded-full bg-emerald-400 border-2 border-background" />
+            </span>
+          </button>
         </div>
       )}
 

@@ -11,6 +11,23 @@ export interface MaterialCheckRow {
   shortfall: number;
 }
 
+export interface ScadaMaterialRow {
+  name: string;
+  recipeKg: number;
+  setKg: number;
+  actualKg: number;
+  varianceKg: number;
+  variancePct: number;
+  unit: string;
+}
+
+export interface ScadaBatchCycle {
+  cycleNo: number;
+  durationSec: number;
+  totalKg: number;
+  weights?: number[];
+}
+
 export interface ScadaBatchDocketData {
   plantName: string;
   plantCapacity: string;
@@ -31,15 +48,24 @@ export interface ScadaBatchDocketData {
   endTime: string;
   wcRatio: number;
   thVolume?: number;
-  rSandKg: number;
-  mSandKg: number;
-  agg10mmKg: number;
-  agg20mmKg: number;
-  cementKg: number;
-  flyashKg: number;
-  waterL: number;
-  admixtureKg: number;
-  totalWeightKg: number;
+  rSandKg?: number;
+  mSandKg?: number;
+  agg10mmKg?: number;
+  agg20mmKg?: number;
+  cementKg?: number;
+  flyashKg?: number;
+  waterL?: number;
+  admixtureKg?: number;
+  totalWeightKg?: number;
+  materials?: ScadaMaterialRow[];
+  cycles?: ScadaBatchCycle[];
+  discrepancies?: string[];
+  isVerified?: boolean;
+  isReadable?: boolean;
+  error?: string;
+  rawText?: string;
+  tripId?: string;
+  replaceExisting?: boolean;
 }
 
 export interface DailyConsumptionData {

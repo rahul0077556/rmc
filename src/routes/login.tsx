@@ -27,7 +27,9 @@ import {
   Gauge,
   HardHat,
   ChevronDown,
-  Info
+  Info,
+  Layers,
+  Filter
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -54,106 +56,114 @@ export const Route = createFileRoute("/login")({
   component: SecureAuthPage,
 });
 
-// Client organizations enrolled in the SaaS platform
-const KNOWN_ORGANIZATIONS = [
-  { id: "roxxcon", name: "ROXXCON RMC NAGPUR", city: "Nagpur, Maharashtra", status: "Active Client" },
-  { id: "apex", name: "Apex Ready Mix Concrete", city: "Pune, Maharashtra", status: "Active Client" },
-  { id: "sai", name: "Sai Concrete Infrastructure", city: "Nashik, Maharashtra", status: "Active Client" },
-  { id: "shree", name: "Shree Ram Concrete Hub", city: "Mumbai, Maharashtra", status: "Active Client" },
+// Fallback seed client organizations
+const INITIAL_ORGANIZATIONS = [
+  { id: "roxxcon", name: "ROXXCON RMC NAGPUR", city: "Nagpur, Maharashtra", status: "Active Plant Workspace" },
+  { id: "apex", name: "Apex Ready Mix Concrete", city: "Pune, Maharashtra", status: "Active Plant Workspace" },
+  { id: "sai", name: "Sai Concrete Infrastructure", city: "Nashik, Maharashtra", status: "Active Plant Workspace" },
+  { id: "shree", name: "Shree Ram Concrete Hub", city: "Mumbai, Maharashtra", status: "Active Plant Workspace" },
 ];
 
-// Department sub-logins inside a client organization
-const SUB_LOGIN_ROLES = [
+// Department sub-login role metadata templates
+const SUB_LOGIN_METADATA = [
   {
-    id: "owner",
     role: "owner",
     title: "Plant Owner / Director",
     sub: "Executive P&L & Audits",
-    email: "owner@rmc.test",
+    defaultEmail: "owner@rmc.test",
+    category: "executive",
     icon: Crown,
     color: "text-amber-400 bg-amber-500/10 border-amber-500/20",
   },
   {
-    id: "sales",
     role: "sales",
     title: "Sales Desk",
     sub: "Order Booking & POs",
-    email: "sales@rmc.test",
+    defaultEmail: "sales@rmc.test",
+    category: "executive",
     icon: FileText,
     color: "text-teal-400 bg-teal-500/10 border-teal-500/20",
   },
   {
-    id: "sales_manager",
     role: "sales_manager",
     title: "Sales Manager",
     sub: "Commercial Approvals",
-    email: "salesmanager@rmc.test",
+    defaultEmail: "salesmanager@rmc.test",
+    category: "executive",
     icon: Gauge,
     color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
   },
   {
-    id: "dispatch",
     role: "dispatcher",
     title: "Dispatch Master",
     sub: "Fleet & TM Logistics",
-    email: "dispatcher@rmc.test",
+    defaultEmail: "dispatcher@rmc.test",
+    category: "logistics",
     icon: Truck,
     color: "text-sky-400 bg-sky-500/10 border-sky-500/20",
   },
   {
-    id: "supervisor",
     role: "supervisor",
     title: "Site Supervisor",
     sub: "Pouring & Pump Ops",
-    email: "supervisor@rmc.test",
+    defaultEmail: "supervisor@rmc.test",
+    category: "logistics",
     icon: HardHat,
     color: "text-lime-400 bg-lime-500/10 border-lime-500/20",
   },
   {
-    id: "production",
     role: "production",
     title: "Production Engineer",
     sub: "CRB-75 SCADA Batching",
-    email: "production@rmc.test",
+    defaultEmail: "production@rmc.test",
+    category: "plant",
     icon: Package,
     color: "text-orange-400 bg-orange-500/10 border-orange-500/20",
   },
   {
-    id: "qa",
     role: "qa",
     title: "QA / QC Lab In-Charge",
     sub: "IS 456 Slump & Cubes",
-    email: "qa@rmc.test",
+    defaultEmail: "qa@rmc.test",
+    category: "plant",
     icon: FlaskConical,
     color: "text-purple-400 bg-purple-500/10 border-purple-500/20",
   },
   {
-    id: "store",
     role: "store",
     title: "Store & Weighbridge",
     sub: "Gross/Tare & Silo Stock",
-    email: "store@rmc.test",
+    defaultEmail: "store@rmc.test",
+    category: "finance",
     icon: Warehouse,
     color: "text-yellow-400 bg-yellow-500/10 border-yellow-500/20",
   },
   {
-    id: "account",
     role: "account",
-    title: "Accounts & Payroll",
+    title: "Accounts & Billing",
     sub: "GST Invoicing & Ledger",
-    email: "account@rmc.test",
+    defaultEmail: "account@rmc.test",
+    category: "finance",
     icon: Users,
     color: "text-rose-400 bg-rose-500/10 border-rose-500/20",
   },
   {
-    id: "customer",
     role: "customer",
     title: "Customer Client Portal",
     sub: "Live Orders & E-Challans",
-    email: "customer1@rmc.test",
+    defaultEmail: "customer1@rmc.test",
+    category: "finance",
     icon: Building2,
     color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/20",
   },
+];
+
+const DEPARTMENT_CATEGORIES = [
+  { id: "all", label: "All Roles (10)" },
+  { id: "executive", label: "Executive & Sales" },
+  { id: "logistics", label: "Dispatch & Site" },
+  { id: "plant", label: "SCADA & QA Lab" },
+  { id: "finance", label: "Store & Accounts" },
 ];
 
 function SecureAuthPage() {
@@ -164,33 +174,16 @@ function SecureAuthPage() {
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
 
   // Selected client organization
-  const [organizations, setOrganizations] = useState(KNOWN_ORGANIZATIONS);
-  const [selectedOrg, setSelectedOrg] = useState(KNOWN_ORGANIZATIONS[0]!);
-  const [selectedSubLogin, setSelectedSubLogin] = useState(SUB_LOGIN_ROLES[0]!);
+  const [organizations, setOrganizations] = useState(INITIAL_ORGANIZATIONS);
+  const [selectedOrg, setSelectedOrg] = useState(INITIAL_ORGANIZATIONS[0]!);
 
-  // Fetch real organizations from backend
-  useEffect(() => {
-    fetch("/api/v1/auth/organizations")
-      .then((r) => r.json())
-      .then((res) => {
-        if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-          const list = res.data.map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            city: p.city || "India",
-            status: "Active Plant Workspace",
-          }));
-          setOrganizations(list);
-          if (!list.find((o: any) => o.id === selectedOrg.id)) {
-            setSelectedOrg(list[0]);
-          }
-        }
-      })
-      .catch(() => {});
-  }, []);
+  // Role filtering & active sub-login
+  const [activeCategory, setActiveCategory] = useState<string>("all");
+  const [plantAccounts, setPlantAccounts] = useState<any[]>(SUB_LOGIN_METADATA);
+  const [selectedSubLogin, setSelectedSubLogin] = useState<any>(SUB_LOGIN_METADATA[0]);
 
   // Login form state
-  const [email, setEmail] = useState(SUB_LOGIN_ROLES[0]!.email);
+  const [email, setEmail] = useState(SUB_LOGIN_METADATA[0]!.defaultEmail);
   const [password, setPassword] = useState(DEMO_PASSWORD);
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
@@ -219,6 +212,67 @@ function SecureAuthPage() {
     }
   }, []);
 
+  // Fetch real organizations from backend
+  useEffect(() => {
+    fetch("/api/v1/auth/organizations")
+      .then((r) => r.json())
+      .then((res) => {
+        if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+          const list = res.data.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            city: p.city || "India",
+            capacity: p.capacity || "60 cum/hr",
+            scada: p.scada || "CRB-75",
+            status: "Active Plant Workspace",
+          }));
+          setOrganizations(list);
+          setSelectedOrg(list[0]);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Whenever selected organization changes, fetch its real accounts from backend
+  useEffect(() => {
+    if (!selectedOrg?.id) return;
+
+    fetch(`/api/v1/auth/plant-accounts?plant_id=${selectedOrg.id}`)
+      .then((r) => r.json())
+      .then((res) => {
+        if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+          const mapped = res.data.map((acc: any) => {
+            const tmpl = SUB_LOGIN_METADATA.find((m) => m.role === acc.role) || SUB_LOGIN_METADATA[0]!;
+            return {
+              id: acc.id,
+              role: acc.role,
+              title: acc.title || tmpl.title,
+              sub: acc.sub || tmpl.sub,
+              email: acc.email,
+              name: acc.name,
+              category: tmpl.category,
+              icon: tmpl.icon,
+              color: tmpl.color,
+              home: acc.home || "/queue",
+            };
+          });
+          setPlantAccounts(mapped);
+          const first = mapped[0];
+          setSelectedSubLogin(first);
+          setEmail(first.email);
+          setPassword(DEMO_PASSWORD);
+        } else {
+          // Fallback to template accounts
+          setPlantAccounts(SUB_LOGIN_METADATA);
+          setSelectedSubLogin(SUB_LOGIN_METADATA[0]);
+          setEmail(SUB_LOGIN_METADATA[0].defaultEmail);
+        }
+      })
+      .catch(() => {
+        setPlantAccounts(SUB_LOGIN_METADATA);
+      });
+  }, [selectedOrg]);
+
   // Redirect if already authenticated
   useEffect(() => {
     if (ready && user) {
@@ -226,9 +280,9 @@ function SecureAuthPage() {
     }
   }, [ready, user, navigate]);
 
-  function handleSubLoginSelect(sub: (typeof SUB_LOGIN_ROLES)[0]) {
+  function handleSubLoginSelect(sub: any) {
     setSelectedSubLogin(sub);
-    setEmail(sub.email);
+    setEmail(sub.email || sub.defaultEmail);
     setPassword(DEMO_PASSWORD);
     setError(null);
   }
@@ -242,7 +296,7 @@ function SecureAuthPage() {
       const signedIn = await login(email, password);
       toast.success(`Authenticated successfully as ${signedIn.name}`);
       void navigate({
-        to: DEMO_ACCOUNTS.find((a) => a.email === signedIn.email)?.home ?? homeForRole(signedIn.role),
+        to: selectedSubLogin?.home ?? homeForRole(signedIn.role),
       });
     } catch (err) {
       setError(isApiError(err) ? err.message : "Authentication failed. Check your email and password.");
@@ -276,7 +330,7 @@ function SecureAuthPage() {
         role: "owner",
       });
 
-      toast.success(`Plant workspace created for ${signupOrgName}! Welcome.`);
+      toast.success(`Plant workspace created for ${signupOrgName}! All 4 customers & inventory initialized.`);
       void navigate({ to: homeForRole(signedIn.role) });
     } catch (err) {
       setError(isApiError(err) ? err.message : "Could not initialize plant workspace. Please try again.");
@@ -285,13 +339,19 @@ function SecureAuthPage() {
     }
   }
 
-  function applySandboxCredentials(sub: (typeof SUB_LOGIN_ROLES)[0]) {
+  function applySandboxCredentials(sub: any) {
     setSelectedSubLogin(sub);
-    setEmail(sub.email);
+    setEmail(sub.email || sub.defaultEmail);
     setPassword(DEMO_PASSWORD);
     setError(null);
     toast.info(`Sandbox credentials loaded for ${sub.title}`);
   }
+
+  // Filter accounts by department category
+  const filteredAccounts = plantAccounts.filter((acc) => {
+    if (activeCategory === "all") return true;
+    return acc.category === activeCategory;
+  });
 
   return (
     <div className="min-h-screen bg-[#07090e] text-[#f1f5f9] selection:bg-emerald-500 selection:text-black font-sans antialiased relative flex flex-col justify-between">
@@ -408,7 +468,7 @@ function SecureAuthPage() {
                       <Building2 className="size-3.5 text-emerald-400" />
                       <span>Select Client Plant Workspace</span>
                     </Label>
-                    <span className="text-[10px] text-emerald-400 font-mono">Multi-Tenant</span>
+                    <span className="text-[10px] text-emerald-400 font-mono">Multi-Tenant Isolation</span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
@@ -434,24 +494,43 @@ function SecureAuthPage() {
                   </div>
                 </div>
 
-                {/* 2. Department Sub-Login Role Selector */}
-                <div className="space-y-2">
+                {/* 2. Department Sub-Login Role Selector with Categories */}
+                <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                       <Cpu className="size-3.5 text-cyan-400" />
                       <span>Authorized Department Sub-Login</span>
                     </Label>
-                    <span className="text-[10px] text-slate-400 font-mono">10 Roles · 1-Click Access</span>
+                    <span className="text-[10px] text-slate-400 font-mono">{filteredAccounts.length} Available Roles</span>
                   </div>
 
-                  {/* Open, Fully Visible Responsive Grid of All 10 Roles */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[320px] overflow-y-auto pr-1">
-                    {SUB_LOGIN_ROLES.map((sub) => {
-                      const isSubSelected = selectedSubLogin.id === sub.id;
-                      const Icon = sub.icon;
+                  {/* Department Category Pills */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                    {DEPARTMENT_CATEGORIES.map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setActiveCategory(cat.id)}
+                        className={cn(
+                          "px-2.5 py-1 rounded-lg text-[11px] font-medium whitespace-nowrap transition-colors cursor-pointer",
+                          activeCategory === cat.id
+                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                            : "bg-white/[0.03] text-slate-400 hover:text-white border border-transparent"
+                        )}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Open, Fully Visible Responsive Grid of Roles */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[300px] overflow-y-auto pr-1">
+                    {filteredAccounts.map((sub) => {
+                      const isSubSelected = selectedSubLogin?.email === sub.email || selectedSubLogin?.role === sub.role;
+                      const Icon = sub.icon || Crown;
                       return (
                         <button
-                          key={sub.id}
+                          key={sub.id || sub.role}
                           type="button"
                           onClick={() => handleSubLoginSelect(sub)}
                           className={cn(
@@ -470,7 +549,7 @@ function SecureAuthPage() {
                               {isSubSelected && <span className="size-1.5 rounded-full bg-emerald-400 shrink-0" />}
                             </div>
                             <span className="text-[10px] text-slate-400 block truncate">{sub.sub}</span>
-                            <span className="text-[10px] text-emerald-400/80 font-mono block truncate">{sub.email}</span>
+                            <span className="text-[10px] text-emerald-400/80 font-mono block truncate">{sub.email || sub.defaultEmail}</span>
                           </div>
                         </button>
                       );
@@ -479,24 +558,29 @@ function SecureAuthPage() {
                 </div>
 
                 {/* Active Sub-Login Banner */}
-                <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-3 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2.5">
-                    <div className={cn("flex size-8 items-center justify-center rounded-lg border", selectedSubLogin.color)}>
-                      <selectedSubLogin.icon className="size-4" />
+                {selectedSubLogin && (
+                  <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-3 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2.5">
+                      <div className={cn("flex size-8 items-center justify-center rounded-lg border", selectedSubLogin.color)}>
+                        {(() => {
+                          const Icon = selectedSubLogin.icon || Crown;
+                          return <Icon className="size-4" />;
+                        })()}
+                      </div>
+                      <div>
+                        <span className="font-bold text-white block">
+                          {selectedSubLogin.title} ({selectedOrg.name})
+                        </span>
+                        <span className="text-[11px] text-slate-400 font-mono">
+                          {email}
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="font-bold text-white block">
-                        {selectedSubLogin.title} ({selectedOrg.name})
-                      </span>
-                      <span className="text-[11px] text-slate-400 font-mono">
-                        {email}
-                      </span>
-                    </div>
+                    <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-400 bg-emerald-500/10">
+                      Encrypted
+                    </Badge>
                   </div>
-                  <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-400 bg-emerald-500/10">
-                    Encrypted
-                  </Badge>
-                </div>
+                )}
 
                 {/* 3. Credentials Form */}
                 <form onSubmit={handleLogin} className="space-y-4">
@@ -585,7 +669,7 @@ function SecureAuthPage() {
                     disabled={busy}
                   >
                     {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : <ArrowRight className="mr-2 size-4" />}
-                    <span>Sign In to {selectedSubLogin.title}</span>
+                    <span>Sign In to {selectedSubLogin?.title || "Department Desk"}</span>
                   </Button>
                 </form>
 
@@ -617,15 +701,15 @@ function SecureAuthPage() {
                         To test different plant sub-logins during evaluation, tap any role below to populate credentials:
                       </p>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                        {SUB_LOGIN_ROLES.map((sub) => (
+                        {plantAccounts.map((sub) => (
                           <button
-                            key={sub.id}
+                            key={sub.id || sub.role}
                             type="button"
                             onClick={() => applySandboxCredentials(sub)}
                             className="p-1.5 rounded-lg border border-white/[0.08] bg-white/[0.02] hover:bg-emerald-500/10 hover:border-emerald-500/30 text-left transition-colors cursor-pointer"
                           >
                             <span className="text-[11px] font-bold text-white block truncate">{sub.title}</span>
-                            <span className="text-[9px] text-slate-500 font-mono block truncate">{sub.email}</span>
+                            <span className="text-[9px] text-slate-500 font-mono block truncate">{sub.email || sub.defaultEmail}</span>
                           </button>
                         ))}
                       </div>
@@ -646,7 +730,7 @@ function SecureAuthPage() {
                     <span>New Client Plant Onboarding</span>
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    This provisions an isolated multi-tenant organization database, creates the Plant Director root account, and prepares sub-logins for your plant crew.
+                    This provisions an isolated multi-tenant organization database, creates 4 dedicated enterprise customers, inwards full material stock, and prepares sub-logins for your plant crew.
                   </p>
                 </div>
 

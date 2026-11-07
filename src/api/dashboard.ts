@@ -46,12 +46,12 @@ export const dashboardApi = {
     ]);
 
     const s = summaryRes.data || {};
-    const chartData = chartRes.data || [];
-    const p = paymentRes.data?.summary || {};
+    const chartData = Array.isArray(chartRes.data) ? chartRes.data : [];
+    const p = paymentRes.data?.summary || paymentRes.data || {};
     const percs = percentagesRes.data || {};
     const truckData = trucksRes.data || {};
-    const allTrips = tripsRes.data || [];
-    const allOrders = ordersRes.data || [];
+    const allTrips = Array.isArray(tripsRes.data) ? tripsRes.data : [];
+    const allOrders = Array.isArray(ordersRes.data) ? ordersRes.data : [];
 
     // Orders per date formatting
     const ordersPerDate = chartData.map((d: any) => ({

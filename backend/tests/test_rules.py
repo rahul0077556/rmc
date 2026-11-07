@@ -26,12 +26,13 @@ def test_customer_data_isolation(client):
     site1 = Site.query.filter_by(customer_id=cust1.id).first()
     grade = Grade.query.first()
 
+    future_date = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d")
     po_res = client.post("/api/v1/purchase-orders", json={
         "customerId": cust1.id,
         "siteId": site1.id,
         "gradeId": grade.id,
         "quantity": 16.0,
-        "deliveryDate": "2026-10-05",
+        "deliveryDate": future_date,
         "deliveryTime": "10:00",
         "purpose": "Slab"
     }, headers={"Authorization": f"Bearer {sales_token}"})
@@ -55,13 +56,14 @@ def test_po_balance_and_trip_capacity_rules(client):
     site = Site.query.filter_by(customer_id=cust.id).first()
     grade = Grade.query.first()
 
+    future_date = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d")
     # Create PO of 10 cum
     po_res = client.post("/api/v1/purchase-orders", json={
         "customerId": cust.id,
         "siteId": site.id,
         "gradeId": grade.id,
         "quantity": 10.0,
-        "deliveryDate": "2026-10-06",
+        "deliveryDate": future_date,
         "deliveryTime": "10:00",
         "purpose": "Column"
     }, headers={"Authorization": f"Bearer {sales_token}"})
@@ -113,12 +115,13 @@ def test_release_strictly_requires_qc_approval(client):
     site = Site.query.filter_by(customer_id=cust.id).first()
     grade = Grade.query.first()
 
+    future_date = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d")
     po_res = client.post("/api/v1/purchase-orders", json={
         "customerId": cust.id,
         "siteId": site.id,
         "gradeId": grade.id,
         "quantity": 6.0,
-        "deliveryDate": "2026-10-06",
+        "deliveryDate": future_date,
         "deliveryTime": "11:00",
         "purpose": "Footing"
     }, headers={"Authorization": f"Bearer {sales_token}"})
@@ -250,4 +253,51 @@ def test_site_supervisor_flow_and_trip_retrieval(client):
     res_deliv = client.post(f"/api/v1/trips/{trip.id}/deliver", json={"deliveredQuantity": 6.0, "receiverName": "Site Eng. Sharma", "notes": "Cube casted"}, headers=headers)
     assert res_deliv.status_code == 200
     assert res_deliv.get_json()["data"]["status"] == "DELIVERED"
+
+def test_register_organization_and_plant_accounts(client):
+    # 1. Register a brand-new plant organization
+    reg_payload = {
+        "organization_name": "Shree Sai ReadyMix Infra",
+        "city": "Nashik, Maharashtra",
+        "name": "Narendra Patil",
+        "email": "patil@shreesai.test",
+        "password": "Password@123",
+        "phone": "+91 94220 55667",
+        "capacity": "90 cum/hr",
+        "scada_type": "Schwing Stetter"
+    }
+    reg_res = client.post("/api/v1/auth/register-organization", json=reg_payload)
+    assert reg_res.status_code == 201
+    res_json = reg_res.get_json()["data"]
+    new_plant_id = res_json["user"]["plant_id"]
+    assert new_plant_id is not None
+    assert res_json["user"]["email"] == "patil@shreesai.test"
+
+    # 2. Check plant accounts endpoint returns isolated sub-logins for this plant
+    acc_res = client.get(f"/api/v1/auth/plant-accounts?plant_id={new_plant_id}")
+    assert acc_res.status_code == 200
+    accounts = acc_res.get_json()["data"]
+    assert len(accounts) == 10
+    roles = [a["role"] for a in accounts]
+    assert "owner" in roles
+    assert "sales" in roles
+    assert "dispatcher" in roles
+    assert "production" in roles
+    assert "qa" in roles
+    assert "store" in roles
+    assert "account" in roles
+
+    # 3. Verify 4 dedicated customers and materials with inwarded stock were provisioned
+    from backend.app.models.models import Customer, Material, Truck, Driver
+    plant_customers = Customer.query.filter_by(plant_id=new_plant_id).all()
+    assert len(plant_customers) == 4
+
+    plant_materials = Material.query.filter_by(plant_id=new_plant_id).all()
+    assert len(plant_materials) >= 8
+    opc = [m for m in plant_materials if "Cement" in m.name][0]
+    assert opc.current_stock > 0
+
+    plant_trucks = Truck.query.filter_by(plant_id=new_plant_id).all()
+    assert len(plant_trucks) >= 4
+
 

@@ -108,11 +108,20 @@ try? handler.perform([request])
     @classmethod
     def parse_text_or_ocr(cls, text: str) -> Dict[str, Any]:
         """
-        Extracts structured fields from raw OCR/text string of a batch report.
+        Dynamically extracts structured fields, arbitrary materials table,
+        cycle batches, and verification balances from raw text or OCR output.
+        Layout-independent and header-driven.
         """
-        data = dict(cls.SAMPLE_ROXXCON_DOCKET)
-        if not text:
-            return data
+        if not text or len(text.strip()) < 15:
+            return {
+                "isReadable": False,
+                "error": "The uploaded batch sheet could not be parsed automatically. Please ensure the document is legible.",
+                "rawText": text or "",
+                "materials": [],
+                "cycles": [],
+                "discrepancies": ["No readable text found in document."],
+                "isVerified": False
+            }
 
         def clean_val(val: str, stops=None) -> str:
             if not val:
@@ -125,105 +134,366 @@ try? handler.perform([request])
                         val = val[:idx].strip()
             return val.strip(" :-|")
 
-        # Customer
-        m = re.search(r"Customer\s*Name\s*[:\-]\s*([^\r\n]+)", text, re.IGNORECASE)
-        if m:
-            c = clean_val(m.group(1), ["Site Name", "Truck", "Order", "Recipe"])
-            if c: data["customerName"] = c
+        def get_val(pat: str) -> Optional[str]:
+            m = re.search(pat, text, re.IGNORECASE)
+            return m.group(1).strip() if m else None
 
-        # Site
-        m = re.search(r"Site\s*Name\s*[:\-]\s*([^\r\n]+)", text, re.IGNORECASE)
-        if m:
-            s = clean_val(m.group(1), ["Truck", "Driver", "Start", "Recipe"])
-            if s: data["siteName"] = s
+        # Parallel label/value detection for OCR multi-column text (e.g. scanned sheets)
+        lines_all = [l.strip() for l in text.split("\n") if l.strip()]
+        lbl_cands = ["Customer Name", "Site Name", "Truck No.", "Driver Name", "Start Time", "End Time", "Batch Size", "Recipe Name", "Total M°", "Total M³", "Date", "W/C Ratio", "Grade of Concrete"]
+        det_lbls = []
+        det_vals = []
+        for l in lines_all:
+            if l in lbl_cands:
+                det_lbls.append(l)
+            elif l.startswith(":") and len(det_lbls) > len(det_vals):
+                det_vals.append(l.lstrip(": ").strip())
+        parallel_kv = dict(zip(det_lbls, det_vals))
 
-        # Truck No
-        m = re.search(r"Truck\s*No\.?\s*[:\-]\s*([^\r\n]+)", text, re.IGNORECASE)
-        if m:
-            t = clean_val(m.group(1), ["Driver", "Start", "End"]).upper().replace(" ", "")
-            if t: data["truckNumber"] = t
+        stops = ["Site Name", "Site:", "Truck", "Driver", "Start", "End", "Recipe", "Order", "Page", "Date", "|"]
 
-        # Driver
-        m = re.search(r"Driver\s*Name\s*[:\-]\s*([^\r\n]+)", text, re.IGNORECASE)
-        if m:
-            d = clean_val(m.group(1), ["Start", "End", "Time", "Batch"])
-            if d: data["driverName"] = d
+        # 1. Metadata Extraction
+        customer_name = clean_val(get_val(r"Customer\s*Name\s*[:\-]\s*([^\r\n]+)") or get_val(r"Customer\s*:\s*([^\r\n|]+)") or parallel_kv.get("Customer Name"), stops)
+        site_name = clean_val(get_val(r"Site\s*Name\s*[:\-]\s*([^\r\n]+)") or get_val(r"Site\s*:\s*([^\r\n|]+)") or parallel_kv.get("Site Name"), stops)
+        raw_truck = get_val(r"Truck\s*No\.?\s*[:\-]\s*([^\r\n]+)") or get_val(r"Truck\s*:\s*([^\r\n|]+)") or parallel_kv.get("Truck No.") or ""
+        truck_number = clean_val(raw_truck, ["Driver", "Start", "End"]).upper().replace(" ", "").replace("-", "")
+        driver_name = clean_val(get_val(r"Driver\s*Name\s*[:\-]\s*([^\r\n]+)") or get_val(r"Driver\s*:\s*([^\r\n|]+)") or parallel_kv.get("Driver Name"), ["Start", "End", "Time", "Batch", "Docket"])
+        docket_number = get_val(r"Docket\s*(?:/\s*Ticket)?\s*No\.?\s*[:\-]\s*([A-Za-z0-9\-]+)") or get_val(r"Docket\s*No:?\s*([0-9]+)") or get_val(r"Ticket\s*#?\s*[:\-]?\s*([0-9]+)") or ""
+        recipe_name = clean_val(get_val(r"Recipe\s*Name\s*[:\-]\s*([^\r\n]+)") or get_val(r"Recipe\s*:\s*([^\r\n|]+)") or parallel_kv.get("Recipe Name"), ["Total M", "Date", "Batch", "Order"])
+        raw_grade = clean_val(get_val(r"Grade(?:\s+of\s+Concrete)?\s*[:\-]\s*([^\r\n]+)") or parallel_kv.get("Grade of Concrete") or "")
+        gm = re.search(r"(M\s*\d+)", raw_grade or recipe_name or "", re.IGNORECASE)
+        grade = gm.group(1).replace(" ", "").upper() if gm else (raw_grade if raw_grade else "M25")
 
-        # Docket No
-        m = re.search(r"Docket\s*/?\s*Ticket\s*No\.?\s*[:\-]\s*([0-9]+)", text, re.IGNORECASE)
-        if m:
-            data["docketNumber"] = m.group(1).strip()
+        start_time = get_val(r"Start\s*Time\s*[:\-]\s*([0-9:]+)") or parallel_kv.get("Start Time") or ""
+        end_time = get_val(r"End\s*Time\s*[:\-]\s*([0-9:]+)") or parallel_kv.get("End Time") or ""
 
-        # Recipe / Grade
-        m = re.search(r"Recipe\s*Name\s*[:\-]\s*([^\r\n]+)", text, re.IGNORECASE)
-        if m:
-            r = clean_val(m.group(1), ["Total M", "Date", "Batch", "Order"])
-            if r: data["recipeName"] = r
+        raw_ticket_qty = get_val(r"(?:Ticket\s*Qty|Total\s*M[³3]?)\.?\s*[:\-]\s*([0-9.]+)") or parallel_kv.get("Total M°") or parallel_kv.get("Total M³")
+        ticket_qty = float(re.search(r"[0-9.]+", raw_ticket_qty).group(0)) if raw_ticket_qty else 0.0
 
-        # Concrete Grade
-        m = re.search(r"Grade(?:\s+of\s+Concrete)?\s*[:\-]\s*([^\r\n]+)", text, re.IGNORECASE)
-        if m:
-            g_str = clean_val(m.group(1))
-            gm = re.search(r"(M\s*\d+)", g_str, re.IGNORECASE)
-            if gm:
-                data["grade"] = gm.group(1).replace(" ", "").upper()
+        raw_batch_size = get_val(r"Batch\s*Size\s*[:\-]\s*([0-9.]+)") or parallel_kv.get("Batch Size")
+        batch_size = float(re.search(r"[0-9.]+", raw_batch_size).group(0)) if raw_batch_size else 0.0
 
-        # Ticket Qty
-        m = re.search(r"Ticket\s*Qty\.?\s*[:\-]\s*([0-9.]+)", text, re.IGNORECASE)
-        if m: data["ticketQtyCum"] = float(m.group(1))
+        order_qty = float(get_val(r"Order\s*Qty\.?\s*[:\-]\s*([0-9.]+)") or 0.0)
+        with_this_load = float(get_val(r"With\s*This\s*Load\s*[:\-]\s*([0-9.]+)") or 0.0)
 
-        # Total M3
-        m = re.search(r"Total\s*M[³3]?\s*[:\-]\s*([0-9.]+)", text, re.IGNORECASE)
-        if m and "ticketQtyCum" not in data:
-            data["ticketQtyCum"] = float(m.group(1))
+        raw_wc = get_val(r"W/?C\s*Ratio\s*[:\-]\s*([0-9.]+)") or parallel_kv.get("W/C Ratio")
+        wc_ratio = float(re.search(r"[0-9.]+", raw_wc).group(0)) if raw_wc else 0.0
 
-        # W/C Ratio
-        m = re.search(r"W/?C\s*Ratio\s*[:\-]\s*([0-9.]+)", text, re.IGNORECASE)
-        if m: data["wcRatio"] = float(m.group(1))
+        th_volume = float(get_val(r"TH\s*[vV]olume\s*[:\-]\s*([0-9.]+)") or 0.0)
 
-        # Date
-        m = re.search(r"Date\s*[:\-]\s*([0-9/.\-]+)", text, re.IGNORECASE)
-        if m:
-            raw_d = m.group(1).strip()
-            parts = re.split(r"[/.\-]", raw_d)
+        plant_name = clean_val(get_val(r"Plant\s*Name\s*[:\-]\s*([^\r\n]+)") or get_val(r"BATCH\s*REPORT\s*-\s*DELIVERY\s+([^\r\n]+)") or "")
+        plant_capacity = clean_val(get_val(r"Plant\s*Capacity\s*[:\-]\s*([^\r\n]+)") or "")
+
+        # Date normalization
+        raw_date = get_val(r"Date\s*[:\-]\s*([0-9/.\-]+)") or parallel_kv.get("Date") or ""
+        normalized_date = ""
+        if raw_date:
+            parts = re.split(r"[/.\-]", raw_date.strip())
             if len(parts) == 3:
                 if len(parts[0]) == 4:
-                    data["date"] = f"{parts[0]}-{parts[1].zfill(2)}-{parts[2].zfill(2)}"
+                    normalized_date = f"{parts[0]}-{parts[1].zfill(2)}-{parts[2].zfill(2)}"
                 elif len(parts[2]) == 4:
-                    data["date"] = f"{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
+                    normalized_date = f"{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
+                else:
+                    normalized_date = f"20{parts[2].zfill(2)}-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
 
-        # Total Actual Scale Weights (R-Sand, M-Sand, 10mm, 20mm, Cement, Flyash, Water, Admix, Total)
-        m = re.search(r"Total\s*Actual\s+([^\r\n]+)", text, re.IGNORECASE)
-        if m:
-            nums = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", m.group(1))]
-            if len(nums) >= 8:
-                data["rSandKg"] = nums[0]
-                data["mSandKg"] = nums[1]
-                data["agg10mmKg"] = nums[2]
-                data["agg20mmKg"] = nums[3]
-                data["cementKg"] = nums[4]
-                data["flyashKg"] = nums[5]
-                data["waterL"] = nums[6]
-                data["admixtureKg"] = nums[7]
-                if len(nums) >= 9:
-                    data["totalWeightKg"] = nums[-1]
+        # 2. Extract Table Numbers (Total Actual, Total Set, Variance %)
+        m_act = re.search(r"Total\s*Actual\s+([^\r\n]+)", text, re.IGNORECASE)
+        nums_act = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", m_act.group(1))] if m_act else []
 
-        # Total Set (Target Weights)
-        m = re.search(r"Total\s*Set\s+([^\r\n]+)", text, re.IGNORECASE)
-        if m:
-            nums = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", m.group(1))]
-            if len(nums) >= 8:
-                data["targetWeights"] = {
-                    "rSandKg": nums[0],
-                    "mSandKg": nums[1],
-                    "agg10mmKg": nums[2],
-                    "agg20mmKg": nums[3],
-                    "cementKg": nums[4],
-                    "flyashKg": nums[5],
-                    "waterL": nums[6],
-                    "admixtureKg": nums[7],
-                    "totalWeightKg": nums[-1] if len(nums) >= 9 else sum(nums[:8])
-                }
+        m_set = re.search(r"Total\s*Set\s+([^\r\n]+)", text, re.IGNORECASE)
+        nums_set = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", m_set.group(1))] if m_set else []
+
+        m_var = re.search(r"Variance\s*%\s+([^\r\n]+)", text, re.IGNORECASE)
+        nums_var = [float(x) for x in re.findall(r"[-+]?\d+(?:\.\d+)?", m_var.group(1))] if m_var else []
+
+        # 3. Dynamic Material Name & Recipe Extraction
+        lines = [l.strip() for l in text.split("\n") if l.strip()]
+        noise_headers = {
+            "channel", "m. name", "recipe/m³", "recipe m³", "batch no", "act", "total kg",
+            "time", "(sec)", "supervisor", "operator", "absorption %", "average", "target", "variance"
+        }
+
+        def is_table_group_header(l_str: str) -> bool:
+            low = l_str.lower()
+            return (
+                "aggregate (kg)" in low
+                or "water (ltr/kg)" in low
+                or "cement (kg)" in low
+                or "binder (kg)" in low
+                or "cementitious materials" in low
+                or "pce admix" in low
+                or "chemical admixtures" in low
+                or "fine & coarse" in low
+            )
+
+        mat_candidates = []
+        in_table = False
+        for l in lines:
+            llow = l.lower()
+            if any(k in llow for k in ["channel", "batch no", "recipe/m³", "recipe m³"]):
+                in_table = True
+                continue
+            if in_table:
+                if "act %m" in llow or re.match(r"^\d+\s+\d+\s*s", l):
+                    break
+                if llow in noise_headers or is_table_group_header(l):
+                    continue
+                mat_candidates.append(l)
+
+        parsed_materials = []
+        ci = 0
+        while ci < len(mat_candidates):
+            item = mat_candidates[ci]
+            if not re.match(r"^\d+(?:\.\d+)?$", item):
+                mname = item
+                rval = 0.0
+                if ci + 1 < len(mat_candidates) and re.match(r"^\d+(?:\.\d+)?$", mat_candidates[ci + 1]):
+                    rval = float(mat_candidates[ci + 1])
+                    ci += 2
+                else:
+                    ci += 1
+                parsed_materials.append({"name": mname, "recipeKg": rval})
+            else:
+                ci += 1
+
+        # If material count doesn't match numbers count, align gracefully
+        num_mats_expected = len(nums_act) - 1 if (len(nums_act) > 0 and len(nums_set) > 0 and abs(nums_act[-1] - sum(nums_act[:-1])) < 5.0) else len(nums_act)
+        
+        materials_result = []
+        for idx in range(num_mats_expected):
+            mat_name = parsed_materials[idx]["name"] if idx < len(parsed_materials) else f"Material {idx+1}"
+            recipe_val = parsed_materials[idx]["recipeKg"] if idx < len(parsed_materials) else 0.0
+            act_val = nums_act[idx] if idx < len(nums_act) else 0.0
+            set_val = nums_set[idx] if idx < len(nums_set) else 0.0
+            var_pct = nums_var[idx] if idx < len(nums_var) else (round(((act_val - set_val) / set_val) * 100, 2) if set_val > 0 else 0.0)
+            var_kg = round(act_val - set_val, 2)
+
+            unit = "L" if any(u in mat_name.lower() for u in ["water", "admix", "additive", "ltr", "retarder"]) else "kg"
+
+            materials_result.append({
+                "name": mat_name,
+                "recipeKg": recipe_val,
+                "setKg": set_val,
+                "actualKg": act_val,
+                "varianceKg": var_kg,
+                "variancePct": var_pct,
+                "unit": unit
+            })
+
+        # Fallback for vertical multi-column OCR format (e.g. scanned dockets)
+        if not materials_result:
+            known_mats = [
+                ("RIVER SAND", "RIVER SAND"),
+                ("CRUSHED SAND", "CRUSHED SAND"),
+                ("M SAND", "M SAND"),
+                ("R SAND", "R SAND"),
+                ("WASHED SAND", "WASHED SAND"),
+                ("10 MM AGG", "10MM AGG"),
+                ("10MM AGG", "10MM AGG"),
+                ("10 MM", "10MM AGG"),
+                ("20 MM AGG", "20MM AGG"),
+                ("20MM AGG", "20MM AGG"),
+                ("20 MM", "20MM AGG"),
+                ("32 MM PAVING", "32 MM PAVING"),
+                ("40 MM BALLAST", "40 MM BALLAST"),
+                ("OPC 43", "OPC 43"),
+                ("OPC 53", "OPC 53"),
+                ("CEMENT 1", "CEMENT 1"),
+                ("FLYASH (F)", "FLYASH (F)"),
+                ("FLYASH", "FLYASH"),
+                ("WATER", "WATER"),
+                ("PP FIBER (kg)", "PP FIBER"),
+                ("PP FIBER", "PP FIBER"),
+                ("SUPERPLAST (kg)", "SUPERPLAST"),
+                ("SUPERPLAST", "SUPERPLAST"),
+                ("AEA (Itr)", "AEA"),
+                ("AEA (ltr)", "AEA"),
+                ("AEA", "AEA"),
+                ("POLYCARBOXYLATE", "POLYCARBOXYLATE"),
+                ("RETARDER", "RETARDER"),
+                ("SILICA FUME", "SILICA FUME"),
+                ("GGBS", "GGBS")
+            ]
+            seen_mats = set()
+            for pattern, clean_name in known_mats:
+                if clean_name in seen_mats:
+                    continue
+                idx = text.find(pattern)
+                if idx == -1:
+                    continue
+                snippet = text[idx:idx + 380]
+                m_rec = re.search(rf"{re.escape(pattern)}\s*\n\s*(\d+(?:\.\d+)?)", snippet)
+                if not m_rec:
+                    m_rec = re.search(rf"{re.escape(pattern)}\s*\n\s*(\d+\.?\d+\.?\d*)", snippet)
+                    if m_rec:
+                        raw_r = m_rec.group(1).replace(".", "", m_rec.group(1).count(".") - 1)
+                        try:
+                            recipe = float(raw_r)
+                        except Exception:
+                            continue
+                    else:
+                        continue
+                else:
+                    recipe = float(m_rec.group(1))
+
+                effective_ticket_qty = ticket_qty if ticket_qty > 0 else 6.0
+                expected_set = round(recipe * effective_ticket_qty, 2)
+
+                nums = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", snippet)]
+                candidates = [n for n in nums if expected_set > 0 and abs(n - expected_set) / max(expected_set, 1) < 0.06 and n > 0.5]
+                if candidates:
+                    cand_set = min(candidates, key=lambda x: abs(x - expected_set))
+                    set_idx = nums.index(cand_set)
+                    act_val = nums[set_idx - 1] if set_idx > 0 else cand_set
+                    if abs(act_val - cand_set) / max(cand_set, 1) > 0.06:
+                        act_val = cand_set
+
+                    var_pct = round(((act_val - cand_set) / cand_set) * 100, 2) if cand_set > 0 else 0.0
+                    unit = "L" if any(u in clean_name.lower() for u in ["water", "admix", "superplast", "aea", "ltr", "retarder"]) else "kg"
+
+                    materials_result.append({
+                        "name": clean_name,
+                        "recipeKg": recipe,
+                        "setKg": cand_set,
+                        "actualKg": act_val,
+                        "varianceKg": round(act_val - cand_set, 2),
+                        "variancePct": var_pct,
+                        "unit": unit
+                    })
+                    seen_mats.add(clean_name)
+
+        # 4. Cycle Details Extraction
+        cycle_lines = re.findall(r"^(\d+)\s+(\d+)\s*s?\s+([0-9.\s]+)$", text, re.MULTILINE)
+        cycles_result = []
+        for c_num, c_sec, c_rest in cycle_lines:
+            c_vals = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", c_rest)]
+            c_tot = c_vals[-1] if c_vals else 0.0
+            cycles_result.append({
+                "cycleNo": int(c_num),
+                "durationSec": int(c_sec),
+                "totalKg": c_tot,
+                "weights": c_vals[:-1] if c_vals else []
+            })
+
+        # Total Weights
+        total_actual_kg = nums_act[-1] if (len(nums_act) > num_mats_expected) else sum(m["actualKg"] for m in materials_result)
+        total_set_kg = nums_set[-1] if (len(nums_set) > num_mats_expected) else sum(m["setKg"] for m in materials_result)
+
+        # 5. Mathematical Balance & Discrepancy Checks
+        discrepancies = []
+        
+        # Check A: Cycles vs Total Actual Weight
+        if cycles_result and total_actual_kg > 0:
+            sum_cycle_weights = round(sum(c["totalKg"] for c in cycles_result), 2)
+            if abs(sum_cycle_weights - total_actual_kg) > 2.0:
+                discrepancies.append(
+                    f"Cycle batch weights sum ({sum_cycle_weights:.2f} kg) differs from total actual scale weight ({total_actual_kg:.2f} kg)."
+                )
+
+        # Check B: Batch count & batch size vs Ticket Quantity
+        batches_count = len(cycles_result) or int(get_val(r"Batches\s*(?:Count)?\s*[:\-]\s*(\d+)") or 0)
+        if batches_count > 0 and batch_size > 0 and ticket_qty > 0:
+            calc_ticket_qty = round(batches_count * batch_size, 2)
+            if abs(calc_ticket_qty - ticket_qty) > 0.15:
+                discrepancies.append(
+                    f"Calculated quantity ({batches_count} cycles × {batch_size:.2f} m³ = {calc_ticket_qty:.2f} m³) differs from ticket quantity ({ticket_qty:.2f} m³)."
+                )
+
+        # Check C: W/C Ratio Verification
+        # Sum recipe water & binders (for target W/C) and actual water & binders (for batched W/C)
+        recipe_water = 0.0
+        recipe_binders = 0.0
+        actual_water = 0.0
+        actual_binders = 0.0
+        for m in materials_result:
+            m_low = m["name"].lower()
+            if "water" in m_low:
+                recipe_water += m["recipeKg"]
+                actual_water += m["actualKg"]
+            elif any(b in m_low for b in ["cement", "opc", "ppc", "flyash", "fly ash", "ggbs", "silica", "slag", "binder"]):
+                recipe_binders += m["recipeKg"]
+                actual_binders += m["actualKg"]
+
+        calc_target_wc = round(recipe_water / recipe_binders, 2) if recipe_binders > 0 else 0.0
+        calc_actual_wc = round(actual_water / actual_binders, 2) if actual_binders > 0 else 0.0
+
+        if wc_ratio > 0:
+            # If sheet W/C doesn't match recipe target W/C or batched W/C within tolerance
+            if abs(calc_target_wc - wc_ratio) > 0.04 and abs(calc_actual_wc - wc_ratio) > 0.08:
+                discrepancies.append(
+                    f"Sheet W/C ratio ({wc_ratio:.2f}) diverges from calculated mix design W/C ratio (target: {calc_target_wc:.2f}, actual batched: {calc_actual_wc:.2f})."
+                )
+
+        # Check D: Material Tolerance Bounds (±2% cement/water, ±3% aggregates)
+        for m in materials_result:
+            m_low = m["name"].lower()
+            vp = abs(m["variancePct"])
+            is_binder_or_water = any(k in m_low for k in ["cement", "opc", "flyash", "water"])
+            tol = 2.0 if is_binder_or_water else 3.0
+            if m["setKg"] > 0 and vp > tol:
+                discrepancies.append(
+                    f"{m['name']}: Actual batch variance ({m['variancePct']:+.2f}%) exceeds plant tolerance (±{tol:.1f}%)."
+                )
+
+        # Backward compatibility field mapping for existing callers
+        data = {
+            "isReadable": True,
+            "docketNumber": docket_number,
+            "customerName": customer_name,
+            "siteName": site_name,
+            "truckNumber": truck_number,
+            "driverName": driver_name,
+            "startTime": start_time,
+            "endTime": end_time,
+            "recipeName": recipe_name,
+            "grade": grade,
+            "ticketQtyCum": ticket_qty,
+            "batchSizeCum": batch_size,
+            "batchesCount": batches_count,
+            "orderQtyCum": order_qty,
+            "withThisLoadCum": with_this_load,
+            "wcRatio": wc_ratio,
+            "plantName": plant_name,
+            "plantCapacity": plant_capacity,
+            "date": normalized_date or raw_date,
+            "thVolume": th_volume,
+            "materials": materials_result,
+            "cycles": cycles_result,
+            "totalWeightKg": total_actual_kg,
+            "totals": {
+                "actualKg": total_actual_kg,
+                "setKg": total_set_kg,
+                "varianceKg": round(total_actual_kg - total_set_kg, 2),
+                "variancePct": round(((total_actual_kg - total_set_kg) / total_set_kg) * 100, 2) if total_set_kg > 0 else 0.0
+            },
+            "discrepancies": discrepancies,
+            "isVerified": len(discrepancies) == 0,
+            "rawText": text
+        }
+
+        # Legacy direct keys for backward compatibility
+        for m in materials_result:
+            mlow = m["name"].lower()
+            if "r sand" in mlow or "river sand" in mlow:
+                data["rSandKg"] = m["actualKg"]
+            elif "m sand" in mlow or "crushed sand" in mlow:
+                data["mSandKg"] = m["actualKg"]
+            elif "10" in mlow:
+                data["agg10mmKg"] = m["actualKg"]
+            elif "20" in mlow:
+                data["agg20mmKg"] = m["actualKg"]
+            elif "cement" in mlow or "opc" in mlow:
+                data["cementKg"] = m["actualKg"]
+            elif "flyash" in mlow or "fly ash" in mlow:
+                data["flyashKg"] = m["actualKg"]
+            elif "water" in mlow:
+                data["waterL"] = m["actualKg"]
+            elif "admix" in mlow or "additive" in mlow or "superplast" in mlow or "polycarb" in mlow:
+                data["admixtureKg"] = m["actualKg"]
+
+        data["actualWeights"] = {m["name"]: m["actualKg"] for m in materials_result}
+        data["targetWeights"] = {m["name"]: m["setKg"] for m in materials_result}
 
         return data
 
@@ -235,28 +505,46 @@ try? handler.perform([request])
         Prevents duplicates unless replaceExisting is flagged.
         Atomically decrements plant materials into ledger and updates DPR & MPR.
         """
-        cust_name = str(data.get("customerName", "LIGHT HOUSE SYSTEM")).strip()
-        site_name = str(data.get("siteName", "IT PARK")).strip()
-        truck_no = str(data.get("truckNumber", "MH40DC3964")).strip().upper()
+        cust_name = str(data.get("customerName") or "").strip()
+        site_name = str(data.get("siteName") or "").strip()
+        truck_no = str(data.get("truckNumber") or "").strip().upper()
         clean_truck = truck_no.replace("-", "").replace(" ", "").upper()
-        driver_name = str(data.get("driverName", "VIKASH")).strip()
-        docket_no = str(data.get("docketNumber") or f"570{Trip.query.count() + 1}").strip()
-        recipe_name = str(data.get("recipeName", "M 25 LIGTH")).strip()
-        ticket_qty = float(data.get("ticketQtyCum", 5.0))
-        wc_ratio = float(data.get("wcRatio", 0.39))
-        plant_name = str(data.get("plantName", "ROXXCON RMC NAGPUR")).strip()
+        driver_name = str(data.get("driverName") or "Plant Driver").strip()
+        docket_no = str(data.get("docketNumber") or f"580{Trip.query.count() + 1}").strip()
+        recipe_name = str(data.get("recipeName") or "Standard Mix").strip()
+        ticket_qty = float(data.get("ticketQtyCum") or data.get("quantity") or 6.0)
+        wc_ratio = float(data.get("wcRatio") or 0.38)
+        plant_name = str(data.get("plantName") or "").strip()
         date_str = str(data.get("date") or datetime.now().strftime("%Y-%m-%d")).strip()
 
-        # Material weights
-        cement_kg = float(data.get("cementKg", 1599.6))
-        flyash_kg = float(data.get("flyashKg", 449.7))
-        r_sand_kg = float(data.get("rSandKg", 2361.0))
-        m_sand_kg = float(data.get("mSandKg", 1578.0))
-        agg_10mm_kg = float(data.get("agg10mmKg", 2217.0))
-        agg_20mm_kg = float(data.get("agg20mmKg", 3436.0))
-        water_l = float(data.get("waterL", 894.1))
-        admixture_kg = float(data.get("admixtureKg", 14.19))
-        total_weight_kg = float(data.get("totalWeightKg", 12550.38))
+        # Build dynamic materials map from submitted materials table or actualWeights
+        materials_list = data.get("materials") or []
+        actual_dict = {}
+        target_dict = {}
+        if materials_list:
+            for m in materials_list:
+                m_name = m.get("name", "").strip()
+                m_act = float(m.get("actualKg", 0.0))
+                m_set = float(m.get("setKg", 0.0))
+                if m_name and m_act > 0:
+                    actual_dict[m_name] = m_act
+                    target_dict[m_name] = m_set
+        
+        if not actual_dict:
+            actual_dict = dict(data.get("actualWeights") or {})
+            target_dict = dict(data.get("targetWeights") or {})
+
+        total_weight_kg = float(data.get("totalWeightKg") or sum(actual_dict.values()) or 0.0)
+
+        # Direct material weights for traditional columns
+        cement_kg = float(data.get("cementKg") or next((v for k, v in actual_dict.items() if "cement" in k.lower() or "opc" in k.lower()), 0.0))
+        flyash_kg = float(data.get("flyashKg") or next((v for k, v in actual_dict.items() if "flyash" in k.lower() or "fly ash" in k.lower()), 0.0))
+        r_sand_kg = float(data.get("rSandKg") or next((v for k, v in actual_dict.items() if "r sand" in k.lower() or "river" in k.lower()), 0.0))
+        m_sand_kg = float(data.get("mSandKg") or next((v for k, v in actual_dict.items() if "m sand" in k.lower() or "crushed" in k.lower()), 0.0))
+        agg_10mm_kg = float(data.get("agg10mmKg") or next((v for k, v in actual_dict.items() if "10" in k.lower()), 0.0))
+        agg_20mm_kg = float(data.get("agg20mmKg") or next((v for k, v in actual_dict.items() if "20" in k.lower() or "32" in k.lower()), 0.0))
+        water_l = float(data.get("waterL") or next((v for k, v in actual_dict.items() if "water" in k.lower()), 0.0))
+        admixture_kg = float(data.get("admixtureKg") or next((v for k, v in actual_dict.items() if "admix" in k.lower() or "additive" in k.lower() or "superplast" in k.lower() or "polycarb" in k.lower()), 0.0))
 
         # Duplicate protection check
         existing_bs = BatchSheet.query.filter_by(docket_number=docket_no).first()
@@ -467,20 +755,21 @@ try? handler.perform([request])
         db.session.add(batch_sheet)
 
         # 7. Stock Deductions & Traceable Ledger Entries (Golden Rule 2: exact ledger, no clamping)
-        actual_dict = dict(data.get("actualWeights") or {})
-        default_items = {
-            "Cement (OPC 53)": cement_kg,
-            "Fly Ash (Class F)": flyash_kg,
-            "River Sand (Zone II)": r_sand_kg,
-            "Manufactured Sand (M-Sand)": m_sand_kg,
-            "Aggregate 10mm": agg_10mm_kg,
-            "Aggregate 20mm": agg_20mm_kg,
-            "Water": water_l,
-            "Admixture (PCE)": admixture_kg
-        }
-        for k, v in default_items.items():
-            if k not in actual_dict:
-                actual_dict[k] = v
+        if not actual_dict:
+            actual_dict = dict(data.get("actualWeights") or {})
+            default_items = {
+                "Cement (OPC 53)": cement_kg,
+                "Fly Ash (Class F)": flyash_kg,
+                "River Sand (Zone II)": r_sand_kg,
+                "Manufactured Sand (M-Sand)": m_sand_kg,
+                "Aggregate 10mm": agg_10mm_kg,
+                "Aggregate 20mm": agg_20mm_kg,
+                "Water": water_l,
+                "Admixture (PCE)": admixture_kg
+            }
+            for k, v in default_items.items():
+                if k not in actual_dict and v > 0:
+                    actual_dict[k] = v
 
         plant_id = getattr(trip, "plant_id", None) or (trip.po.plant_id if (trip and trip.po) else None)
         q_mat = Material.query

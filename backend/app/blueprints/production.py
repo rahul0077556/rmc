@@ -316,6 +316,14 @@ def parse_uploaded_batch_sheet():
                 import pypdf
                 reader = pypdf.PdfReader(io.BytesIO(file_bytes))
                 raw_text = "\n".join(page.extract_text() or "" for page in reader.pages)
+                # If digital text extraction returned empty or very short string (scanned PDF), extract embedded images
+                if len(raw_text.strip()) < 60:
+                    for page in reader.pages:
+                        if hasattr(page, "images") and len(page.images) > 0:
+                            for img in page.images:
+                                img_ocr = BatchReportParserService.ocr_image_bytes(img.data, ext="jpg")
+                                if img_ocr.strip():
+                                    raw_text += "\n" + img_ocr
             except Exception:
                 raw_text = ""
 
@@ -340,7 +348,7 @@ def parse_uploaded_batch_sheet():
 @production_bp.route("/production/batch-sheets/confirm-upload", methods=["POST"])
 @production_bp.route("/production/batch-sheets/ingest", methods=["POST"])
 @jwt_required()
-@roles_required("production", "dispatcher", "qa", "owner")
+@roles_required("production", "dispatcher", "qa")
 def confirm_uploaded_batch_sheet():
     """
     Confirms and posts the batch report:

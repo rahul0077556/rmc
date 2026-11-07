@@ -17,14 +17,13 @@ def roles_required(*allowed_roles):
             user_role = claims.get("role")
             is_manager = claims.get("is_manager", False)
             
-            # Enforce owner read-only rule globally (except endpoints explicitly allowing owner or parsing utility)
+            # Enforce owner read-only rule globally (all non-GET requests are rejected with 403)
             if user_role == "owner" and request.method not in ["GET", "HEAD", "OPTIONS"]:
-                if "owner" not in allowed_roles and not request.path.endswith("/upload-parse"):
-                    return error_response(
-                        code="FORBIDDEN_READ_ONLY",
-                        message="Owner role is strictly read-only.",
-                        status_code=403
-                    )
+                return error_response(
+                    code="FORBIDDEN_READ_ONLY",
+                    message="Owner role is strictly read-only.",
+                    status_code=403
+                )
                 
             # If specific roles are specified, verify match
             if allowed_roles:
