@@ -1,18 +1,17 @@
 """
-Purge all dummy and seed data from the RMC database for a clean start.
-Preserves:
+Purge and seed baseline data for the RMC database.
+Preserves / Seeds:
 - All 10 User login accounts (with password Demo@123 so every portal is immediately accessible)
-- Plant settings and master profile
-- Concrete Grades (M15–M40) and standard IS 10262 mix designs
-- Standard Material catalogue (current stock reset to 0.0 so inventory is inwarded from scratch)
-- Trucks & Drivers (status reset to AVAILABLE)
-- Numbering sequences reset to start fresh at PO-2026-0001, TRIP-2026-0001, etc.
+- Plant settings and master profile (ROXXCON RMC NAGPUR)
+- 4 Enterprise Construction Clients with dedicated delivery sites
+- Standard Concrete Grades (M15–M40) and standard IS 10262 mix designs
+- Full Material inventory with inwarded stock (Cement, Sand, Aggregates, Fly Ash, Water, Admixture, Diesel)
+- Trucks & Drivers (status AVAILABLE)
+- Numbering sequences
 Removes:
-- All Customers & Sites (users create fresh accounts via Sales Desk "Add New Customer")
-- All Purchase Orders & Trips
-- All Batch Sheets, Revisions & QC Tests
-- All Challans, Invoices & Payments
-- All Weighbridge Tickets, Stock Transactions, DPRs, TM Logs & Expense records
+- Transient/demo Purchase Orders & Trips
+- Transient Batch Sheets, Revisions & QC Tests
+- Transient Challans, Invoices & Payments
 """
 
 import sys
@@ -33,7 +32,7 @@ from backend.app.models.models import (
 )
 
 def execute_purge():
-    print("Clearing all transactional and demo records...")
+    print("Clearing transactional demo records...")
 
     # 1. Billing & Payments
     Payment.query.delete()
@@ -55,16 +54,7 @@ def execute_purge():
     Trip.query.delete()
     PurchaseOrder.query.delete()
 
-    # 5. Customers & Sites
-    # Unlink customer_id on Users to avoid FK constraints
-    for u in User.query.all():
-        u.customer_id = None
-    db.session.flush()
-
-    Site.query.delete()
-    Customer.query.delete()
-
-    # 6. Store & Weighbridge, DPR, TM logs & HR Records
+    # 5. Store & Weighbridge, DPR, TM logs & HR Records
     WeighbridgeTicket.query.delete()
     StockTransaction.query.delete()
     TransitMixerPayload.query.delete()
@@ -74,11 +64,11 @@ def execute_purge():
     AttendanceRecord.query.delete()
     PayrollRun.query.delete()
 
-    # 7. Audit & Notification Logs
+    # 6. Audit & Notification Logs
     AuditLog.query.delete()
     NotificationLog.query.delete()
 
-    # Plant Profile & Weighbridge Settings
+    # 7. Plant Profile & Weighbridge Settings
     plant = Plant.query.filter_by(name="ROXXCON RMC NAGPUR").first() or Plant.query.first()
     if not plant:
         plant = Plant(
@@ -105,39 +95,190 @@ def execute_purge():
         if not plant.scada_type:
             plant.scada_type = "CRB-75"
 
-    # 8. Reset Material Stocks to 0.0 (Clean Inventory)
-    standard_materials = [
-        {"name": "Cement (OPC 53)", "unit": "kg", "reorder_level": 50000.0, "density": 3.15},
-        {"name": "River Sand (Zone II)", "unit": "kg", "reorder_level": 80000.0, "density": 2.65},
-        {"name": "Manufactured Sand (M-Sand)", "unit": "kg", "reorder_level": 50000.0, "density": 2.60},
-        {"name": "Aggregate 10mm", "unit": "kg", "reorder_level": 60000.0, "density": 2.70},
-        {"name": "Aggregate 20mm", "unit": "kg", "reorder_level": 90000.0, "density": 2.70},
-        {"name": "Fly Ash (Class F)", "unit": "kg", "reorder_level": 30000.0, "density": 2.20},
-        {"name": "GGBS (Slag)", "unit": "kg", "reorder_level": 35000.0, "density": 2.90},
-        {"name": "Water", "unit": "l", "reorder_level": 50000.0, "density": 1.0},
-        {"name": "Admixture (PCE)", "unit": "l", "reorder_level": 800.0, "density": 1.08},
-        {"name": "Diesel", "unit": "l", "reorder_level": 2000.0, "density": 0.85},
+    # 8. Unlink customer_id on Users to avoid FK constraints, then seed 4 Enterprise Customers
+    for u in User.query.all():
+        u.customer_id = None
+    db.session.flush()
+
+    Site.query.delete()
+    Customer.query.delete()
+
+    enterprise_customers = [
+        {
+            "name": "Larsen & Toubro Ltd (L&T Construction)",
+            "contact_person": "Er. Rajesh Deshmukh",
+            "phone": "+91 98220 11223",
+            "email": "rajesh.deshmukh@lntecc.com",
+            "gstin": "27AAACL0123P1Z8",
+            "address": "L&T Tech Park, Wardha Road, Nagpur, Maharashtra 440025",
+            "credit_days": 45,
+            "credit_limit": 5000000.0,
+            "site": {
+                "name": "Metro Rail Corridor Phase 2 (Pillar P-104 to P-120)",
+                "address": "Wardha Road, Near Airport Station, Nagpur, Maharashtra 440025",
+                "contact_person": "Nitin Bagde",
+                "phone": "+91 98220 11224",
+                "notes": "32T transit mixer access road clear. Dedicated wash bay available."
+            }
+        },
+        {
+            "name": "Godrej Properties Infrastructure",
+            "contact_person": "Nitin Gadre",
+            "phone": "+91 94231 44556",
+            "email": "ngadre@godrejproperties.com",
+            "gstin": "27AAACG4455K1Z3",
+            "address": "Godrej Anandam Tower A, Ganeshpeth, Nagpur, Maharashtra 440018",
+            "credit_days": 30,
+            "credit_limit": 3500000.0,
+            "site": {
+                "name": "Godrej Anandam Commercial Wing Site",
+                "address": "Model Mill Compound, Ganeshpeth, Nagpur, Maharashtra 440018",
+                "contact_person": "Ajay Sharma",
+                "phone": "+91 94231 44557",
+                "notes": "Stationary line pump CP-30 stationed at basement B2."
+            }
+        },
+        {
+            "name": "Tata Projects Civil Infrastructure",
+            "contact_person": "Amitabh Verma",
+            "phone": "+91 97654 33221",
+            "email": "averma@tataprojects.com",
+            "gstin": "27AAACT9988M1Z4",
+            "address": "Samruddhi Expressway Junction Package 1, Nagpur, Maharashtra",
+            "credit_days": 60,
+            "credit_limit": 7500000.0,
+            "site": {
+                "name": "Samruddhi Interchange Cloverleaf Bridge Site",
+                "address": "Hingna Bypass Km 12.5, Nagpur, Maharashtra 441110",
+                "contact_person": "Sandeep Patil",
+                "phone": "+91 97654 33222",
+                "notes": "Heavy TM access via Gate 3. Slump retention test required upon entry."
+            }
+        },
+        {
+            "name": "KEC International Power & Infra",
+            "contact_person": "Vikas Rathi",
+            "phone": "+91 98901 88776",
+            "email": "vrathi@kecrpg.com",
+            "gstin": "27AAACK1122D1Z6",
+            "address": "MIDC Butibori Industrial Estate, Nagpur, Maharashtra 441122",
+            "credit_days": 30,
+            "credit_limit": 2500000.0,
+            "site": {
+                "name": "400kV Substation Transmission Foundation Site",
+                "address": "Plot 45, Butibori Industrial Area, Nagpur, Maharashtra 441122",
+                "contact_person": "Manoj Kulkarni",
+                "phone": "+91 98901 88777",
+                "notes": "Safety induction mandatory for TM drivers. Boom pump clearance active."
+            }
+        }
     ]
 
-    for m_def in standard_materials:
+    first_customer = None
+    for c_data in enterprise_customers:
+        site_info = c_data.pop("site")
+        cust = Customer(
+            name=c_data["name"],
+            contact_person=c_data["contact_person"],
+            phone=c_data["phone"],
+            email=c_data["email"],
+            gstin=c_data["gstin"],
+            address=c_data["address"],
+            credit_days=c_data["credit_days"],
+            credit_limit=c_data["credit_limit"],
+            plant_id=plant.id
+        )
+        db.session.add(cust)
+        db.session.flush()
+
+        if not first_customer:
+            first_customer = cust
+
+        site = Site(
+            customer_id=cust.id,
+            name=site_info["name"],
+            address=site_info["address"],
+            contact_person=site_info["contact_person"],
+            phone=site_info["phone"],
+            accessibility_notes=site_info["notes"]
+        )
+        db.session.add(site)
+
+    # 9. Inward Full Material Inventory with official Inward Weighbridge Tickets & Ledgers
+    now = datetime.now(timezone.utc)
+    now_str = now.isoformat()
+
+    standard_materials = [
+        {"name": "Cement (OPC 53)", "unit": "kg", "initial_stock": 35000.0, "reorder_level": 50000.0, "density": 3.15, "supplier": "UltraTech Cement Ltd (Bulk Tanker)", "vehicle": "MH-40-BL-1122"},
+        {"name": "River Sand (Zone II)", "unit": "kg", "initial_stock": 45000.0, "reorder_level": 80000.0, "density": 2.65, "supplier": "Narmada River Sands (Tipper 45T)", "vehicle": "MH-40-TR-3344"},
+        {"name": "Manufactured Sand (M-Sand)", "unit": "kg", "initial_stock": 45000.0, "reorder_level": 50000.0, "density": 2.60, "supplier": "Vashishta Quarry Mines (VSI M-Sand)", "vehicle": "MH-40-TR-5566"},
+        {"name": "Aggregate 10mm", "unit": "kg", "initial_stock": 50000.0, "reorder_level": 60000.0, "density": 2.70, "supplier": "Hingna Stone Crushers (Blue Metal 10mm)", "vehicle": "MH-40-TR-7788"},
+        {"name": "Aggregate 20mm", "unit": "kg", "initial_stock": 60000.0, "reorder_level": 90000.0, "density": 2.70, "supplier": "Hingna Stone Crushers (Blue Metal 20mm)", "vehicle": "MH-40-TR-9900"},
+        {"name": "Fly Ash (Class F)", "unit": "kg", "initial_stock": 30000.0, "reorder_level": 30000.0, "density": 2.20, "supplier": "Koradi Thermal Power Station (Bulker)", "vehicle": "MH-40-BL-2233"},
+        {"name": "GGBS (Slag)", "unit": "kg", "initial_stock": 30000.0, "reorder_level": 35000.0, "density": 2.90, "supplier": "JSW Cement Ltd (Bulk Tanker)", "vehicle": "MH-40-BL-4455"},
+        {"name": "Water", "unit": "l", "initial_stock": 50000.0, "reorder_level": 50000.0, "density": 1.0, "supplier": "MIDC Hingna Industrial Pipeline", "vehicle": "MIDC-PIPE-01"},
+        {"name": "Admixture (PCE)", "unit": "l", "initial_stock": 1200.0, "reorder_level": 800.0, "density": 1.08, "supplier": "Sika India Pvt Ltd (Plastiment PCE)", "vehicle": "MH-12-CM-8899"},
+        {"name": "Diesel", "unit": "l", "initial_stock": 6000.0, "reorder_level": 2000.0, "density": 0.85, "supplier": "Indian Oil Corporation Ltd (Fuel Bowser)", "vehicle": "MH-40-FL-9911"},
+    ]
+
+    for idx, m_def in enumerate(standard_materials, 1):
         mat = Material.query.filter_by(name=m_def["name"], plant_id=plant.id).first()
+        init_qty = m_def["initial_stock"]
         if not mat:
             mat = Material(
                 name=m_def["name"],
                 unit=m_def["unit"],
-                current_stock=0.0,
+                current_stock=init_qty,
                 reorder_level=m_def["reorder_level"],
                 density=m_def.get("density", 1.0),
-                plant_id=plant.id
+                plant_id=plant.id,
+                is_active=True
             )
             db.session.add(mat)
+            db.session.flush()
         else:
-            mat.current_stock = 0.0
+            mat.current_stock = init_qty
             mat.unit = m_def["unit"]
             mat.reorder_level = m_def["reorder_level"]
             mat.plant_id = plant.id
+            mat.is_active = True
 
-    # 9. Reset Trucks & Drivers to AVAILABLE
+        # Inward Weighbridge Ticket
+        wb_ticket = WeighbridgeTicket(
+            ticket_number=f"WB-INW-{idx:04d}",
+            type="INWARD",
+            vehicle_number=m_def["vehicle"],
+            material=mat.name,
+            supplier_or_customer=m_def["supplier"],
+            gross_weight=round(init_qty * 1.35, 1),
+            tare_weight=round(init_qty * 0.35, 1),
+            net_weight=init_qty,
+            gross_time=now_str,
+            tare_time=now_str,
+            status="COMPLETED",
+            variance=0.0,
+            challan_weight=init_qty,
+            received_rs=0.0,
+            wb_name="Gate Scale #1",
+            driver_name="Consignment Delivery Driver",
+            watchman_name="Ganesh S (Gate Security)",
+            gate_pass_no=f"GP-INW-{idx:04d}",
+            plant_id=plant.id
+        )
+        db.session.add(wb_ticket)
+
+        # Stock Transaction Ledger Entry
+        tx = StockTransaction(
+            material_id=mat.id,
+            type="IN",
+            quantity=init_qty,
+            reference=f"WB-INW-{idx:04d}",
+            note=f"Initial Silo & Bay Consignment Inwarded from {m_def['supplier']}",
+            created_by="Store Inventory Manager"
+        )
+        db.session.add(tx)
+
+    # 10. Reset Trucks & Drivers to AVAILABLE
     standard_trucks = [
         {"tm_number": "MH40DC4288", "capacity_cum": 8.0},
         {"tm_number": "MH40DC3964", "capacity_cum": 8.0},
@@ -189,7 +330,7 @@ def execute_purge():
         wb_set.plant_name = "ROXXCON RMC NAGPUR"
         wb_set.wb_name = "WB-01 (Inward/Outward Pitless 60T)"
 
-    # 10. Ensure Concrete Grades (M15 - M40) exist
+    # 11. Concrete Grades (M15 - M40)
     standard_grades = [
         {"code": "M15", "strength": 15.0, "s_min": 100, "s_max": 140, "rate": 3950.0, "cement": 240, "sand": 780, "agg10": 460, "agg20": 700, "water": 175, "admix": 1.2},
         {"code": "M20", "strength": 20.0, "s_min": 110, "s_max": 150, "rate": 4200.0, "cement": 280, "sand": 740, "agg10": 470, "agg20": 720, "water": 170, "admix": 1.5},
@@ -223,7 +364,7 @@ def execute_purge():
             )
             db.session.add(mix)
 
-    # 11. Ensure Core Portal User Accounts Exist (Password: Demo@123)
+    # 12. Ensure Core Portal User Accounts Exist (Password: Demo@123)
     core_users = [
         {"name": "Vikramaditya Singhania", "email": "owner@rmc.test", "role": "owner", "mgr": False},
         {"name": "Ananya Sharma", "email": "sales@rmc.test", "role": "sales", "mgr": False},
@@ -246,23 +387,29 @@ def execute_purge():
                 phone="+91 98000 12345",
                 role=u_info["role"],
                 is_manager=u_info["mgr"],
-                is_active=True
+                is_active=True,
+                plant_id=plant.id
             )
             user.set_password("Demo@123")
             db.session.add(user)
         else:
             user.role = u_info["role"]
             user.is_manager = u_info["mgr"]
-            user.customer_id = None
+            user.plant_id = plant.id
             user.is_active = True
             user.set_password("Demo@123")
 
-    # 12. Reset Document Sequences to 0
+        # Link customer user to Customer 1
+        if user.email == "customer1@rmc.test" and first_customer:
+            user.customer_id = first_customer.id
+
+    # 13. Reset Document Sequences to 0
     Sequence.query.delete()
 
     db.session.commit()
-    print("✓ All seed, dummy, and operational data successfully purged.")
-    print("✓ Database is completely clean and ready to create everything from scratch across all logins.")
+    print("✓ All 4 Enterprise Customers and delivery sites seeded.")
+    print("✓ All raw materials inwarded with official gate weighbridge receipts & ledger entries.")
+    print("✓ Plant database is completely initialized and ready for production batching.")
 
 def purge_dummy_data():
     app = create_app()

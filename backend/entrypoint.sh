@@ -15,11 +15,13 @@ app = create_app()
 with app.app_context():
     db.create_all()
     user = User.query.filter_by(email='sales@rmc.test').first()
-    if not user or not user.check_password('Demo@123'):
-        print('Core users missing or invalid. Bootstrapping clean plant database...')
+    from backend.app.models.models import Customer
+    cust_count = Customer.query.count()
+    if not user or not user.check_password('Demo@123') or cust_count == 0:
+        print('Core users or baseline enterprise customers missing. Bootstrapping clean plant database...')
         execute_purge()
     else:
-        print('Core users verified.')
+        print('Core users and baseline enterprise customers verified.')
 "
 
 PORT="${PORT:-8080}"
