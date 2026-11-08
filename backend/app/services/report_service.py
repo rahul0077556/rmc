@@ -161,7 +161,7 @@ class ReportService:
                 if norm_name not in materials_by_name:
                     materials_by_name[norm_name] = m
 
-            sorted_materials = sorted(materials_by_name.values(), key=lambda x: x.name.asc())
+            sorted_materials = sorted(materials_by_name.values(), key=lambda x: (x.name or "").lower())
 
             # Also pre-sum batch sheet consumption in this date range to cross-reconcile
             batch_sheets_q = BatchSheet.query.filter(
@@ -394,8 +394,9 @@ class ReportService:
                 concrete_vol = round(sum(t.delivered_quantity or t.quantity_cum for t in trips_q), 1)
 
                 # Assigned or primary TM
-                assigned_tm = d.truck.tm_number if d.truck else (trips_q[0].truck.tm_number if trips_q and trips_q[0].truck else f"TM-{idx:02d}")
-                tm_cap = d.truck.capacity_cum if d.truck and d.truck.capacity_cum else (trips_q[0].truck.capacity_cum if trips_q and trips_q[0].truck else 7.0)
+                truck_for_driver = Truck.query.filter_by(default_driver_id=d.id).first()
+                assigned_tm = (truck_for_driver.tm_number if truck_for_driver else None) or (trips_q[0].truck.tm_number if trips_q and trips_q[0].truck else f"TM-{idx:02d}")
+                tm_cap = (truck_for_driver.capacity_cum if truck_for_driver and truck_for_driver.capacity_cum else None) or (trips_q[0].truck.capacity_cum if trips_q and trips_q[0].truck else 7.0)
 
                 # Realistic days present and operational diesel reconciliation
                 wp = min(28, max(22, 24 + (idx % 5)))
@@ -957,7 +958,8 @@ class ReportService:
             rows = []
             muster_idx = 1
             for d in drivers:
-                tm_str = d.truck.tm_number if d.truck else f"TM-{muster_idx:02d}"
+                truck_for_driver = Truck.query.filter_by(default_driver_id=d.id).first()
+                tm_str = truck_for_driver.tm_number if truck_for_driver else f"TM-{muster_idx:02d}"
                 rows.append([
                     f"MST-{muster_idx:03d}",
                     today_str,
