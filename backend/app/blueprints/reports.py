@@ -3,7 +3,8 @@ from flask import Blueprint, request, make_response, Response
 from flask_jwt_extended import jwt_required
 from backend.app.services.report_service import ReportService
 from backend.app.utils.responses import success_response, error_response
-from backend.app.utils.decorators import roles_required
+from backend.app.utils.decorators import roles_required, get_scoped_plant_id
+from backend.app.models.models import Plant
 
 reports_bp = Blueprint("reports", __name__, url_prefix="/api/v1/reports")
 
@@ -39,7 +40,14 @@ def get_report(key):
     else:
         to_date = now + timedelta(days=1)
 
-    cols, rows = ReportService.generate_report(key, from_date, to_date)
+    scoped_plant = request.args.get("plant_id") or get_scoped_plant_id()
+    plant = Plant.query.get(scoped_plant) if scoped_plant else None
+    plant_name = plant.name if plant else "ROXXCON RMC NAGPUR"
+    plant_city = plant.city if plant and plant.city else "Nagpur"
+
+    cols, rows = ReportService.generate_report(
+        key, from_date, to_date, plant_id=scoped_plant, plant_name=plant_name, plant_city=plant_city
+    )
 
     if fmt == "csv":
         csv_data = ReportService.to_csv(cols, rows)
@@ -50,7 +58,11 @@ def get_report(key):
         )
 
     elif fmt in ["xlsx", "excel"]:
-        xlsx_bytes = ReportService.to_excel(key.replace("_", " "), cols, rows)
+        xlsx_bytes = ReportService.to_excel(
+            key.replace("_", " "), cols, rows,
+            plant_name=plant_name, plant_city=plant_city,
+            from_date=from_date, to_date=to_date
+        )
         response = make_response(xlsx_bytes)
         response.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         response.headers["Content-Disposition"] = f"attachment; filename={key}_{from_date.strftime('%Y%m%d')}_{to_date.strftime('%Y%m%d')}.xlsx"
@@ -64,5 +76,7 @@ def get_report(key):
             "rows": rows,
             "totalRows": len(rows),
             "from": from_date.strftime("%Y-%m-%d"),
-            "to": to_date.strftime("%Y-%m-%d")
+            "to": to_date.strftime("%Y-%m-%d"),
+            "plantName": plant_name,
+            "plantCity": plant_city
         })

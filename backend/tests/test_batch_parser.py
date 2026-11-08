@@ -109,3 +109,4 @@ def test_empty_or_unreadable_file_handling():
     assert "could not be parsed" in parsed["error"].lower()
     assert len(parsed["materials"]) == 0
     assert parsed["isVerified"] is False
+

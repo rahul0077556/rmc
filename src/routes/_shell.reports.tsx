@@ -16,7 +16,8 @@ import {
   Calendar,
   Layers,
   ChevronRight,
-  Filter
+  Filter,
+  CircleDollarSign
 } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { ChartCard } from "@/components/app/chart-card";
@@ -47,9 +48,10 @@ export const Route = createFileRoute("/_shell/reports")({
   component: ReportsPage,
 });
 
-const DEPT_ICONS = {
+const DEPT_ICONS: Record<string, any> = {
   All: Layers,
   Store: Warehouse,
+  Commercial: CircleDollarSign,
   Dispatch: Truck,
   HR: Users,
   "QA/QC": FlaskConical,
@@ -57,8 +59,9 @@ const DEPT_ICONS = {
 
 const DEPT_BADGE_COLORS: Record<string, string> = {
   Store: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+  Commercial: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
   Dispatch: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-  HR: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  HR: "bg-indigo-500/15 text-indigo-400 border-indigo-500/30",
   "QA/QC": "bg-purple-500/15 text-purple-400 border-purple-500/30",
 };
 
@@ -185,6 +188,12 @@ function ReportsPage() {
     );
   }, [reportQuery.data?.rows, tableSearch]);
 
+  const hasSerialCol = useMemo(() => {
+    if (!reportQuery.data?.columns || reportQuery.data.columns.length === 0) return false;
+    const first = String(reportQuery.data.columns[0] || "").trim();
+    return /^(s\.?no\.?|sr\.?\s*no\.?|sr|#)$/i.test(first);
+  }, [reportQuery.data?.columns]);
+
   async function handleExportExcel() {
     if (!activeReport) return;
     setDownloading(true);
@@ -253,7 +262,7 @@ function ReportsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         {isOwner ? (
           <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-border bg-surface p-1">
-            {(["All", "Store", "Dispatch", "HR", "QA/QC"] as ReportDepartment[]).map((dept) => {
+            {(["All", "Store", "Commercial", "Dispatch", "HR", "QA/QC"] as ReportDepartment[]).map((dept) => {
               const Icon = DEPT_ICONS[dept];
               const count =
                 dept === "All"
@@ -453,7 +462,9 @@ function ReportsPage() {
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Plant Location
                 </p>
-                <p className="text-base font-bold text-foreground">Mulkhed Plant</p>
+                <p className="text-base font-bold text-foreground">
+                  {reportQuery.data?.plantName || user?.plant || "Main Batching Facility"}
+                </p>
               </div>
               <div className="rounded-lg border border-border bg-surface-raised/40 p-2.5">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -478,7 +489,7 @@ function ReportsPage() {
               <table className="w-full min-w-[750px] text-xs">
                 <thead>
                   <tr className="border-b border-border bg-surface-raised/70 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    <th className="w-12 px-3 py-2.5 text-center">#</th>
+                    {!hasSerialCol && <th className="w-12 px-3 py-2.5 text-center">#</th>}
                     {reportQuery.data.columns.map((c) => (
                       <th
                         key={c}
@@ -495,14 +506,34 @@ function ReportsPage() {
                       key={rIdx}
                       className="transition-colors hover:bg-surface-raised/50"
                     >
-                      <td className="px-3 py-2 text-center text-muted-foreground">
-                        {rIdx + 1}
-                      </td>
+                      {!hasSerialCol && (
+                        <td className="px-3 py-2 text-center text-muted-foreground">
+                          {rIdx + 1}
+                        </td>
+                      )}
                       {row.map((cell, cIdx) => {
                         const str = String(cell ?? "");
-                        const isPass = str === "PASS" || str === "ADEQUATE" || str === "CALIBRATION OK";
-                        const isFail = str === "FAIL" || str.includes("REORDER") || str.includes("REJECTED");
-                        const isStatus = str === "DELIVERED" || str === "PRESENT" || str === "IN_TRANSIT";
+                        const isPass =
+                          str === "PASS" ||
+                          str === "ADEQUATE" ||
+                          str === "CALIBRATION OK" ||
+                          str === "ALL DUES CLEARED" ||
+                          str === "STANDARD CREDIT" ||
+                          str === "PASSED (CALIBRATED)" ||
+                          str === "Within Fuel Norms";
+                        const isFail =
+                          str === "FAIL" ||
+                          str.includes("REORDER") ||
+                          str.includes("REJECTED") ||
+                          str.includes("CRITICAL") ||
+                          str.includes("EXCEEDED") ||
+                          str.includes("SHORTFALL");
+                        const isStatus =
+                          str === "DELIVERED" ||
+                          str === "PRESENT" ||
+                          str === "IN_TRANSIT" ||
+                          str === "NORMAL" ||
+                          str === "PLANNED";
 
                         return (
                           <td

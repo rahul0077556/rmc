@@ -1,15 +1,15 @@
 import { request, apiClient } from "./client";
 import type { ApiResponse } from "@/types";
 
-export type ReportDepartment = "All" | "Store" | "Dispatch" | "HR" | "QA/QC";
+export type ReportDepartment = "All" | "Store" | "Commercial" | "Dispatch" | "HR" | "QA/QC";
 
 export interface ReportDefinition {
   id: string;
   backendKey: string;
   title: string;
   description: string;
-  department: "Store" | "Dispatch" | "HR" | "QA/QC";
-  departments: ("Store" | "Dispatch" | "HR" | "QA/QC")[]; // supports multiple depts like 12 (Dispatch & QA/QC)
+  department: "Store" | "Commercial" | "Dispatch" | "HR" | "QA/QC";
+  departments: ("Store" | "Commercial" | "Dispatch" | "HR" | "QA/QC")[];
 }
 
 export const REPORTS: ReportDefinition[] = [
@@ -20,13 +20,21 @@ export const REPORTS: ReportDefinition[] = [
     title: "MPR Report (Store)",
     description: "Material Purchase & Requisition Report (Opening stock, Receipts, Plant Consumption, Closing Stock, Reorder Level)",
     department: "Store",
-    departments: ["Store"],
+    departments: ["Store", "Commercial"],
+  },
+  {
+    id: "weighbridge-inward",
+    backendKey: "weighbridge_inward",
+    title: "Weighbridge Gate Inward Audit",
+    description: "Raw material gate receipts, Gross/Tare/Net weights vs supplier challan with variance & scale audit",
+    department: "Store",
+    departments: ["Store", "Commercial"],
   },
   {
     id: "hr-report-store",
     backendKey: "hr_report_store",
     title: "HR Report (Store)",
-    description: "Driver & Transit Mixer monthly trip performance, diesel average, and trip incentive summary (As per MUL HR Reports)",
+    description: "Driver & Transit Mixer monthly trip performance, diesel average, and trip incentive summary",
     department: "Store",
     departments: ["Store", "HR"],
   },
@@ -34,9 +42,27 @@ export const REPORTS: ReportDefinition[] = [
     id: "tm-average-report",
     backendKey: "tm_average_report",
     title: "TM Average Report (Store)",
-    description: "Vehicle running kilometers, handi rotating hours, diesel consumption & fuel mileage reconciliation (As per MUL TM Average Summary)",
+    description: "Vehicle running kilometers, handi rotating hours, diesel consumption & fuel mileage reconciliation",
     department: "Store",
-    departments: ["Store"],
+    departments: ["Store", "Dispatch"],
+  },
+
+  // COMMERCIAL SECTION (High Priority for Plant Owner)
+  {
+    id: "customer-outstanding",
+    backendKey: "customer_outstanding",
+    title: "Customer Outstanding & Ageing",
+    description: "Customer-wise ledger, billed vs received, outstanding balances, and credit ageing (>30 days overdue)",
+    department: "Commercial",
+    departments: ["Commercial"],
+  },
+  {
+    id: "concrete-margins",
+    backendKey: "concrete_margins",
+    title: "Grade-Wise Concrete Margins",
+    description: "Mix grade sales realization vs raw material & transport cost with gross profit margin per m³",
+    department: "Commercial",
+    departments: ["Commercial", "Dispatch"],
   },
 
   // DISPATCH SECTION
@@ -51,10 +77,10 @@ export const REPORTS: ReportDefinition[] = [
   {
     id: "zone-02-pump",
     backendKey: "zone_02_pump",
-    title: "Zone 02 Pump Report",
-    description: "Concrete boom pump & stationary line pump utilization, pipeline lengths, pumping speed and revenue in Zone 02",
+    title: "Concrete Pump Deployment & Utilization",
+    description: "Concrete boom pump & stationary line pump utilization, pipeline lengths, pumping speed and billed charges",
     department: "Dispatch",
-    departments: ["Dispatch"],
+    departments: ["Dispatch", "Commercial"],
   },
   {
     id: "daywise-production",
@@ -85,8 +111,8 @@ export const REPORTS: ReportDefinition[] = [
   {
     id: "mul-attendance",
     backendKey: "mul_attendance",
-    title: "MUL Attendance",
-    description: "Mulkhed Plant workforce, drivers and helpers daily muster roll & asset assignment",
+    title: "Plant Muster Roll & Shift Roster",
+    description: "Plant workforce, drivers and helpers daily muster roll & asset assignment",
     department: "HR",
     departments: ["HR"],
   },
@@ -130,7 +156,7 @@ export function getReportsForRole(role?: string): ReportDefinition[] {
   if (!role || role === "owner") return REPORTS;
   if (role === "store") return REPORTS.filter((r) => r.departments.includes("Store"));
   if (role === "dispatcher") return REPORTS.filter((r) => r.departments.includes("Dispatch"));
-  if (role === "account") return REPORTS.filter((r) => r.departments.includes("HR"));
+  if (role === "account") return REPORTS.filter((r) => r.departments.includes("HR") || r.departments.includes("Commercial"));
   if (role === "qa") return REPORTS.filter((r) => r.departments.includes("QA/QC"));
   if (role === "production") {
     return REPORTS.filter((r) =>
@@ -139,7 +165,7 @@ export function getReportsForRole(role?: string): ReportDefinition[] {
   }
   if (role === "sales" || role === "sales_manager") {
     return REPORTS.filter((r) =>
-      ["schedule-and-production", "daywise-production", "zone-02-pump"].includes(r.id)
+      ["customer-outstanding", "concrete-margins", "schedule-and-production", "daywise-production", "zone-02-pump"].includes(r.id)
     );
   }
   return REPORTS;
@@ -155,6 +181,8 @@ export interface ReportResult {
   totalRows?: number;
   from?: string;
   to?: string;
+  plantName?: string;
+  plantCity?: string;
 }
 
 export const reportsApi = {
@@ -177,6 +205,8 @@ export const reportsApi = {
         totalRows: result?.totalRows,
         from: result?.from,
         to: result?.to,
+        plantName: result?.plantName,
+        plantCity: result?.plantCity,
       },
     };
   },
