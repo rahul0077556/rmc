@@ -68,6 +68,26 @@ def get_report(key):
         response.headers["Content-Disposition"] = f"attachment; filename={key}_{from_date.strftime('%Y%m%d')}_{to_date.strftime('%Y%m%d')}.xlsx"
         return response
 
+    elif fmt == "pdf":
+        from backend.app.services.pdf_service import PdfService
+        from flask_jwt_extended import get_jwt
+        try:
+            claims = get_jwt() or {}
+            user_name = claims.get("name") or "Authorized Plant Officer"
+        except Exception:
+            user_name = "Authorized Plant Officer"
+
+        pdf_bytes = PdfService.generate_report_pdf(
+            key.replace("_", " "), cols, rows,
+            plant_name=plant_name, plant_city=plant_city,
+            from_date=from_date, to_date=to_date,
+            user_name=user_name
+        )
+        response = make_response(pdf_bytes)
+        response.headers["Content-Type"] = "application/pdf"
+        response.headers["Content-Disposition"] = f"attachment; filename={key}_{from_date.strftime('%Y%m%d')}_{to_date.strftime('%Y%m%d')}.pdf"
+        return response
+
     else:
         # Default JSON format
         return success_response(data={

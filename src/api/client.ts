@@ -48,6 +48,20 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+export async function downloadAuthenticatedFile(url: string, filename: string): Promise<void> {
+  const response = await apiClient.get(url, { responseType: "blob" });
+  const contentType = response.headers["content-type"] || "application/pdf";
+  const blob = new Blob([response.data], { type: contentType });
+  const objectUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(objectUrl);
+}
+
 // Response interceptor to handle errors gracefully
 apiClient.interceptors.response.use(
   (response) => response,

@@ -1,10 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Printer } from "lucide-react";
+import { ArrowLeft, Printer, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LoadingState, ErrorState } from "@/components/app/states";
 import { StatusBadge } from "@/components/app/status-badge";
 import { productionApi } from "@/api/production";
+import { downloadAuthenticatedFile } from "@/api/client";
 import { PLANT_NAME } from "@/lib/mock-data";
 import { cum, dt, num } from "@/lib/format";
 
@@ -59,9 +60,24 @@ function BatchSheetPage() {
           <Button variant="ghost" onClick={handleBack}>
             <ArrowLeft className="size-4" /> Back
           </Button>
-          <Button onClick={() => window.print()}>
-            <Printer className="size-4" /> Print batch sheet
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="gap-1.5 border-blue-500/40 text-blue-400 hover:bg-blue-500/10 cursor-pointer"
+              onClick={async () => {
+                try {
+                  await downloadAuthenticatedFile(`/production/batch-sheets/${s.id}/pdf`, `BatchDocket_${s.batchNumber || s.id}.pdf`);
+                } catch {
+                  window.print();
+                }
+              }}
+            >
+              <FileText className="size-4" /> Download PDF Docket
+            </Button>
+            <Button onClick={() => window.print()} className="gap-1.5 cursor-pointer">
+              <Printer className="size-4" /> Print batch sheet
+            </Button>
+          </div>
         </div>
 
         <article className="panel space-y-5 p-6 print:border-0 print:shadow-none">

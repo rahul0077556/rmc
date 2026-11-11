@@ -190,13 +190,121 @@
 }
 
 @media print {
-  .no-print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+
+  :root {
+    --background: #ffffff !important;
+    --foreground: #0f172a !important;
+    --surface: #ffffff !important;
+    --surface-raised: #f8fafc !important;
+    --card: #ffffff !important;
+    --card-foreground: #0f172a !important;
+    --popover: #ffffff !important;
+    --popover-foreground: #0f172a !important;
+    --muted: #f1f5f9 !important;
+    --muted-foreground: #475569 !important;
+    --primary: #1e40af !important;
+    --primary-foreground: #ffffff !important;
+    --border: #cbd5e1 !important;
+  }
+
+  /* Force exact color reproduction and strip all dark background colors */
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  html, body, #root, main, div, section, article, .space-y-6, [class*="bg-"], [class*="surface"], [class*="card"] {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  /* Blue headings as requested by user */
+  h1, h2, h3, h4, h5, h6, [data-report-heading], .print-blue-heading {
+    color: #1e40af !important; /* Royal Blue */
+  }
+
+  p, span, div, td, label {
+    color: #0f172a !important;
+  }
+
+  .text-muted-foreground, .text-slate-400, .text-gray-400 {
+    color: #475569 !important;
+  }
+
+  /* Hide navigation, sidebars, interactive buttons, inputs and chrome */
+  header, nav, aside, .no-print, button, input, select, textarea,
+  [data-sidebar="sidebar"], [data-sidebar="trigger"], .navbar-shell,
+  .print-hidden, .toaster, [role="status"], .sonner-toast,
+  [aria-live="polite"], .live-ticker, [class*="ticker"] {
     display: none !important;
   }
 
-  body {
-    background: white;
-    color: black;
+  /* Prevent table and panels from being horizontally cut off */
+  .overflow-x-auto, .overflow-y-auto, .overflow-hidden {
+    overflow: visible !important;
+    max-width: none !important;
+    width: 100% !important;
+    border: none !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    background-color: #ffffff !important;
+    font-size: 8pt !important;
+    page-break-inside: auto !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
+  }
+
+  th {
+    background-color: #1e40af !important; /* Royal Blue Table Header */
+    color: #ffffff !important;
+    border: 0.5pt solid #93c5fd !important;
+    padding: 3.5pt 4pt !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    font-size: 7.5pt !important;
+  }
+
+  th * {
+    color: #ffffff !important;
+  }
+
+  td {
+    border: 0.5pt solid #cbd5e1 !important;
+    padding: 3pt 4pt !important;
+    color: #0f172a !important;
+    background-color: #ffffff !important;
+    font-size: 7.5pt !important;
+  }
+
+  tr:nth-child(even) td {
+    background-color: #f8fafc !important;
+  }
+
+  /* Badges in print */
+  .badge, [class*="Badge"] {
+    border: 0.5pt solid #94a3b8 !important;
+    color: #0f172a !important;
+    background: transparent !important;
+    font-size: 7pt !important;
+    padding: 0.5pt 3pt !important;
   }
 }
 

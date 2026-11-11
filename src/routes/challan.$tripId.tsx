@@ -4,6 +4,7 @@ import { ArrowLeft, BadgeCheck, Printer, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LoadingState, ErrorState } from "@/components/app/states";
 import { tripsApi } from "@/api/trips";
+import { downloadAuthenticatedFile } from "@/api/client";
 import { PLANT_NAME } from "@/lib/mock-data";
 import { cum, dt, inr } from "@/lib/format";
 
@@ -64,8 +65,18 @@ function ChallanPage() {
             <ArrowLeft className="size-4" /> Back
           </Button>
           <div className="flex items-center gap-2">
-            <Button variant="outline" className="gap-1.5" onClick={() => window.open(`/api/v1/trips/${t.id}/challan/pdf`, '_blank')}>
-              <FileText className="size-4" /> PDF Challan
+            <Button
+              variant="outline"
+              className="gap-1.5 border-blue-500/40 text-blue-400 hover:bg-blue-500/10 cursor-pointer"
+              onClick={async () => {
+                try {
+                  await downloadAuthenticatedFile(`/trips/${t.id}/challan/pdf`, `Challan_${t.challanNumber || t.id}.pdf`);
+                } catch {
+                  window.print();
+                }
+              }}
+            >
+              <FileText className="size-4" /> Download PDF Challan
             </Button>
             <Button className="gap-1.5" onClick={() => window.print()}>
               <Printer className="size-4" /> Print Challan

@@ -79,7 +79,7 @@ function OwnerDashboardPage() {
     { key: "status", header: "Status", align: "center", cell: (r) => <StatusBadge status={r.status} /> },
   ];
 
-  const maxTruck = Math.max(...data.truckUtilisation.map((t) => t.count), 1);
+  const maxTruck = Math.max(1, ...(data?.truckUtilisation || []).map((t) => t.count || 0));
 
   return (
     <div className="space-y-6">

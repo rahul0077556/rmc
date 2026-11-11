@@ -359,31 +359,22 @@ function ProductLandingPage() {
             >
               Pricing & ROI
             </button>
-            <Link
-              to="/reports"
-              className="hover:text-emerald-400 transition-colors flex items-center gap-1 text-slate-400 whitespace-nowrap"
-            >
-              <FileSpreadsheet className="size-3 text-emerald-400" />
-              <span>13 Reports</span>
-            </Link>
           </nav>
 
           {/* Action CTAs */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <ThemeSwitcher className="border-white/10 bg-white/[0.04] text-slate-300 py-1" />
+          <div className="flex items-center gap-2.5 sm:gap-3.5 shrink-0">
             <Link
               to="/login"
-              className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white px-3 py-1.5 rounded-xl border border-white/10 hover:border-white/20 transition-all cursor-pointer bg-white/[0.02] whitespace-nowrap"
+              className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white px-3 py-1.5 rounded-xl border border-white/10 hover:border-white/20 transition-all cursor-pointer bg-white/[0.03] whitespace-nowrap"
             >
               <Lock className="size-3 text-emerald-400" />
               <span>Client Sign In</span>
             </Link>
             <Link
               to="/login"
-              className="bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs h-8.5 sm:h-9 px-3 sm:px-4 rounded-xl shadow-lg shadow-emerald-500/25 transition-all hover:shadow-emerald-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
+              className="bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs h-8.5 sm:h-9 px-3.5 sm:px-4.5 rounded-xl shadow-lg shadow-emerald-500/25 transition-all hover:shadow-emerald-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
             >
-              <span>Explore</span>
-              <span className="hidden sm:inline">Platform</span>
+              <span>Explore Platform</span>
               <ArrowRight className="size-3.5" />
             </Link>
 
@@ -454,14 +445,6 @@ function ProductLandingPage() {
               >
                 Pricing & ROI
               </button>
-              <Link
-                to="/reports"
-                onClick={() => setMobileNavOpen(false)}
-                className="text-left text-xs font-medium text-slate-300 hover:text-emerald-400 p-2.5 rounded-lg hover:bg-white/[0.04] transition-colors flex items-center gap-1.5"
-              >
-                <FileSpreadsheet className="size-3 text-emerald-400" />
-                <span>13 Live Reports</span>
-              </Link>
             </div>
 
             <div className="flex flex-col gap-2.5 pt-1">
@@ -1112,10 +1095,7 @@ function ProductLandingPage() {
               Pricing
             </button>
             <Link to="/login" className="hover:text-emerald-400 text-slate-300 font-medium transition-colors">
-              Client Login
-            </Link>
-            <Link to="/reports" className="hover:text-emerald-400 text-slate-300 font-medium transition-colors">
-              13 Reports Directory
+              Client Portal
             </Link>
           </div>
 

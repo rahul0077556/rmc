@@ -78,17 +78,25 @@ export const dashboardApi = {
     }
     const statusDistribution = Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
 
-    // Today's schedule from real trips
-    const dailySchedule = allTrips.slice(0, 10).map((t: any) => {
-      const planned = t.plannedTime || t.plannedDatetime || new Date().toISOString();
-      const timeStr = planned.includes("T") ? planned.split("T")[1].slice(0, 5) : planned.slice(11, 16) || "09:00";
+    // Today's schedule from real trips (with defensive parsing)
+    const dailySchedule = (Array.isArray(allTrips) ? allTrips : []).slice(0, 10).map((t: any) => {
+      let timeStr = "09:00";
+      const raw = t.plannedTime || t.plannedDatetime;
+      if (typeof raw === "string" && raw.trim()) {
+        if (raw.includes("T")) {
+          const parts = raw.split("T");
+          timeStr = parts[1] ? parts[1].slice(0, 5) : "09:00";
+        } else if (raw.length >= 5) {
+          timeStr = raw.slice(0, 5);
+        }
+      }
       return {
         time: timeStr,
-        customer: t.customerName || "—",
-        po: t.poNumber || t.poId || "PO",
-        grade: t.grade || "M25",
-        quantity: t.quantity || 0,
-        tm: t.tmNumber || t.truckNumber || "TM",
+        customer: t.customerName || t.customer?.name || "—",
+        po: t.poNumber || t.poId || t.po?.poNumber || "PO",
+        grade: t.grade || t.mixDesign || "M25",
+        quantity: Number(t.quantity || t.quantity_cum || 0),
+        tm: t.tmNumber || t.truckNumber || t.truck?.truckNumber || "TM",
         status: (t.status || "PLANNED") as TripStatus,
       };
     });

@@ -225,6 +225,21 @@ export const reportsApi = {
     link.remove();
     window.URL.revokeObjectURL(url);
   },
+
+  async downloadPdf(id: string, from: string, to: string, filename: string): Promise<void> {
+    const backendKey = REPORT_KEY_MAP[id] || id.replace(/-/g, "_");
+    const response = await apiClient.get(`/reports/${backendKey}?from=${from}&to=${to}&format=pdf`, {
+      responseType: "blob",
+    });
+    const url = window.URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `${filename}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
 };
 
 export function toCsv(result: ReportResult): string {

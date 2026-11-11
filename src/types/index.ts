@@ -17,6 +17,7 @@ export interface User {
   role: Role;
   customerId?: string;
   plant: string;
+  plantId?: string;
   token?: string;
 }
 

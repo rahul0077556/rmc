@@ -17,7 +17,8 @@ import {
   Layers,
   ChevronRight,
   Filter,
-  CircleDollarSign
+  CircleDollarSign,
+  FileText
 } from "lucide-react";
 import { PageHeader } from "@/components/app/page-header";
 import { ChartCard } from "@/components/app/chart-card";
@@ -88,6 +89,7 @@ function ReportsPage() {
   );
   const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
   const [downloading, setDownloading] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   // Sync activeId if user changes role or activeId is not authorized
   useEffect(() => {
@@ -224,6 +226,24 @@ function ReportsPage() {
     toast.success("CSV file downloaded successfully!");
   }
 
+  async function handleExportPdf() {
+    if (!activeReport) return;
+    setDownloadingPdf(true);
+    try {
+      await reportsApi.downloadPdf(
+        activeReport.id,
+        from,
+        to,
+        `${activeReport.backendKey}_${from}_${to}`
+      );
+      toast.success("Certified PDF report generated and downloaded successfully!");
+    } catch {
+      toast.error("Failed to generate PDF. You can also export as Excel or CSV.");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -232,6 +252,16 @@ function ReportsPage() {
         subtitle={pageMeta.subtitle}
         actions={
           <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleExportPdf}
+              disabled={!reportQuery.data || downloadingPdf}
+              className="border-rose-500/40 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 font-medium"
+            >
+              <FileText className="size-4 mr-1.5" />
+              {downloadingPdf ? "Generating PDF..." : "Export PDF (.pdf)"}
+            </Button>
             <Button
               size="sm"
               variant="outline"
@@ -251,7 +281,12 @@ function ReportsPage() {
               <Download className="size-4 mr-1.5" />
               Export CSV
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => window.print()}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => window.print()}
+              title="Print formatted document view"
+            >
               <Printer className="size-4" />
             </Button>
           </div>
@@ -385,15 +420,55 @@ function ReportsPage() {
           title={activeReport.title}
           description={activeReport.description}
           actions={
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span
                 className={cn(
-                  "rounded-md border px-2.5 py-1 text-xs font-medium",
+                  "rounded-md border px-2.5 py-1 text-xs font-medium no-print",
                   DEPT_BADGE_COLORS[activeReport.department]
                 )}
               >
                 Department: {activeReport.departments.join(" & ")}
               </span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleExportPdf}
+                disabled={!reportQuery.data || downloadingPdf}
+                className="border-blue-500/40 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 font-semibold cursor-pointer no-print shadow-sm"
+                title="Download Official Certified PDF Report (Light Mode, Blue Headings)"
+              >
+                <FileText className="size-4 mr-1.5 text-blue-400" />
+                {downloadingPdf ? "Generating PDF..." : "Export PDF (.pdf)"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleExportExcel}
+                disabled={!reportQuery.data || downloading}
+                className="border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 font-medium cursor-pointer no-print"
+              >
+                <FileSpreadsheet className="size-4 mr-1.5" />
+                {downloading ? "Generating..." : "Export Excel (.xlsx)"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleExportCsv}
+                disabled={!reportQuery.data}
+                className="cursor-pointer no-print text-xs"
+              >
+                <Download className="size-3.5 mr-1" />
+                CSV
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => window.print()}
+                title="Print clean light-mode view"
+                className="cursor-pointer no-print text-muted-foreground hover:text-foreground"
+              >
+                <Printer className="size-4" />
+              </Button>
             </div>
           }
         >
@@ -474,6 +549,34 @@ function ReportsPage() {
               </div>
             </div>
           )}
+
+          {/* Printable Official Letterhead (Visible only on print/PDF) - Clean Light Mode with Royal Blue Headings */}
+          <div className="hidden print:block mb-4 border-b-2 border-blue-600 pb-3">
+            <div className="flex items-start justify-between">
+              <div>
+                <h1 className="text-xl font-bold tracking-tight text-blue-700 uppercase" data-report-heading>
+                  {reportQuery.data?.plantName || user?.plant || "ROXXCON RMC NAGPUR"}
+                </h1>
+                <p className="text-xs text-slate-600 font-medium">
+                  CERTIFIED READY-MIX CONCRETE OPERATIONS & COMPLIANCE REPORT | LOCATION: {reportQuery.data?.plantCity || "NAGPUR"}
+                </p>
+                <p className="text-[10px] text-blue-800 font-semibold mt-0.5">
+                  IS 456:2000 & IS 4926:2003 Quality Standards • SCADA Plant Operations Audit
+                </p>
+              </div>
+              <div className="text-right text-xs">
+                <p className="font-bold text-blue-800 uppercase tracking-wide">
+                  {activeReport.title}
+                </p>
+                <p className="text-[10px] text-slate-600">
+                  Period: <span className="font-semibold text-blue-900">{from}</span> to <span className="font-semibold text-blue-900">{to}</span>
+                </p>
+                <p className="text-[10px] text-slate-500">
+                  Generated: {new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST
+                </p>
+              </div>
+            </div>
+          </div>
 
           {/* Table Content */}
           {reportQuery.isLoading && <LoadingState rows={5} />}
@@ -570,6 +673,26 @@ function ReportsPage() {
               )}
             </div>
           )}
+
+          {/* Printable Official Sign-Off (Visible only on print/PDF) */}
+          <div className="hidden print:grid print:grid-cols-4 print:gap-4 print:mt-6 print:pt-4 print:border-t print:border-slate-300 print:text-[9px] print:text-slate-700">
+            <div className="border border-slate-200 p-2.5 rounded bg-slate-50/50">
+              <p className="font-bold text-slate-900">PREPARED BY:</p>
+              <p className="mt-6 border-t border-slate-400 pt-1">Store / Dispatcher Sign</p>
+            </div>
+            <div className="border border-slate-200 p-2.5 rounded bg-slate-50/50">
+              <p className="font-bold text-slate-900">QUALITY CERTIFIED:</p>
+              <p className="mt-6 border-t border-slate-400 pt-1">QA / QC Chemist Sign</p>
+            </div>
+            <div className="border border-slate-200 p-2.5 rounded bg-slate-50/50">
+              <p className="font-bold text-slate-900">COMMERCIAL AUDIT:</p>
+              <p className="mt-6 border-t border-slate-400 pt-1">Accounts Lead Sign</p>
+            </div>
+            <div className="border border-slate-200 p-2.5 rounded bg-slate-50/50">
+              <p className="font-bold text-slate-900">AUTHORIZED OFFICER:</p>
+              <p className="mt-6 border-t border-slate-400 pt-1">Plant Head / Owner [SEAL]</p>
+            </div>
+          </div>
         </ChartCard>
       )}
     </div>

@@ -25,7 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { invoicesApi, type InvoiceRow } from "@/api/invoices";
-import { isApiError } from "@/api/client";
+import { isApiError, downloadAuthenticatedFile } from "@/api/client";
 import { useAuth } from "@/auth/auth-context";
 import { inr, cum } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -179,8 +179,16 @@ function BillingPage() {
             size="sm"
             variant="ghost"
             className="h-8 gap-1 text-xs px-2 text-muted-foreground hover:text-foreground cursor-pointer"
+            className="h-8 gap-1 text-xs px-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 cursor-pointer"
             title="Download Tax Invoice PDF"
             onClick={() => window.open(`/api/v1/invoices/${r.id}/pdf`, "_blank")}
+            onClick={async () => {
+              try {
+                await downloadAuthenticatedFile(`/invoices/${r.id}/pdf`, `Invoice_${r.invoiceNumber}.pdf`);
+              } catch {
+                toast.error("Failed to download invoice PDF.");
+              }
+            }}
           >
             <FileText className="size-3.5" /> PDF
           </Button>
@@ -442,6 +450,15 @@ function BillingPage() {
               variant="outline"
               className="gap-1.5 text-xs"
               onClick={() => selectedInvoice && window.open(`/api/v1/invoices/${selectedInvoice.id}/pdf`, "_blank")}
+              className="gap-1.5 text-xs border-blue-500/40 text-blue-400 hover:bg-blue-500/10 cursor-pointer"
+              onClick={async () => {
+                if (!selectedInvoice) return;
+                try {
+                  await downloadAuthenticatedFile(`/invoices/${selectedInvoice.id}/pdf`, `Invoice_${selectedInvoice.invoiceNumber}.pdf`);
+                } catch {
+                  toast.error("Failed to download invoice PDF.");
+                }
+              }}
             >
               <FileText className="size-3.5" /> Download Tax Invoice PDF
             </Button>
